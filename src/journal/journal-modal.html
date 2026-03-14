@@ -1,0 +1,172 @@
+<div class="full-journal-overlay" id="fullJournalOverlay">
+  <div class="full-journal-container">
+    <div class="full-journal-header">
+      <div class="full-journal-title">
+        <i class="fas fa-book"></i> Trading Journal
+        <span class="journal-date-range" id="journalDateRange">Today</span>
+      </div>
+      <button class="close-full-journal" id="closeFullJournalBtn">
+        <i class="fas fa-times"></i> Close Journal
+      </button>
+    </div>
+    
+    <div class="full-journal-content">
+      <div class="journal-tabs">
+        <button class="journal-tab active" data-tab="calendar">📅 Calendar</button>
+        <button class="journal-tab" data-tab="trades">📊 Trades</button>
+        <button class="journal-tab" data-tab="stats">📈 Statistics</button>
+      </div>
+      
+      <div id="journal-calendar-tab" class="journal-tab-content active">
+        <div class="journal-calendar-section">
+          <div class="journal-calendar-container">
+            <div class="journal-calendar-header">
+              <button class="journal-nav-btn" data-direction="-1">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+              <div class="journal-calendar-title" id="journal-calendar-title">January 2024</div>
+              <button class="journal-nav-btn" data-direction="1">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+            
+            <div class="journal-calendar-weekdays">
+              <div>Sun</div>
+              <div>Mon</div>
+              <div>Tue</div>
+              <div>Wed</div>
+              <div>Thu</div>
+              <div>Fri</div>
+              <div>Sat</div>
+            </div>
+            
+            <div class="journal-calendar-grid" id="journal-calendar-days">
+            </div>
+            
+            <div class="journal-calendar-footer">
+              <button class="journal-today-btn">Today</button>
+            </div>
+          </div>
+          
+          <div class="journal-daily-trades">
+            <div class="journal-section-header">
+              <h3 id="journal-selected-date">Today's Trades</h3>
+              <button class="journal-view-all">View All Trades →</button>
+            </div>
+            
+            <div class="journal-trades-list" id="journal-daily-trades">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div id="journal-trades-tab" class="journal-tab-content">
+        <div class="journal-trades-section">
+          <div class="journal-trades-header">
+            <div class="journal-trades-stats">
+              <div class="journal-stat-card">
+                <div class="journal-stat-number" id="totalTradesStat">0</div>
+                <div class="journal-stat-label">Total Trades</div>
+              </div>
+              <div class="journal-stat-card">
+                <div class="journal-stat-number journal-stat-win" id="winRateStat">0%</div>
+                <div class="journal-stat-label">Win Rate</div>
+              </div>
+              <div class="journal-stat-card">
+                <div class="journal-stat-number journal-stat-win" id="netPnlStat">$0</div>
+                <div class="journal-stat-label">Net P&L</div>
+              </div>
+            </div>
+            
+            <div class="journal-trades-controls">
+              <select id="journal-filter-dropdown" class="journal-dropdown">
+                <option value="">All Trades</option>
+                <option value="win">Winning Trades</option>
+                <option value="loss">Losing Trades</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="journal-trades-table-container">
+            <table class="journal-trades-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Pair</th>
+                  <th>Direction</th>
+                  <th>Size</th>
+                  <th>P&L</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody id="journal-filtered-trades">
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      
+      <div id="journal-stats-tab" class="journal-tab-content">
+        <div class="journal-stats-section">
+          <div class="journal-stats-overview">
+            <div class="journal-stat-card-large">
+              <div class="journal-stat-number-large" id="netProfitStat">$0</div>
+              <div class="journal-stat-label">Net Profit</div>
+            </div>
+            <div class="journal-stat-card-large">
+              <div class="journal-stat-number-large journal-stat-win" id="winRateLargeStat">0%</div>
+              <div class="journal-stat-label">Win Rate</div>
+            </div>
+            <div class="journal-stat-card-large">
+              <div class="journal-stat-number-large journal-stat-win" id="profitFactorStat">0</div>
+              <div class="journal-stat-label">Profit Factor</div>
+            </div>
+            <div class="journal-stat-card-large">
+              <div class="journal-stat-number-large journal-stat-loss" id="maxDrawdownStat">$0</div>
+              <div class="journal-stat-label">Max Drawdown</div>
+            </div>
+          </div>
+          
+          <div class="journal-charts-grid">
+            <div class="journal-chart-container">
+              <div class="journal-chart-title">P&L Distribution</div>
+              <div id="journal-pnlChart" class="journal-chart"></div>
+            </div>
+            
+            <div class="journal-chart-container">
+              <div class="journal-chart-title">Win Rate Over Time</div>
+              <div id="journal-winRateChart" class="journal-chart"></div>
+            </div>
+            
+            <div class="journal-chart-container">
+              <div class="journal-chart-title">Monthly Performance</div>
+              <div id="journal-monthlyChart" class="journal-chart"></div>
+            </div>
+            
+            <div class="journal-chart-container">
+              <div class="journal-chart-title">Pair Performance</div>
+              <div id="journal-pairPerformanceChart" class="journal-chart"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="journal-modal" id="journal-trade-modal">
+  <div class="journal-modal-content">
+    <div class="journal-modal-header">
+      <h3>Trade Details</h3>
+      <button class="journal-close-modal">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="journal-modal-body">
+      <div id="journal-trade-detail-content">
+      </div>
+    </div>
+  </div>
+</div>

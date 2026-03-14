@@ -1,0 +1,134 @@
+<!-- ================================================================
+     ALERTS PANEL
+     ================================================================ -->
+<div class="panel-content alerts-panel">
+
+    <!-- Header -->
+    <div class="panel-header">
+        <div class="panel-header-left">
+            <i class="fas fa-bell"></i>
+            <span>Price Alerts</span>
+        </div>
+        <div class="panel-header-right">
+            <button class="panel-icon-btn add" id="alertAddBtn" title="Add Alert">
+                <i class="fas fa-plus"></i>
+            </button>
+            <button class="panel-icon-btn" id="alertFilterBtn" title="Filter">
+                <i class="fas fa-filter"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Add Alert Form -->
+    <div class="alert-add-form hidden" id="alertAddForm">
+
+        <div class="alert-form-row">
+            <select class="alert-select" id="alertSymbol">
+                <option>EUR/USD</option>
+                <option>GBP/USD</option>
+                <option>USD/JPY</option>
+                <option>XAU/USD</option>
+                <option>BTC/USD</option>
+            </select>
+            <select class="alert-select" id="alertCondition">
+                <option value="above">Above</option>
+                <option value="below">Below</option>
+                <option value="crosses">Crosses</option>
+            </select>
+        </div>
+
+        <!-- Price source tabs -->
+        <div class="alert-source-tabs">
+            <button class="alert-source-tab active" data-source="manual">Manual</button>
+            <button class="alert-source-tab" data-source="level">S/R Level</button>
+        </div>
+
+        <!-- Manual price input -->
+        <div class="alert-manual-wrap" id="alertManualWrap">
+            <input type="number" class="alert-input price" id="alertPrice"
+                   placeholder="0.00000" step="0.00001">
+        </div>
+
+        <!-- S/R Level select -->
+        <div class="alert-level-wrap hidden" id="alertLevelWrap">
+            <select class="alert-select" id="alertLevel">
+                <optgroup label="Resistance">
+                    <option value="1.09500">Resistance · 1.09500</option>
+                    <option value="1.10200">Resistance · 1.10200</option>
+                    <option value="1.11000">Resistance · 1.11000</option>
+                </optgroup>
+                <optgroup label="Support">
+                    <option value="1.08000">Support · 1.08000</option>
+                    <option value="1.07500">Support · 1.07500</option>
+                    <option value="1.06800">Support · 1.06800</option>
+                </optgroup>
+                <optgroup label="Moving Averages">
+                    <option value="1.08750">MA50 · 1.08750</option>
+                    <option value="1.08200">MA200 · 1.08200</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <!-- Action -->
+        <select class="alert-select" id="alertAction">
+            <option value="notify">Notify only</option>
+            <option value="buy">Buy on trigger</option>
+            <option value="sell">Sell on trigger</option>
+        </select>
+
+        <!-- Auto trade fields -->
+        <div class="alert-auto-fields hidden" id="alertAutoFields">
+            <div class="alert-auto-label">
+                <i class="fas fa-bolt"></i> Auto Trade Settings
+            </div>
+            <div class="alert-auto-row">
+                <span class="alert-auto-field-label">Lot</span>
+                <input type="number" class="alert-auto-input" id="alertLot"
+                       placeholder="0.01" step="0.01" value="0.01">
+            </div>
+            <div class="alert-auto-row">
+                <span class="alert-auto-field-label">TP</span>
+                <input type="number" class="alert-auto-input tp" id="alertTP"
+                       placeholder="0.00000" step="0.00001">
+            </div>
+            <div class="alert-auto-row">
+                <span class="alert-auto-field-label">SL</span>
+                <input type="number" class="alert-auto-input sl" id="alertSL"
+                       placeholder="0.00000" step="0.00001">
+            </div>
+            <div class="alert-auto-warning">
+                <i class="fas fa-triangle-exclamation"></i>
+                Trade will execute automatically when price hits level
+            </div>
+        </div>
+
+        <!-- Form actions -->
+        <div class="alert-form-actions">
+            <button class="alert-form-btn cancel" id="alertCancelBtn">Cancel</button>
+            <button class="alert-form-btn confirm" id="alertConfirmBtn">
+                <i class="fas fa-check"></i> Set Alert
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Stats bar -->
+    <div class="alert-stats-bar">
+        <div class="alert-stat">
+            <i class="fas fa-bell"></i>
+            <span id="alertActiveCount">0</span> active
+        </div>
+    </div>
+
+    <!-- Alert list -->
+    <div class="alert-list" id="alertList"></div>
+
+    <!-- Footer -->
+    <div class="panel-footer">
+        <span class="alert-footer-count" id="alertFooterCount">0 total</span>
+        <button class="alert-clear-btn" id="alertClearAll">
+            <i class="fas fa-trash"></i> Clear All
+        </button>
+    </div>
+
+</div>

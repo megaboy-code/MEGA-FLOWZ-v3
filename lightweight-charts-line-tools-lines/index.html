@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MEGA FLOWZ</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.35.0/dist/apexcharts.css">
+  
+  <link rel="stylesheet" href="styles/global.css">
+  <link rel="stylesheet" href="styles/panels.css">
+  <link rel="stylesheet" href="styles/trading.css">
+  <link rel="stylesheet" href="styles/calculator.css">
+  <link rel="stylesheet" href="styles/analysis.css">
+  <link rel="stylesheet" href="styles/strategies.css">
+  <link rel="stylesheet" href="styles/alerts.css">
+  <link rel="stylesheet" href="styles/journal.css">
+  <link rel="stylesheet" href="styles/heatmap.css">
+  <link rel="stylesheet" href="styles/chart.css">
+</head>
+<body>
+  <div class="workspace-container">
+    <div class="top-controls">
+      <div class="chart-controls-bar">
+        <div class="control-group">
+          <select id="chartPairsSelect" class="timeframe-select">
+            <option value="EURUSD">EUR/USD</option>
+            <option value="GBPUSD">GBP/USD</option>
+            <option value="USDJPY">USD/JPY</option>
+            <option value="AUDUSD">AUD/USD</option>
+            <option value="USDCAD">USD/CAD</option>
+            <option value="USDCHF">USD/CHF</option>
+            <option value="NZDUSD">NZD/USD</option>
+            <option value="XAUUSD">XAU/USD</option>
+            <option value="BTCUSD">BTC/USD</option>
+            <option value="ETHUSD">ETH/USD</option>
+            <option value="ADAUSD">ADA/USD</option>
+            <option value="DOTUSD">DOT/USD</option>
+            <option value="LINKUSD">LINK/USD</option>
+            <option value="LTCUSD">LTC/USD</option>
+            <option value="XRPUSD">XRP/USD</option>
+            <option value="SOLUSD">SOL/USD</option>
+          </select>
+          
+          <select id="timeframeSelect" class="timeframe-select">
+            <option value="1">1M</option>
+            <option value="5">5M</option>
+            <option value="15">15M</option>
+            <option value="60" selected>1H</option>
+            <option value="240">4H</option>
+            <option value="1D">1D</option>
+          </select>
+          
+          <select id="chartTypeSelect" class="chart-type-select">
+            <option value="candlestick">Candles</option>
+            <option value="line">Line</option>
+            <option value="area">Area</option>
+            <option value="baseline">Baseline</option>
+          </select>
+          
+          <!-- DRAWING TOOLS TOOLBAR ADDED HERE -->
+          <div class="drawing-tools-bar">
+            <button data-tool="TrendLine" title="Trend Line" class="drawing-tool-btn">
+              <span>📈</span>
+              <span>Trend</span>
+            </button>
+            <button data-tool="HorizontalLine" title="Horizontal Line" class="drawing-tool-btn">
+              <span>─</span>
+              <span>Horizontal</span>
+            </button>
+            <button data-tool="VerticalLine" title="Vertical Line" class="drawing-tool-btn">
+              <span>│</span>
+              <span>Vertical</span>
+            </button>
+            <button data-tool="Ray" title="Ray" class="drawing-tool-btn">
+              <span>↗</span>
+              <span>Ray</span>
+            </button>
+            <button data-tool="Arrow" title="Arrow" class="drawing-tool-btn">
+              <span>→</span>
+              <span>Arrow</span>
+            </button>
+            <button data-tool="Callout" title="Text Note" class="drawing-tool-btn">
+              <span>T</span>
+              <span>Text</span>
+            </button>
+            <button data-action="clear-drawings" title="Clear All Drawings" class="drawing-tool-btn clear-btn">
+              <span>🗑️</span>
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="control-icons">
+        <div class="chart-status-mini" id="chartStatusMini">
+          <i class="fas fa-plug"></i> Connected
+        </div>
+        
+        <div class="auto-toggle-mini">
+          <label class="switch mini-switch">
+            <input type="checkbox" id="autoTradeToggleMini">
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <div class="notification-bell" id="notificationBell" title="Alerts">
+          <i class="fas fa-bell"></i>
+          <span class="alert-count" id="alertCount">0</span>
+        </div>
+        
+        <div class="journal-toggle-btn" id="journalToggleBtn" title="Trading Journal">
+          <i class="fas fa-book"></i>
+          <span class="journal-badge" id="journalBadge">0</span>
+        </div>
+        
+        <div class="strategies-toggle-btn" id="strategiesToggleBtn" title="Trading Strategies">
+          <i class="fas fa-robot"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="main-workspace">
+      <div class="tools-panel collapsed" id="toolsPanel">
+        <div class="tool-icons">
+          <div class="tool-icon" data-tool="trading">
+            <i class="fas fa-chart-line"></i>
+          </div>
+          <div class="tool-icon" data-tool="calculator">
+            <i class="fas fa-calculator"></i>
+          </div>
+          <div class="tool-icon" data-tool="alerts">
+            <i class="fas fa-bell"></i>
+          </div>
+          <div class="tool-icon" data-tool="journal">
+            <i class="fas fa-book"></i>
+          </div>
+          <div class="tool-icon" data-tool="heatmap">
+            <i class="fas fa-fire"></i>
+          </div>
+        </div>
+        
+        <div class="panel-expand-toggle" id="panelLockToggle" title="Lock Panel">
+          <i class="fas fa-unlock"></i>
+        </div>
+        
+        <div class="panel-content trading-panel active">
+          <div class="trading-panel-header">
+            <h4><i class="fas fa-sliders-h"></i> TRADING CONTROL</h4>
+          </div>
+
+          <div class="panel-section">
+            <div class="account-summary">
+              <div class="account-pnl-reading">
+                <span class="pnl-value" id="pnlReading">$300.34USD</span>
+              </div>
+              
+              <div class="account-row">
+                <span class="account-label">Balance:</span>
+                <span class="account-value" id="accountBalance">$10,000.00</span>
+              </div>
+              <div class="account-row">
+                <span class="account-label">Equity:</span>
+                <span class="account-value" id="accountEquity">$10,245.32</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <div class="price-display-section">
+              <div class="bid-ask-display">
+                <div class="price-row bid">
+                  <span class="price-label">Bid:</span>
+                  <span class="price-value" id="bidPrice">1.08485</span>
+                  <span class="price-spread">Spread: <span id="currentSpread">1.2</span> pips</span>
+                </div>
+                <div class="price-row ask">
+                  <span class="price-label">Ask:</span>
+                  <span class="price-value" id="askPrice">1.08497</span>
+                  <div class="price-change" id="priceChange">+0.12%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+            
+          <div class="panel-section">
+            <div class="trading-controls">
+              <button class="trade-btn buy" data-action="buy" id="buyButton">
+                BUY
+              </button>
+              
+              <button class="trade-btn sell" data-action="sell" id="sellButton">
+                SELL
+              </button>
+            </div>
+          </div>
+            
+          <div class="panel-section">
+            <div class="lot-size-controls">
+              <div class="lot-control-group">
+                <label for="volumeInput">
+                  <i class="fas fa-layer-group"></i> Lot Size
+                </label>
+                <div class="lot-input-container">
+                  <input 
+                    type="number" 
+                    id="volumeInput" 
+                    class="lot-input" 
+                    min="0.01" 
+                    max="100" 
+                    step="0.01" 
+                    value="0.01"
+                    title="Trading volume in lots"
+                  >
+                  <span class="lot-label">L</span>
+                </div>
+                <div class="lot-quick-buttons">
+                  <button class="lot-quick-btn" data-volume="0.01">0.01</button>
+                  <button class="lot-quick-btn" data-volume="0.10">0.10</button>
+                  <button class="lot-quick-btn" data-volume="1.00">1.00</button>
+                  <button class="lot-quick-btn" data-volume="custom">Custom</button>
+                </div>
+              </div>
+              
+              <div class="lot-info-display">
+                <div class="lot-info-item">
+                  <span class="lot-info-label">Risk:</span>
+                  <span class="lot-info-value" id="riskAmount">$10.00</span>
+                </div>
+                <div class="lot-info-item">
+                  <span class="lot-info-label">Margin:</span>
+                  <span class="lot-info-value" id="marginAmount">$50.00</span>
+                </div>
+              </div>
+            </div>
+          </div>
+            
+          <div class="panel-section">
+            <div class="quick-actions">
+              <button class="quick-action-btn" data-action="close-all">
+                <i class="fas fa-times-circle"></i> Close All
+              </button>
+              <button class="quick-action-btn" data-action="hedge">
+                <i class="fas fa-shield-alt"></i> Hedge
+              </button>
+            </div>
+          </div>
+
+          <div class="open-trades-section">
+            <h4><i class="fas fa-chart-line"></i> OPEN TRADES</h4>
+            <div class="open-trades-list" id="openTradesList">
+              <div class="no-open-trades" id="noOpenTradesMessage" style="display: block;">
+                <i class="fas fa-chart-line"></i>
+                <p>No open trades</p>
+                <small>Trades will appear here when opened</small>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="panel-content calculator-panel">
+          <div class="panel-section">
+            <h4><i class="fas fa-calculator"></i> TRADING CALCULATOR</h4>
+            <div class="calculator-display" id="calcDisplay">0</div>
+            <div class="calculator-buttons">
+              <div class="calc-btn clear-all" data-calc="C" title="Clear All">C</div>
+              <div class="calc-btn clear-entry" data-calc="CE" title="Clear Entry">CE</div>
+              <div class="calc-btn backspace" data-calc="⌫" title="Backspace">⌫</div>
+              <div class="calc-btn operator" data-calc="/">/</div>
+              
+              <div class="calc-btn" data-calc="7">7</div>
+              <div class="calc-btn" data-calc="8">8</div>
+              <div class="calc-btn" data-calc="9">9</div>
+              <div class="calc-btn operator" data-calc="*">×</div>
+              
+              <div class="calc-btn" data-calc="4">4</div>
+              <div class="calc-btn" data-calc="5">5</div>
+              <div class="calc-btn" data-calc="6">6</div>
+              <div class="calc-btn operator" data-calc="-">-</div>
+              
+              <div class="calc-btn" data-calc="1">1</div>
+              <div class="calc-btn" data-calc="2">2</div>
+              <div class="calc-btn" data-calc="3">3</div>
+              <div class="calc-btn operator" data-calc="+">+</div>
+              
+              <div class="calc-btn zero" data-calc="0">0</div>
+              <div class="calc-btn" data-calc=".">.</div>
+              <div class="calc-btn equals" data-calc="=">=</div>
+              <div class="calc-btn operator" style="visibility: hidden;"></div>
+            </div>
+          </div>
+          <div class="panel-section">
+            <h4><i class="fas fa-tools"></i> TRADING CALCULATORS</h4>
+            <div class="quick-actions">
+              <button class="quick-action-btn" data-calc="pip" id="pipCalcBtn">Pip Value</button>
+              <button class="quick-action-btn" data-calc="position" id="positionCalcBtn">Position Size</button>
+              <button class="quick-action-btn" data-calc="risk" id="riskCalcBtn">Risk %</button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="panel-content alerts-panel">
+          <div class="panel-section">
+            <h4><i class="fas fa-bell"></i> PRICE ALERTS</h4>
+            
+            <div class="alert-form">
+              <div class="form-group">
+                <label>Symbol</label>
+                <select id="alertSymbol" class="alert-input">
+                  <option value="EURUSD">EUR/USD</option>
+                  <option value="GBPUSD">GBP/USD</option>
+                  <option value="USDJPY">USD/JPY</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label>Condition</label>
+                <select id="alertCondition" class="alert-input">
+                  <option value="above">Price Above</option>
+                  <option value="below">Price Below</option>
+                  <option value="crosses">Crosses</option>
+                </select>
+              </div>
+              
+              <div class="form-group">
+                <label>Price Level</label>
+                <input type="number" id="alertPrice" class="alert-input" placeholder="1.1000" step="0.0001">
+              </div>
+              
+              <button class="alert-btn" id="createAlertBtn">
+                <i class="fas fa-plus"></i> Create Alert
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h4><i class="fas fa-list"></i> ACTIVE ALERTS</h4>
+            <div class="alerts-list" id="alertsList">
+              <div class="no-alerts">
+                <i class="fas fa-bell-slash"></i>
+                <p>No active alerts</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-content journal-panel">
+          <div class="panel-section">
+            <h4><i class="fas fa-book"></i> TRADING JOURNAL</h4>
+            <div class="journal-quick-stats">
+              <div class="journal-stat-mini">
+                <div class="mini-stat-value" id="todayPnl">$0</div>
+                <div class="mini-stat-label">Today P&L</div>
+              </div>
+              <div class="journal-stat-mini">
+                <div class="mini-stat-value" id="todayWinRate">0%</div>
+                <div class="mini-stat-label">Win Rate</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h5>Recent Trades</h5>
+            <div class="journal-recent-trades" id="journalRecentTrades">
+              <div class="no-recent-trades">
+                <i class="fas fa-chart-line"></i>
+                <p>No trades today</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <div class="journal-quick-actions">
+              <button class="quick-action-btn" id="quickAddTradeBtn">
+                <i class="fas fa-plus"></i> Quick Log Trade
+              </button>
+              <button class="quick-action-btn primary" id="openFullJournalFromPanel">
+                <i class="fas fa-external-link-alt"></i> Open Full Journal
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="panel-content heatmap-panel">
+          <div class="panel-section">
+            <h4><i class="fas fa-fire"></i> LIVE HEATMAP</h4>
+            
+            <div class="market-status-mini">
+              <div class="market-state" id="heatmapMarketState">
+                <span class="state-bullet bullish"></span>
+                <span>Bullish</span>
+              </div>
+              <div class="market-strength" id="heatmapMarketStrength">75%</div>
+            </div>
+            
+            <div class="mini-heatmap-blocks" id="miniHeatmapBlocks">
+              <div class="mini-heatmap-block bullish" data-tf="D1">
+                <div class="mini-block-header">
+                  <span class="mini-block-tf">D1</span>
+                  <span class="mini-block-range">28p</span>
+                </div>
+                <div class="mini-block-metrics">
+                  <div class="metric-item">
+                    <div class="metric-label">POS</div>
+                    <div class="metric-value metric-pos">67%</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">SPD</div>
+                    <div class="metric-value metric-pos">+15p</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">STR</div>
+                    <div class="metric-value metric-pos">1.3x</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">RNG</div>
+                    <div class="metric-value">28p</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="mini-heatmap-block bearish" data-tf="H4">
+                <div class="mini-block-header">
+                  <span class="mini-block-tf">H4</span>
+                  <span class="mini-block-range">18p</span>
+                </div>
+                <div class="mini-block-metrics">
+                  <div class="metric-item">
+                    <div class="metric-label">POS</div>
+                    <div class="metric-value metric-neg">45%</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">SPD</div>
+                    <div class="metric-value metric-neg">-8p</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">STR</div>
+                    <div class="metric-value metric-neg">0.9x</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">RNG</div>
+                    <div class="metric-value">18p</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="mini-heatmap-block bullish" data-tf="H1">
+                <div class="mini-block-header">
+                  <span class="mini-block-tf">H1</span>
+                  <span class="mini-block-range">12p</span>
+                </div>
+                <div class="mini-block-metrics">
+                  <div class="metric-item">
+                    <div class="metric-label">POS</div>
+                    <div class="metric-value metric-pos">72%</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">SPD</div>
+                    <div class="metric-value metric-pos">+22p</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">STR</div>
+                    <div class="metric-value metric-pos">1.8x</div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">RNG</div>
+                    <div class="metric-value">12p</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="panel-section">
+            <h4><i class="fas fa-sliders-h"></i> CONTROLS</h4>
+            
+            <div class="heatmap-style-selector">
+              <select id="miniHeatmapStyle" class="mini-heatmap-select">
+                <option value="daily" selected>Daily View</option>
+                <option value="intraday">Intraday</option>
+                <option value="scalper">Scalper</option>
+              </select>
+            </div>
+            
+            <div class="heatmap-actions">
+              <button class="quick-action-btn" id="refreshMiniHeatmapBtn">
+                <i class="fas fa-sync-alt"></i> Refresh
+              </button>
+              <button class="quick-action-btn primary" id="openFullHeatmapFromPanel">
+                <i class="fas fa-expand"></i> Full View
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hover-trigger-zone" id="hoverTriggerZone"></div>
+
+      <div class="main-chart-area" id="mainChartArea">
+        <div class="chart-content">
+          <div class="chart-view" id="chartDisplay">
+            <div class="chart-box">
+              <div class="chart-wrapper">
+                <div id="tvChart"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="strategies-modal" id="strategiesModal">
+    <div class="strategies-modal-content">
+      <div class="strategies-modal-header">
+        <div class="strategies-modal-title">
+          <i class="fas fa-robot"></i> Algo Trading Strategies
+          <span class="strategies-modal-subtitle">Configure, backtest, and manage trading algorithms</span>
+        </div>
+        <button class="close-strategies-modal" id="closeStrategiesModalBtn">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="strategies-modal-body">
+        <div class="strategies-tabs">
+          <button class="strategy-tab active" data-tab="selection">
+            <i class="fas fa-sliders-h"></i> Strategy Config
+          </button>
+          <button class="strategy-tab" data-tab="active">
+            <i class="fas fa-play-circle"></i> Active (<span id="activeStrategyCount">0</span>)
+          </button>
+          <button class="strategy-tab" data-tab="backtest">
+            <i class="fas fa-chart-line"></i> Backtests
+          </button>
+        </div>
+        
+        <div id="strategy-selection-tab" class="strategy-tab-content active">
+          <div class="strategy-config-grid">
+            <div class="config-left">
+              <div class="strategy-selection-section">
+                <div class="strategy-category-group">
+                  <label for="strategyCategory">Category</label>
+                  <select id="strategyCategory" class="strategy-dropdown">
+                    <option value="">Select Category</option>
+                    <option value="trend">Trend-Following</option>
+                    <option value="meanreversion">Mean-Reversion</option>
+                    <option value="breakout">Breakout</option>
+                    <option value="scalping">Scalping</option>
+                    <option value="marketstructure">Market Structure</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                
+                <div class="strategy-name-group">
+                  <label for="strategyName">Strategy</label>
+                  <select id="strategyName" class="strategy-dropdown" disabled>
+                    <option value="">Select Strategy</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div class="strategy-description" id="strategyDescription">
+                <div class="description-header">
+                  <i class="fas fa-info-circle"></i> Description
+                </div>
+                <div class="description-content" id="strategyDescContent">
+                  Select a strategy category and name to see details
+                </div>
+              </div>
+            </div>
+            
+            <div class="config-right">
+              <div class="strategy-params-section" id="strategyParamsSection">
+                <div class="params-header">
+                  <i class="fas fa-sliders-h"></i> Parameters
+                </div>
+                <div class="params-container" id="paramsContainer">
+                </div>
+              </div>
+              
+              <div class="strategy-controls-compact">
+                <div class="controls-row">
+                  <div class="control-item">
+                    <label for="strategyTimeframe">TF</label>
+                    <select id="strategyTimeframe" class="compact-select">
+                      <option value="1">M1</option>
+                      <option value="5">M5</option>
+                      <option value="15">M15</option>
+                      <option value="60" selected>H1</option>
+                      <option value="240">H4</option>
+                      <option value="1D">D1</option>
+                    </select>
+                  </div>
+                  
+                  <div class="control-item">
+                    <label for="strategyRiskPercent">Risk</label>
+                    <div class="risk-control">
+                      <input type="range" id="strategyRiskPercent" min="0.5" max="5" step="0.5" value="1">
+                      <span class="risk-value" id="riskPercentValue">1%</span>
+                    </div>
+                  </div>
+                  
+                  <div class="control-item">
+                    <label for="maxOpenTrades">Max Trades</label>
+                    <input type="number" id="maxOpenTrades" min="1" max="10" value="3" class="compact-input">
+                  </div>
+                  
+                  <div class="control-item">
+                    <div class="activation-toggle">
+                      <label for="strategyActiveToggle">Active</label>
+                      <label class="switch mini-switch">
+                        <input type="checkbox" id="strategyActiveToggle">
+                        <span class="slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="controls-buttons">
+                  <button class="compact-btn secondary" id="backtestStrategyBtn" title="Backtest">
+                    <i class="fas fa-chart-line"></i> Test
+                  </button>
+                  <button class="compact-btn primary" id="applyStrategyBtn" title="Apply Strategy">
+                    <i class="fas fa-play"></i> Apply
+                  </button>
+                  <button class="compact-btn tertiary" id="saveStrategyBtn" title="Save Configuration">
+                    <i class="fas fa-save"></i> Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="strategy-active-tab" class="strategy-tab-content">
+          <div class="active-strategies-list-modal" id="activeStrategiesList">
+            <div class="no-active-strategies">
+              <i class="fas fa-robot"></i>
+              <p>No active strategies</p>
+              <small>Apply a strategy to see it here</small>
+            </div>
+          </div>
+          
+          <div class="active-strategies-controls">
+            <button class="strategy-control-btn compact" id="pauseAllStrategiesBtn">
+              <i class="fas fa-pause"></i> Pause All
+            </button>
+            <button class="strategy-control-btn compact danger" id="stopAllStrategiesBtn">
+              <i class="fas fa-stop"></i> Stop All
+            </button>
+          </div>
+        </div>
+        
+        <div id="strategy-backtest-tab" class="strategy-tab-content">
+          <div class="backtest-history" id="backtestHistory">
+            <div class="no-backtest-results">
+              <i class="fas fa-chart-line"></i>
+              <p>No backtest results</p>
+              <small>Run a backtest to see results here</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="full-journal-overlay" id="fullJournalOverlay">
+    <div class="full-journal-container">
+      <div class="full-journal-header">
+        <div class="full-journal-title">
+          <i class="fas fa-book"></i> Trading Journal
+          <span class="journal-date-range" id="journalDateRange">Today</span>
+        </div>
+        <button class="close-full-journal" id="closeFullJournalBtn">
+          <i class="fas fa-times"></i> Close Journal
+        </button>
+      </div>
+      
+      <div class="full-journal-content">
+        <div class="journal-tabs">
+          <button class="journal-tab active" data-tab="calendar">📅 Calendar</button>
+          <button class="journal-tab" data-tab="trades">📊 Trades</button>
+          <button class="journal-tab" data-tab="stats">📈 Statistics</button>
+        </div>
+        
+        <div id="journal-calendar-tab" class="journal-tab-content active">
+          <div class="journal-calendar-section">
+            <div class="journal-calendar-container">
+              <div class="journal-calendar-header">
+                <button class="journal-nav-btn" data-direction="-1">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <div class="journal-calendar-title" id="journal-calendar-title">January 2024</div>
+                <button class="journal-nav-btn" data-direction="1">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+              
+              <div class="journal-calendar-weekdays">
+                <div>Sun</div>
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+              </div>
+              
+              <div class="journal-calendar-grid" id="journal-calendar-days">
+              </div>
+              
+              <div class="journal-calendar-footer">
+                <button class="journal-today-btn">Today</button>
+              </div>
+            </div>
+            
+            <div class="journal-daily-trades">
+              <div class="journal-section-header">
+                <h3 id="journal-selected-date">Today's Trades</h3>
+                <button class="journal-view-all">View All Trades →</button>
+              </div>
+              
+              <div class="journal-trades-list" id="journal-daily-trades">
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div id="journal-trades-tab" class="journal-tab-content">
+          <div class="journal-trades-section">
+            <div class="journal-trades-header">
+              <div class="journal-trades-stats">
+                <div class="journal-stat-card">
+                  <div class="journal-stat-number" id="totalTradesStat">0</div>
+                  <div class="journal-stat-label">Total Trades</div>
+                </div>
+                <div class="journal-stat-card">
+                  <div class="journal-stat-number journal-stat-win" id="winRateStat">0%</div>
+                  <div class="journal-stat-label">Win Rate</div>
+                </div>
+                <div class="journal-stat-card">
+                  <div class="journal-stat-number journal-stat-win" id="netPnlStat">$0</div>
+                  <div class="journal-stat-label">Net P&L</div>
+                </div>
+              </div>
+              
+              <div class="journal-trades-controls">
+                <select id="journal-filter-dropdown" class="journal-dropdown">
+                  <option value="">All Trades</option>
+                  <option value="win">Winning Trades</option>
+                  <option value="loss">Losing Trades</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="journal-trades-table-container">
+              <table class="journal-trades-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Pair</th>
+                    <th>Direction</th>
+                    <th>Size</th>
+                    <th>P&L</th>
+                    <th>Result</th>
+                  </tr>
+                </thead>
+                <tbody id="journal-filtered-trades">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <div id="journal-stats-tab" class="journal-tab-content">
+          <div class="journal-stats-section">
+            <div class="journal-stats-overview">
+              <div class="journal-stat-card-large">
+                <div class="journal-stat-number-large" id="netProfitStat">$0</div>
+                <div class="journal-stat-label">Net Profit</div>
+              </div>
+              <div class="journal-stat-card-large">
+                <div class="journal-stat-number-large journal-stat-win" id="winRateLargeStat">0%</div>
+                <div class="journal-stat-label">Win Rate</div>
+              </div>
+              <div class="journal-stat-card-large">
+                <div class="journal-stat-number-large journal-stat-win" id="profitFactorStat">0</div>
+                <div class="journal-stat-label">Profit Factor</div>
+              </div>
+              <div class="journal-stat-card-large">
+                <div class="journal-stat-number-large journal-stat-loss" id="maxDrawdownStat">$0</div>
+                <div class="journal-stat-label">Max Drawdown</div>
+              </div>
+            </div>
+            
+            <div class="journal-charts-grid">
+              <div class="journal-chart-container">
+                <div class="journal-chart-title">P&L Distribution</div>
+                <div id="journal-pnlChart" class="journal-chart"></div>
+              </div>
+              
+              <div class="journal-chart-container">
+                <div class="journal-chart-title">Win Rate Over Time</div>
+                <div id="journal-winRateChart" class="journal-chart"></div>
+              </div>
+              
+              <div class="journal-chart-container">
+                <div class="journal-chart-title">Monthly Performance</div>
+                <div id="journal-monthlyChart" class="journal-chart"></div>
+              </div>
+              
+              <div class="journal-chart-container">
+                <div class="journal-chart-title">Pair Performance</div>
+                <div id="journal-pairPerformanceChart" class="journal-chart"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="full-heatmap-overlay" id="fullHeatmapOverlay">
+    <div class="full-heatmap-container">
+      <div class="full-heatmap-header">
+        <i class="fas fa-fire"></i> Full Market Pyramid Heatmap
+        <button class="close-full-heatmap" id="closeFullHeatmapBtn">
+          <i class="fas fa-times"></i> Close
+        </button>
+      </div>
+      
+      <div class="full-heatmap-content">
+        <div id="fullHeatMap" class="heatmap">
+          <div class="loading">
+            <i class="fas fa-fire"></i>
+            <p>Loading Full Market Pyramid...</p>
+            <small>Multi-timeframe market structure analysis</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="journal-modal" id="journal-trade-modal">
+    <div class="journal-modal-content">
+      <div class="journal-modal-header">
+        <h3>Trade Details</h3>
+        <button class="journal-close-modal">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="journal-modal-body">
+        <div id="journal-trade-detail-content">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notification-modal" id="notificationModal">
+    <div class="notification-modal-content">
+      <div class="notification-header">
+        <h3><i class="fas fa-bell"></i> Notifications</h3>
+        <button class="close-notifications">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="notification-list" id="notificationList">
+        <div class="notification-item empty">
+          <div class="notification-icon info">
+            <i class="fas fa-info-circle"></i>
+          </div>
+          <div class="notification-content">
+            <div class="notification-title">No notifications</div>
+            <div class="notification-text">You're all caught up!</div>
+          </div>
+        </div>
+      </div>
+      <div class="notification-footer">
+        <button class="clear-all" id="clearNotifications">Clear All</button>
+        <span class="notification-count">0 total</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ApexCharts library -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts@3.35.0"></script>
+  
+  <!-- SINGLE SCRIPT TAG FOR TYPESCRIPT -->
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,429 @@
+<!-- ================================================================
+     CHART MODULE - Refactored (Drawing Tools in Left Sidebar)
+     ================================================================ -->
+
+<!-- TOP CONTROLS BAR -->
+<div class="top-controls">
+  <div class="chart-controls-bar">
+
+    <!-- SYMBOL -->
+    <div class="ctrl-item ctrl-symbol" id="symbolPill">
+      <div class="symbol-icons" id="symbolIcons">
+        <div class="flag-circle flag-base" id="symbolFlagBase"></div>
+        <div class="flag-circle flag-quote" id="symbolFlagQuote"></div>
+      </div>
+      <span class="symbol-text" id="symbolText">EURUSD</span>
+      <select id="chartPairsSelect" class="hidden-select">
+        <option value="EURUSD">EURUSD</option>
+        <option value="GBPUSD">GBPUSD</option>
+        <option value="USDJPY">USDJPY</option>
+        <option value="AUDUSD">AUDUSD</option>
+        <option value="USDCAD">USDCAD</option>
+        <option value="USDCHF">USDCHF</option>
+        <option value="NZDUSD">NZDUSD</option>
+        <option value="XAUUSD">XAUUSD</option>
+        <option value="BTCUSD">BTCUSD</option>
+        <option value="ETHUSD">ETHUSD</option>
+        <option value="LTCUSD">LTCUSD</option>
+        <option value="XRPUSD">XRPUSD</option>
+      </select>
+    </div>
+
+    <!-- DIVIDER -->
+    <div class="ctrl-divider"></div>
+
+    <!-- TIMEFRAME GROUP -->
+    <div class="tf-group" id="tfGroup">
+      <button class="tf-btn" data-tf="M1">1m</button>
+      <button class="tf-btn" data-tf="M5">5m</button>
+      <button class="tf-btn" data-tf="M15">15m</button>
+      <button class="tf-btn active" data-tf="H1">1H</button>
+      <button class="tf-btn" data-tf="H4">4H</button>
+      <button class="tf-btn" data-tf="D1">1D</button>
+      <div class="tf-more" id="tfMore">
+        <button class="tf-btn tf-more-btn" id="tfMoreBtn">···</button>
+        <div class="tf-more-dropdown" id="tfMoreDropdown">
+          <div class="tf-more-item" data-tf="M3">3m</div>
+          <div class="tf-more-item" data-tf="M10">10m</div>
+          <div class="tf-more-item" data-tf="M30">30m</div>
+          <div class="tf-more-item" data-tf="H2">2H</div>
+          <div class="tf-more-item" data-tf="H3">3H</div>
+          <div class="tf-more-item" data-tf="W1">1W</div>
+          <div class="tf-more-item" data-tf="MN">1M</div>
+        </div>
+      </div>
+      <select id="timeframeSelect" class="hidden-select">
+        <option value="M1">M1</option>
+        <option value="M3">M3</option>
+        <option value="M5">M5</option>
+        <option value="M10">M10</option>
+        <option value="M15">M15</option>
+        <option value="M30">M30</option>
+        <option value="H1" selected>H1</option>
+        <option value="H2">H2</option>
+        <option value="H3">H3</option>
+        <option value="H4">H4</option>
+        <option value="D1">D1</option>
+        <option value="W1">W1</option>
+        <option value="MN">MN</option>
+      </select>
+    </div>
+
+    <!-- DIVIDER -->
+    <div class="ctrl-divider"></div>
+
+    <!-- CHART TYPE -->
+    <div class="ctrl-item ctrl-type" id="chartTypePill">
+      <i class="fas fa-chart-candlestick" id="chartTypeIcon"></i>
+      <span id="chartTypeText">Candles</span>
+      <select id="chartTypeSelect" class="hidden-select">
+        <option value="candlestick">Candles</option>
+        <option value="bar">Bars</option>
+        <option value="line">Line</option>
+        <option value="area">Area</option>
+        <option value="baseline">Baseline</option>
+      </select>
+      <div class="chart-type-dropdown" id="chartTypeDropdown">
+        <div class="chart-type-item active" data-type="candlestick" data-icon="fa-chart-candlestick" data-label="Candles">
+          <i class="fas fa-chart-candlestick"></i><span>Candles</span>
+        </div>
+        <div class="chart-type-item" data-type="bar" data-icon="fa-chart-bar" data-label="Bars">
+          <i class="fas fa-chart-bar"></i><span>Bars</span>
+        </div>
+        <div class="chart-type-item" data-type="line" data-icon="fa-chart-line" data-label="Line">
+          <i class="fas fa-chart-line"></i><span>Line</span>
+        </div>
+        <div class="chart-type-item" data-type="area" data-icon="fa-chart-area" data-label="Area">
+          <i class="fas fa-chart-area"></i><span>Area</span>
+        </div>
+        <div class="chart-type-item" data-type="baseline" data-icon="fa-minus" data-label="Baseline">
+          <i class="fas fa-minus"></i><span>Baseline</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIVIDER -->
+    <div class="ctrl-divider"></div>
+
+    <!-- INDICATORS -->
+    <div class="ctrl-item ctrl-indicators" id="indicatorsBtn">
+      <i class="fas fa-flask-vial"></i>
+      <span>Indicators</span>
+    </div>
+
+  </div>
+
+  <!-- ✅ RIGHT SIDE — Journal removed, lives in right panel now -->
+  <div class="ctrl-right">
+  </div>
+</div>
+
+<!-- ================================================================
+     SYMBOL SEARCH MODAL
+     ================================================================ -->
+<div class="symbol-modal-overlay" id="symbolModalOverlay">
+  <div class="symbol-modal" id="symbolModal">
+
+    <div class="symbol-modal-header">
+      <div class="symbol-modal-search-wrap">
+        <i class="fas fa-search"></i>
+        <input type="text" id="symbolSearchInput" placeholder="Search symbol..." class="symbol-modal-search-input" autofocus />
+      </div>
+      <button class="symbol-modal-close" id="symbolModalClose">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="symbol-modal-body" id="symbolModalBody">
+
+      <!-- FOREX -->
+      <div class="symbol-modal-group">
+        <div class="symbol-modal-group-label">Forex</div>
+        <div class="symbol-modal-item" data-value="EURUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base" style="background-image:url('https://flagcdn.com/w320/eu.png');"></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">EURUSD</span>
+          <span class="symbol-modal-desc">Euro / US Dollar</span>
+        </div>
+        <div class="symbol-modal-item" data-value="GBPUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base" style="background-image:url('https://flagcdn.com/w320/gb.png');"></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">GBPUSD</span>
+          <span class="symbol-modal-desc">British Pound / US Dollar</span>
+        </div>
+        <div class="symbol-modal-item" data-value="USDJPY">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/jp.png');"></div>
+          </div>
+          <span class="symbol-modal-name">USDJPY</span>
+          <span class="symbol-modal-desc">US Dollar / Japanese Yen</span>
+        </div>
+        <div class="symbol-modal-item" data-value="AUDUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base" style="background-image:url('https://flagcdn.com/w320/au.png');"></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">AUDUSD</span>
+          <span class="symbol-modal-desc">Australian Dollar / US Dollar</span>
+        </div>
+        <div class="symbol-modal-item" data-value="USDCAD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/ca.png');"></div>
+          </div>
+          <span class="symbol-modal-name">USDCAD</span>
+          <span class="symbol-modal-desc">US Dollar / Canadian Dollar</span>
+        </div>
+        <div class="symbol-modal-item" data-value="USDCHF">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/ch.png');"></div>
+          </div>
+          <span class="symbol-modal-name">USDCHF</span>
+          <span class="symbol-modal-desc">US Dollar / Swiss Franc</span>
+        </div>
+        <div class="symbol-modal-item" data-value="NZDUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base" style="background-image:url('https://flagcdn.com/w320/nz.png');"></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">NZDUSD</span>
+          <span class="symbol-modal-desc">New Zealand Dollar / US Dollar</span>
+        </div>
+      </div>
+
+      <!-- METALS -->
+      <div class="symbol-modal-group">
+        <div class="symbol-modal-group-label">Metals</div>
+        <div class="symbol-modal-item" data-value="XAUUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base icon-circle xau"><i class="fas fa-coins"></i></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">XAUUSD</span>
+          <span class="symbol-modal-desc">Gold / US Dollar</span>
+        </div>
+      </div>
+
+      <!-- CRYPTO -->
+      <div class="symbol-modal-group">
+        <div class="symbol-modal-group-label">Crypto</div>
+        <div class="symbol-modal-item" data-value="BTCUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base icon-circle btc"><i class="fab fa-bitcoin"></i></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">BTCUSD</span>
+          <span class="symbol-modal-desc">Bitcoin / US Dollar</span>
+        </div>
+        <div class="symbol-modal-item" data-value="ETHUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base icon-circle eth"><i class="fab fa-ethereum"></i></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">ETHUSD</span>
+          <span class="symbol-modal-desc">Ethereum / US Dollar</span>
+        </div>
+        <div class="symbol-modal-item" data-value="LTCUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base icon-circle ltc"><span>Ł</span></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">LTCUSD</span>
+          <span class="symbol-modal-desc">Litecoin / US Dollar</span>
+        </div>
+        <div class="symbol-modal-item" data-value="XRPUSD">
+          <div class="symbol-pair-icons">
+            <div class="flag-circle flag-base icon-circle xrp"><span>X</span></div>
+            <div class="flag-circle flag-quote" style="background-image:url('https://flagcdn.com/w320/us.png');"></div>
+          </div>
+          <span class="symbol-modal-name">XRPUSD</span>
+          <span class="symbol-modal-desc">Ripple / US Dollar</span>
+        </div>
+      </div>
+
+      <div class="symbol-modal-empty" id="symbolModalEmpty" style="display:none;">
+        <i class="fas fa-search"></i>
+        <p>No symbols found</p>
+        <small>Try a different search term</small>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     INDICATORS MODAL
+     ================================================================ -->
+<div class="indicators-modal-overlay" id="indicatorsModalOverlay">
+  <div class="indicators-modal" id="indicatorsModal">
+
+    <div class="indicators-modal-header">
+      <div class="indicators-search-wrap">
+        <i class="fas fa-search"></i>
+        <input type="text" id="indicatorSearchInput" placeholder="Search indicators, strategies..." class="indicators-search-input" />
+      </div>
+      <button class="indicators-modal-close" id="indicatorsModalClose">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="indicators-modal-body" id="indicatorsModalBody">
+
+      <!-- FAVORITES -->
+      <div class="indicators-favorites-section" id="indicatorsFavoritesSection">
+        <div class="indicators-favorites-header">
+          <i class="fas fa-star"></i>
+          <span>Favorites</span>
+        </div>
+        <div class="indicators-favorites-list" id="indicatorsFavoritesList"></div>
+      </div>
+
+      <!-- BUILT-IN INDICATORS -->
+      <div class="indicators-category open" id="cat-builtin">
+        <div class="indicators-category-header">
+          <i class="fas fa-chevron-right"></i>
+          <span>Built-in Indicators</span>
+          <span class="indicators-count">8</span>
+        </div>
+        <div class="indicators-list">
+          <div class="indicator-item" data-value="SMA" data-type="indicator" data-name="SMA (Simple Moving Average)">
+            <i class="fas fa-chart-line"></i>
+            <span class="indicator-name">SMA (Simple Moving Average)</span>
+            <span class="indicator-badge">trend</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="EMA" data-type="indicator" data-name="EMA (Exponential Moving Average)">
+            <i class="fas fa-chart-line"></i>
+            <span class="indicator-name">EMA (Exponential Moving Average)</span>
+            <span class="indicator-badge">trend</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="RSI" data-type="indicator" data-name="RSI (Relative Strength Index)">
+            <i class="fas fa-wave-square"></i>
+            <span class="indicator-name">RSI (Relative Strength Index)</span>
+            <span class="indicator-badge">oscillator</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="MACD" data-type="indicator" data-name="MACD">
+            <i class="fas fa-chart-bar"></i>
+            <span class="indicator-name">MACD</span>
+            <span class="indicator-badge">trend</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="BB" data-type="indicator" data-name="Bollinger Bands">
+            <i class="fas fa-chart-area"></i>
+            <span class="indicator-name">Bollinger Bands</span>
+            <span class="indicator-badge">volatility</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="STOCH" data-type="indicator" data-name="Stochastic">
+            <i class="fas fa-wave-square"></i>
+            <span class="indicator-name">Stochastic</span>
+            <span class="indicator-badge">oscillator</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="ATR" data-type="indicator" data-name="ATR (Average True Range)">
+            <i class="fas fa-ruler-horizontal"></i>
+            <span class="indicator-name">ATR (Average True Range)</span>
+            <span class="indicator-badge">volatility</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="VOLUME" data-type="indicator" data-name="Volume">
+            <i class="fas fa-chart-column"></i>
+            <span class="indicator-name">Volume</span>
+            <span class="indicator-badge">volume</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- STRATEGIES -->
+      <div class="indicators-category" id="cat-strategies">
+        <div class="indicators-category-header">
+          <i class="fas fa-chevron-right"></i>
+          <span>Strategies</span>
+          <span class="indicators-count">4</span>
+        </div>
+        <div class="indicators-list">
+          <div class="indicator-item" data-value="MA_CROSS" data-type="strategy" data-name="MA Crossover">
+            <i class="fas fa-arrows-left-right"></i>
+            <span class="indicator-name">MA Crossover</span>
+            <span class="indicator-badge strategy">strategy</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="EMA_CROSS" data-type="strategy" data-name="EMA Crossover">
+            <i class="fas fa-arrows-left-right"></i>
+            <span class="indicator-name">EMA Crossover</span>
+            <span class="indicator-badge strategy">strategy</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="MACD_CROSS" data-type="strategy" data-name="MACD Crossover">
+            <i class="fas fa-chart-bar"></i>
+            <span class="indicator-name">MACD Crossover</span>
+            <span class="indicator-badge strategy">strategy</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+          <div class="indicator-item" data-value="RSI_OB_OS" data-type="strategy" data-name="RSI Overbought/Oversold">
+            <i class="fas fa-wave-square"></i>
+            <span class="indicator-name">RSI Overbought/Oversold</span>
+            <span class="indicator-badge strategy">strategy</span>
+            <i class="fas fa-star indicator-fav-star"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- CUSTOM -->
+      <div class="indicators-category open" id="cat-custom">
+        <div class="indicators-category-header">
+          <i class="fas fa-chevron-right"></i>
+          <span>Custom Indicators</span>
+          <span class="indicators-count">0</span>
+        </div>
+        <div class="indicators-list">
+          <div class="indicators-empty-state">
+            <i class="fas fa-code"></i>
+            <p>No custom indicators yet</p>
+            <small>Create your own using the builder below</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="indicators-empty-search" id="indicatorsEmptySearch" style="display:none;">
+        <i class="fas fa-search"></i>
+        <p>No indicators found</p>
+        <small>Try different keywords</small>
+      </div>
+
+    </div>
+
+    <!-- ✅ FOOTER — Custom Strategy wired to open Strategy tab -->
+    <div class="indicators-modal-footer">
+      <button class="indicators-btn-strategy" id="customStrategyBtn">
+        <i class="fas fa-code"></i> Custom Strategy
+      </button>
+      <button class="indicators-btn-primary" id="indicatorsApplyBtn">
+        Apply
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- MAIN CHART AREA -->
+<div class="main-chart-area" id="mainChartArea">
+  <div class="chart-content">
+    <div class="chart-view" id="chartDisplay">
+      <div class="chart-box">
+        <div class="chart-wrapper">
+          <div id="tvChart"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

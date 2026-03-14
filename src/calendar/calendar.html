@@ -1,0 +1,51 @@
+<!-- ================================================================
+     ECONOMIC CALENDAR PANEL
+     ================================================================ -->
+<div class="panel-content calendar-panel">
+
+    <!-- Header -->
+    <div class="panel-header">
+        <div class="panel-header-left">
+            <i class="fas fa-calendar-days"></i>
+            <span>Economic Calendar</span>
+        </div>
+        <div class="panel-header-right" style="position:relative;">
+            <button class="panel-icon-btn" id="calendarSettingsBtn" title="Settings">
+                <i class="fas fa-ellipsis-vertical"></i>
+            </button>
+
+            <!-- Settings dropdown -->
+            <div class="cal-settings-drop" id="calendarSettingsDrop">
+                <div class="cal-settings-label">Show Impact</div>
+                <div class="cal-settings-option active" data-filter="high">
+                    <span class="cal-radio"></span> High only
+                </div>
+                <div class="cal-settings-option" data-filter="high-medium">
+                    <span class="cal-radio"></span> High + Medium
+                </div>
+                <div class="cal-settings-option" data-filter="all">
+                    <span class="cal-radio"></span> All events
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Day tabs -->
+    <div class="cal-day-tabs">
+        <button class="cal-day-tab" data-day="yesterday">Yesterday</button>
+        <button class="cal-day-tab active" data-day="today">Today</button>
+        <button class="cal-day-tab" data-day="tomorrow">Tomorrow</button>
+    </div>
+
+    <!-- Event list -->
+    <div class="cal-event-list" id="calendarEventList"></div>
+
+    <!-- Footer -->
+    <div class="panel-footer">
+        <div class="cal-footer-info">
+            <i class="fas fa-circle"></i> Live
+        </div>
+        <span class="cal-footer-tz">UTC+0</span>
+    </div>
+
+</div>

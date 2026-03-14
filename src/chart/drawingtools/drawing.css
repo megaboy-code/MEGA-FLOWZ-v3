@@ -1,0 +1,145 @@
+/* ================================================================
+   ✏️ DRAWING TOOLS SIDEBAR - Vertical Left Panel
+   ================================================================ */
+
+/* ==================== DRAWING SIDEBAR CONTAINER ==================== */
+.drawing-sidebar {
+    position: fixed;
+    left: 0;
+    top: var(--header-height);
+    width: 38px;
+    height: calc(100vh - var(--header-height));
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
+    z-index: 900;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-sm);
+    transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+/* ==================== VERTICAL TOOLS CONTAINER ==================== */
+.drawing-tools-vertical {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+    width: 38px;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--bg-card);
+}
+
+/* ==================== VERTICAL TOOL BUTTONS ==================== */
+.drawing-tool-btn-vertical {
+    width: 28px;
+    height: 28px;
+    margin: 3px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.drawing-tool-btn-vertical:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    transform: translateX(2px);
+}
+
+.drawing-tool-btn-vertical.active {
+    background: var(--bg-active);
+    color: var(--accent-info);
+    box-shadow: 0 0 0 1px var(--accent-info);
+}
+
+.drawing-tool-btn-vertical.active::after {
+    content: '';
+    position: absolute;
+    right: -3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 16px;
+    background: var(--accent-info);
+    border-radius: 2px;
+}
+
+/* ==================== CLEAR BUTTON ==================== */
+.drawing-tool-btn-vertical.clear-btn {
+    color: var(--accent-sell);
+    margin-top: 6px;
+}
+
+.drawing-tool-btn-vertical.clear-btn:hover {
+    background: rgba(var(--accent-sell-rgb), 0.15);
+    color: var(--accent-sell);
+}
+
+/* ==================== TOOL SEPARATORS ==================== */
+.tool-separator {
+    width: 24px;
+    height: 1px;
+    background: var(--border);
+    margin: 6px 0;
+    flex-shrink: 0;
+}
+
+/* ==================== TOOLTIP ==================== */
+.drawing-tool-btn-vertical[title]:hover::before {
+    content: attr(title);
+    position: absolute;
+    left: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--glass-gradient), var(--bg-elevated);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+    z-index: 1000;
+    pointer-events: none;
+    font-family: var(--text-sans);
+}
+
+/* ==================== SCROLLBAR ==================== */
+.drawing-tools-vertical::-webkit-scrollbar { width: 2px; }
+.drawing-tools-vertical::-webkit-scrollbar-track { background: transparent; }
+.drawing-tools-vertical::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 768px) {
+    .drawing-sidebar { width: 32px; }
+
+    .drawing-tool-btn-vertical {
+        width: 26px;
+        height: 26px;
+        font-size: 11px;
+    }
+
+    .drawing-tool-btn-vertical[title]:hover::before {
+        left: 30px;
+        font-size: 0.6rem;
+        padding: 3px 6px;
+    }
+}
+
+/* ==================== REDUCED MOTION ==================== */
+@media (prefers-reduced-motion: reduce) {
+    .drawing-tool-btn-vertical { transition: none; }
+    .drawing-tool-btn-vertical:hover { transform: none; }
+}

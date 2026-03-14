@@ -1,0 +1,52 @@
+<!-- ================================================================
+     WATCHLIST PANEL
+     ================================================================ -->
+<div class="panel-content watchlist-panel">
+
+    <!-- Header -->
+    <div class="panel-header">
+        <div class="panel-header-left">
+            <i class="fas fa-list"></i>
+            <span>Watchlist</span>
+        </div>
+        <div class="panel-header-right">
+            <button class="panel-icon-btn add" id="watchlistAddBtn" title="Add Symbol">
+                <i class="fas fa-plus"></i>
+            </button>
+            <button class="panel-icon-btn" id="watchlistSortBtn" title="Sort">
+                <i class="fas fa-arrow-up-wide-short"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="watchlist-search" id="watchlistSearch">
+        <div class="search-input-wrap">
+            <i class="fas fa-search"></i>
+            <input type="text" class="search-input" id="watchlistSearchInput" placeholder="Search e.g. EUR/USD, BTC...">
+        </div>
+        <div class="search-results" id="watchlistSearchResults"></div>
+    </div>
+
+    <!-- Column Headers -->
+    <div class="watchlist-cols">
+        <span class="wl-col-symbol">Symbol</span>
+        <span class="wl-col-price">Price</span>
+        <span class="wl-col-change">Chg%</span>
+    </div>
+
+    <!-- Items -->
+    <div class="watchlist-items" id="watchlistItems"></div>
+
+    <!-- Footer -->
+    <div class="panel-footer">
+        <div class="wl-footer-info">
+            <i class="fas fa-circle"></i> Live
+        </div>
+        <div class="wl-footer-sort">
+            <button class="wl-sort-btn active" data-sort="az">A-Z</button>
+            <button class="wl-sort-btn" data-sort="chg">Chg%</button>
+        </div>
+    </div>
+
+</div>

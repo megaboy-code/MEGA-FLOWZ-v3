@@ -1,0 +1,124 @@
+<!-- ================================================================ -->
+<!-- ⚡ POSITIONS MODAL                                               -->
+<!-- ================================================================ -->
+
+<div class="positions-modal hidden" id="positionsModal">
+
+    <!-- HEADER -->
+    <div class="positions-modal-header" id="positionsModalHeader">
+        <div class="modal-header-left">
+            <i class="fas fa-table-list"></i>
+            <span class="modal-title">Open Positions</span>
+            <span class="modal-position-count" id="modalPositionCount">0</span>
+        </div>
+        <div class="modal-header-right">
+            <button class="modal-close-all-btn" id="modalCloseAllBtn">
+                <i class="fas fa-times-circle"></i> Close All
+            </button>
+            <button class="modal-close-btn" id="positionsModalClose">
+                <i class="fas fa-xmark"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- SUMMARY BAR -->
+    <div class="positions-summary-bar">
+        <div class="summary-item">
+            <div class="summary-label">Total P&L</div>
+            <div class="summary-value positive" id="summaryTotalPnl">+$324.50</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Total Lots</div>
+            <div class="summary-value" id="summaryTotalLots">0.03</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Winning</div>
+            <div class="summary-value positive" id="summaryWinning">2</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Losing</div>
+            <div class="summary-value negative" id="summaryLosing">1</div>
+        </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="positions-table-wrap">
+
+        <div class="positions-empty hidden" id="positionsEmpty">
+            <i class="fas fa-inbox"></i>
+            <p>No open positions</p>
+        </div>
+
+        <table class="positions-table" id="positionsTable">
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Type</th>
+                    <th>Lots</th>
+                    <th>Entry</th>
+                    <th>Current</th>
+                    <th>SL</th>
+                    <th>TP</th>
+                    <th>P&L</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="positionsTableBody">
+                <!-- Rows injected by trading-module.ts -->
+            </tbody>
+        </table>
+
+    </div>
+
+    <!-- INLINE EDITOR -->
+    <div class="inline-editor hidden" id="inlineEditor">
+        <div class="inline-editor-inner">
+
+            <div class="inline-editor-title">
+                <i class="fas fa-pen"></i>
+                Modify Position
+                <span class="inline-editor-ticket" id="inlineEditorTicket">#123456</span>
+                <span class="inline-editor-time" id="inlineEditorTime">—</span>
+            </div>
+
+            <!-- ✅ Pip presets -->
+            <div id="inlinePipPresets" class="inline-pip-presets"></div>
+
+            <div class="inline-editor-fields">
+
+                <div class="inline-field">
+                    <label class="inline-field-label sl-label">
+                        <i class="fas fa-arrow-down"></i> Stop Loss
+                    </label>
+                    <input type="number" class="inline-field-input" id="inlineSlInput"
+                           step="0.00001" placeholder="0.00000">
+                    <span class="inline-field-pips negative" id="inlineSlPips">—</span>
+                </div>
+
+                <div class="inline-field">
+                    <label class="inline-field-label tp-label">
+                        <i class="fas fa-arrow-up"></i> Take Profit
+                    </label>
+                    <input type="number" class="inline-field-input" id="inlineTpInput"
+                           step="0.00001" placeholder="0.00000">
+                    <span class="inline-field-pips positive" id="inlineTpPips">—</span>
+                </div>
+
+            </div>
+
+            <div class="inline-editor-actions">
+                <button class="inline-btn inline-btn-update" id="inlineUpdateBtn">
+                    <i class="fas fa-check"></i> Update
+                </button>
+                <button class="inline-btn inline-btn-close-trade" id="inlineCloseTradeBtn">
+                    <i class="fas fa-times"></i> Close Trade
+                </button>
+                <button class="inline-btn inline-btn-cancel" id="inlineCancelBtn">
+                    Cancel
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+</div>

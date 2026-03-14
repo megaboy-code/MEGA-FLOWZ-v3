@@ -1,0 +1,248 @@
+/* ================================================================
+   🎨 COLOR PICKER - Styles
+   src/core/color-picker/color-picker.css
+   ================================================================ */
+
+.cp-container {
+    position: fixed;
+    width: 240px;
+    background: #0f172a;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    z-index: 99999;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-family: 'Inter', sans-serif;
+    animation: cpFadeIn 0.15s ease;
+}
+
+.cp-container.cp-closing {
+    animation: cpFadeOut 0.15s ease forwards;
+}
+
+@keyframes cpFadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cpFadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-6px); }
+}
+
+.cp-gradient-wrap {
+    position: relative;
+    width: 100%;
+    height: 150px;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: crosshair;
+}
+
+.cp-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.cp-canvas-cursor {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.cp-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cp-slider-wrap {
+    width: 100%;
+}
+
+.cp-hue-slider {
+    position: relative;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right,
+        hsl(0,100%,50%), hsl(30,100%,50%), hsl(60,100%,50%),
+        hsl(90,100%,50%), hsl(120,100%,50%), hsl(150,100%,50%),
+        hsl(180,100%,50%), hsl(210,100%,50%), hsl(240,100%,50%),
+        hsl(270,100%,50%), hsl(300,100%,50%), hsl(330,100%,50%),
+        hsl(360,100%,50%)
+    );
+    cursor: pointer;
+}
+
+.cp-hue-thumb {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.3);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.cp-opacity-slider {
+    position: relative;
+    height: 10px;
+    border-radius: 5px;
+    background-image: linear-gradient(45deg, #808080 25%, transparent 25%),
+        linear-gradient(-45deg, #808080 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #808080 75%),
+        linear-gradient(-45deg, transparent 75%, #808080 75%);
+    background-size: 8px 8px;
+    background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+    background-color: #b0b0b0;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.cp-opacity-track {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border-radius: 5px;
+}
+
+.cp-opacity-thumb {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.3);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.cp-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cp-preview-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.15);
+    flex-shrink: 0;
+    background-image: linear-gradient(45deg, #808080 25%, transparent 25%),
+        linear-gradient(-45deg, #808080 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #808080 75%),
+        linear-gradient(-45deg, transparent 75%, #808080 75%);
+    background-size: 6px 6px;
+    background-position: 0 0, 0 3px, 3px -3px, -3px 0px;
+    background-color: #b0b0b0;
+    position: relative;
+    overflow: hidden;
+}
+
+.cp-preview-swatch::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: inherit;
+}
+
+.cp-hex-input {
+    flex: 1;
+    background: #1e293b;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 5px;
+    color: #e2e8f0;
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 5px 8px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.cp-hex-input:focus {
+    border-color: #3a86ff;
+}
+
+.cp-opacity-input {
+    width: 42px;
+    background: #1e293b;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 5px;
+    color: #e2e8f0;
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 5px 4px;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.2s;
+}
+
+.cp-opacity-input:focus {
+    border-color: #3a86ff;
+}
+
+.cp-opacity-label {
+    font-size: 0.7rem;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+.cp-presets {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+}
+
+.cp-swatch {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 3px;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: transform 0.1s ease, border-color 0.1s ease;
+}
+
+.cp-swatch:hover {
+    transform: scale(1.15);
+    border-color: rgba(255,255,255,0.4);
+}
+
+.cp-recents-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cp-recents-title {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #475569;
+}
+
+.cp-recents {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    min-height: 20px;
+}
+
+.cp-recents .cp-swatch {
+    width: 20px;
+    height: 20px;
+}

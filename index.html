@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MEGA FLOWZ</title>
+
+  <!-- ✅ Critical CSS — prevents FOUC -->
+  <link rel="stylesheet" href="/src/core/global.css">
+  <link rel="stylesheet" href="/src/chart/chart.css">
+  <link rel="stylesheet" href="/src/panel/panel.css">
+  <link rel="stylesheet" href="/src/chart/drawingtools/drawing.css">
+  <link rel="stylesheet" href="/src/chart/legend/items-legend.css">
+  <link rel="stylesheet" href="/src/trading/trading.css">
+  <link rel="stylesheet" href="/src/notification/notification.css">
+ <link rel="stylesheet" href="/src/chart/ui/context-menu.css">
+  <link rel="stylesheet" href="/src/chart/ui/chart-settings-modal.css">
+  <link rel="stylesheet" href="/src/trading/positions-modal.css">
+  <link rel="stylesheet" href="/src/watchlist/watchlist.css">
+  <link rel="stylesheet" href="/src/calendar/calendar.css">
+  <link rel="stylesheet" href="/src/alerts/alerts.css">
+  <!-- External fonts & icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <!-- Fixed sidebars outside workspace -->
+  <!--@include src/panel/panel.html-->
+  <!--@include src/chart/drawingtools/drawing-sidebar.html-->
+
+  <!-- Workspace sits between the two sidebars -->
+  <div class="workspace-container">
+    <!--@include src/chart/chart.html-->
+    <!--@include src/strategy/strategy.html-->
+  </div>
+
+  <!-- Modals outside workspace -->
+  <!--@include src/journal/journal-modal.html-->
+  <!--@include src/notification/notification-modal.html-->
+
+  <!-- Main app entry point -->
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

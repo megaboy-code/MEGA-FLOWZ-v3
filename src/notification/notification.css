@@ -1,0 +1,477 @@
+/* ===============================================================
+   🔔 NOTIFICATIONS SYSTEM - MEGA FLOWZ Trading Platform
+   =============================================================== */
+
+/* ==================== NOTIFICATION BELL ==================== */
+.notification-bell {
+    position: relative;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.notification-bell:hover {
+    background: var(--bg-hover);
+    color: var(--accent-info);
+    border-color: var(--accent-info);
+}
+
+.notification-bell.has-unread { color: var(--accent-info); }
+
+.bell-count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--accent-sell);
+    color: #ffffff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: 2px solid var(--bg-card);
+}
+
+/* ==================== NOTIFICATION MODAL ==================== */
+.notification-modal {
+    position: absolute;
+    top: 52px;
+    right: 20px;
+    width: 360px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--card-shadow);
+    z-index: 10001;
+    display: none;
+    overflow: hidden;
+}
+
+.notification-modal.show {
+    display: block;
+    animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.notification-modal-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* ==================== HEADER ==================== */
+.notification-header {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-base);
+    flex-shrink: 0;
+}
+
+.notification-header h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+
+.notification-header h3 i { color: var(--accent-info); }
+
+.notification-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.notification-sound-toggle {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.notification-sound-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.notification-sound-toggle.active {
+    color: var(--accent-info);
+    background: rgba(var(--accent-info-rgb), 0.1);
+}
+
+.close-notifications {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.close-notifications:hover {
+    background: rgba(var(--accent-sell-rgb), 0.1);
+    color: var(--accent-sell);
+}
+
+/* ==================== NOTIFICATION LIST ==================== */
+.notification-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 0;
+    flex: 1;
+}
+
+.notification-list::-webkit-scrollbar { width: 4px; }
+.notification-list::-webkit-scrollbar-track { background: transparent; }
+.notification-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.notification-list::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ==================== NOTIFICATION ITEM ==================== */
+.notification-item {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.notification-item:last-child { border-bottom: none; }
+.notification-item:hover { background: var(--bg-hover); }
+
+.notification-item.unread {
+    background: linear-gradient(90deg,
+        rgba(var(--accent-info-rgb), 0.1) 0%,
+        transparent 100%);
+}
+
+.notification-item.empty {
+    padding: 40px 20px;
+    color: var(--text-muted);
+    cursor: default;
+    pointer-events: none;
+}
+
+.notification-item.empty:hover { background: transparent; }
+
+/* ==================== NOTIFICATION ICON ==================== */
+.notification-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1rem;
+}
+
+.notification-icon.success {
+    background: rgba(var(--accent-buy-rgb), 0.1);
+    color: var(--accent-buy);
+    border: 1px solid rgba(var(--accent-buy-rgb), 0.2);
+}
+
+.notification-icon.error {
+    background: rgba(var(--accent-sell-rgb), 0.1);
+    color: var(--accent-sell);
+    border: 1px solid rgba(var(--accent-sell-rgb), 0.2);
+}
+
+.notification-icon.warning {
+    background: rgba(var(--accent-warn-rgb), 0.1);
+    color: var(--accent-warning);
+    border: 1px solid rgba(var(--accent-warn-rgb), 0.2);
+}
+
+.notification-icon.info {
+    background: rgba(var(--accent-info-rgb), 0.1);
+    color: var(--accent-info);
+    border: 1px solid rgba(var(--accent-info-rgb), 0.2);
+}
+
+/* ==================== NOTIFICATION CONTENT ==================== */
+.notification-content { flex: 1; min-width: 0; }
+
+.notification-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.notification-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin-bottom: 4px;
+}
+
+.notification-time {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+/* ==================== NOTIFICATION ACTIONS ==================== */
+.notification-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.notification-item:hover .notification-actions { opacity: 1; }
+
+.notification-mark-read,
+.notification-dismiss {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.notification-mark-read:hover {
+    background: rgba(var(--accent-buy-rgb), 0.1);
+    color: var(--accent-buy);
+}
+
+.notification-dismiss:hover {
+    background: rgba(var(--accent-sell-rgb), 0.1);
+    color: var(--accent-sell);
+}
+
+/* ==================== FOOTER ==================== */
+.notification-footer {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-base);
+    flex-shrink: 0;
+}
+
+.clear-all {
+    background: rgba(var(--accent-sell-rgb), 0.1);
+    border: 1px solid rgba(var(--accent-sell-rgb), 0.2);
+    color: var(--accent-sell);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-family: var(--text-sans);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.clear-all:hover {
+    background: rgba(var(--accent-sell-rgb), 0.2);
+    border-color: var(--accent-sell);
+}
+
+.notification-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* ==================== TOAST CONTAINER — bottom right ==================== */
+.notification-toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10002;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 8px;
+    pointer-events: none;
+    max-width: 320px;
+}
+
+/* ==================== TOAST ==================== */
+.notification-toast {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    width: 320px;
+    box-shadow: var(--card-shadow);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateX(100%);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.notification-toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.notification-toast.success {
+    background: linear-gradient(90deg,
+        rgba(var(--accent-buy-rgb), 0.15) 0%,
+        var(--bg-card) 100%);
+    border-color: rgba(var(--accent-buy-rgb), 0.3);
+}
+
+.notification-toast.error {
+    background: linear-gradient(90deg,
+        rgba(var(--accent-sell-rgb), 0.15) 0%,
+        var(--bg-card) 100%);
+    border-color: rgba(var(--accent-sell-rgb), 0.3);
+}
+
+.notification-toast.warning {
+    background: linear-gradient(90deg,
+        rgba(var(--accent-warn-rgb), 0.15) 0%,
+        var(--bg-card) 100%);
+    border-color: rgba(var(--accent-warn-rgb), 0.3);
+}
+
+.notification-toast.info {
+    background: linear-gradient(90deg,
+        rgba(var(--accent-info-rgb), 0.15) 0%,
+        var(--bg-card) 100%);
+    border-color: rgba(var(--accent-info-rgb), 0.3);
+}
+
+/* ==================== TOAST CONTENT ==================== */
+.notification-toast-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-toast-content > i {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.notification-toast.success .notification-toast-content > i { color: var(--accent-buy); }
+.notification-toast.error   .notification-toast-content > i { color: var(--accent-sell); }
+.notification-toast.warning .notification-toast-content > i { color: var(--accent-warning); }
+.notification-toast.info    .notification-toast-content > i { color: var(--accent-info); }
+
+.notification-toast-text { flex: 1; min-width: 0; }
+
+.notification-toast-title {
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notification-toast-message {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notification-action-btn,
+.notification-close-btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+}
+
+.notification-action-btn:hover {
+    background: rgba(var(--accent-info-rgb), 0.1);
+    color: var(--accent-info);
+}
+
+.notification-close-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 768px) {
+    .notification-modal {
+        width: calc(100vw - 16px);
+        right: 8px;
+        left: 8px;
+        top: 60px;
+    }
+
+    .notification-toast-container {
+        bottom: 12px;
+        right: 12px;
+        left: 12px;
+        max-width: 100%;
+    }
+
+    .notification-toast { width: 100%; }
+}
+
+/* ==================== REDUCED MOTION ==================== */
+@media (prefers-reduced-motion: reduce) {
+    .notification-modal.show { animation: none; }
+    .notification-toast { transition: opacity 0.3s ease; }
+}

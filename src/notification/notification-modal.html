@@ -1,0 +1,39 @@
+<div class="notification-modal" id="notificationModal">
+  <div class="notification-modal-content">
+
+    <div class="notification-header">
+      <h3><i class="fas fa-bell"></i> Notifications</h3>
+      <div class="notification-header-actions">
+        <button class="notification-sound-toggle" id="notificationSoundToggle" title="Toggle Sound">
+          <i class="fas fa-volume-xmark"></i>
+        </button>
+        <button class="close-notifications" id="closeNotifications">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="notification-list" id="notificationList">
+      <div class="notification-item empty">
+        <div class="notification-icon info">
+          <i class="fas fa-info-circle"></i>
+        </div>
+        <div class="notification-content">
+          <div class="notification-title">No notifications</div>
+          <div class="notification-text">You're all caught up!</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notification-footer">
+      <button class="clear-all" id="clearNotifications">
+        <i class="fas fa-trash"></i> Clear All
+      </button>
+      <span class="notification-count">0 total</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast Container — bottom right -->
+<div class="notification-toast-container" id="notificationToastContainer"></div>
