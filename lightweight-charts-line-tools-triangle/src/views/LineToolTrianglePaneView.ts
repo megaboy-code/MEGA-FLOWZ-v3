@@ -182,9 +182,9 @@ export class LineToolTrianglePaneView<HorzScaleItem> extends LineToolPaneView<Ho
 		(this._renderer as CompositeRenderer<HorzScaleItem>).append(this._polygonRenderer);
 
 		// 4. Add Anchors (Only for finished tool or active creation)
-		//if (this.areAnchorsVisible()) {
+		if (this.areAnchorsVisible()) {
 			this._addAnchors(this._renderer as CompositeRenderer<HorzScaleItem>);
-		//}
+		}
 	}
 	
 	/**
@@ -198,6 +198,13 @@ export class LineToolTrianglePaneView<HorzScaleItem> extends LineToolPaneView<Ho
 	 */
 	protected override _addAnchors(renderer: CompositeRenderer<HorzScaleItem>): void {
 		if (this._points.length < 2) return;
+
+		const options = this._tool.options() as LineToolOptionsInternal<'Triangle'>;
+		
+		// Don't add anchors if locked
+		if (options.locked) {
+			return;
+		}
 
 		// The anchor points are the vertices themselves (P0, P1, P2)
 		const anchorPoints: AnchorPoint[] = this._points.slice(0, 3).map((p, index) => {
