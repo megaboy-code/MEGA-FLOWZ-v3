@@ -70,7 +70,9 @@ export class ChartLegend {
             pointer-events: auto;
         `;
 
-        this.paneManager.setMainContainer(this.mainItemContainer);
+        // ✅ Recreate after destroy() to reset _destroyed flag
+        this.paneManager = new LegendPaneManager();
+        this.paneManager.setMainContainer(this.mainItemContainer, this.chartContainer);
 
         this.legendContainer.appendChild(mainLegendEl);
         this.legendContainer.appendChild(this.mainItemContainer);
@@ -111,10 +113,7 @@ export class ChartLegend {
     public update(data: LegendUpdateData): void {
         if (data.symbol    !== undefined) this.mainLegend.updateSymbol(data.symbol);
         if (data.timeframe !== undefined) this.mainLegend.updateTimeframe(data.timeframe);
-        if (data.price     !== undefined) this.mainLegend.updatePrice(data.price, data.precision);
-        if (data.precision !== undefined && data.price === undefined) {
-            this.mainLegend.updatePrice(null, data.precision);
-        }
+        if (data.precision !== undefined) this.mainLegend.updatePrecision(data.precision);
         if (data.volumeVisible !== undefined) {
             const volumeItem = this.itemsLegend.getItem('volume');
             if (data.volumeVisible && !volumeItem) {
@@ -128,6 +127,15 @@ export class ChartLegend {
                 this.removeItem('volume');
             }
         }
+    }
+
+    public updateOHLC(
+        o: number | null,
+        h: number | null,
+        l: number | null,
+        c: number | null
+    ): void {
+        this.mainLegend.updateOHLC(o, h, l, c);
     }
 
     public updateConnectionStatus(status: ConnectionStatus): void {
@@ -163,12 +171,10 @@ export class ChartLegend {
         this.itemsLegend.updateValue(id, values);
     }
 
-    // ✅ Update legend name when period changes
     public updateItemName(id: string, name: string): void {
         this.itemsLegend.updateName(id, name);
     }
 
-    // ✅ Update settings stored in legend item
     public updateItemSettings(id: string, settings: Record<string, any>): void {
         this.itemsLegend.updateSettings(id, settings);
     }
@@ -202,7 +208,6 @@ export class ChartLegend {
     // ==================== DESTROY ====================
 
     public destroy(): void {
-        // ✅ One line removes ALL event listeners
         this.abortController?.abort();
         this.abortController = null;
 

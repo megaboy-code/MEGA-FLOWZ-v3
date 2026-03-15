@@ -1,5 +1,5 @@
 // ================================================================
-// 📊 MAIN LEGEND - Symbol, Price, Timeframe, Status
+// 📊 MAIN LEGEND - Symbol, Timeframe, OHLC, Status
 // ================================================================
 
 import { getSymbolName, formatPrice } from './utils';
@@ -28,13 +28,18 @@ function injectPulseStyle(): void {
 export class MainLegend {
     private container:    HTMLElement | null = null;
     private nameEl:       HTMLElement | null = null;
-    private priceEl:      HTMLElement | null = null;
     private timeframeEl:  HTMLElement | null = null;
     private dotEl:        HTMLElement | null = null;
     private arrowEl:      HTMLElement | null = null;
     private arrowWrapper: HTMLElement | null = null;
     private precision:    number = 5;
-    private lastPrice:    string = '--';
+
+    private ohlcEls: {
+        o: HTMLElement | null;
+        h: HTMLElement | null;
+        l: HTMLElement | null;
+        c: HTMLElement | null;
+    } = { o: null, h: null, l: null, c: null };
 
     public onToggleCollapse: (() => void) | null = null;
 
@@ -45,7 +50,7 @@ export class MainLegend {
         this.container.style.cssText = `
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             font-family: 'Inter', sans-serif;
             font-size: 11px;
             line-height: 16px;
@@ -58,7 +63,7 @@ export class MainLegend {
         this.nameEl = document.createElement('span');
         this.nameEl.style.cssText = `
             color: var(--text-primary);
-            font-weight: 600;
+            font-weight: 700;
             white-space: nowrap;
         `;
 
@@ -68,22 +73,11 @@ export class MainLegend {
         this.timeframeEl = document.createElement('span');
         this.timeframeEl.style.cssText = `
             color: var(--text-muted);
-            font-weight: 500;
+            font-weight: 700;
             white-space: nowrap;
         `;
 
         const sep2 = this.makeSep();
-
-        // ── Price ──
-        this.priceEl = document.createElement('span');
-        this.priceEl.style.cssText = `
-            color: var(--text-primary);
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-            min-width: 70px;
-        `;
-        this.priceEl.textContent = '--';
 
         // ── Connection dot ──
         this.dotEl = document.createElement('div');
@@ -95,7 +89,20 @@ export class MainLegend {
             flex-shrink: 0;
         `;
 
-        // ── Collapse arrow wrapper — fixed height, isolates arrow from row ──
+        const sep3 = this.makeSep();
+
+        // ── OHLC ──
+        const ohlcO = this.makeOhlcItem('O:');
+        const ohlcH = this.makeOhlcItem('H:');
+        const ohlcL = this.makeOhlcItem('L:');
+        const ohlcC = this.makeOhlcItem('C:');
+
+        this.ohlcEls.o = ohlcO.val;
+        this.ohlcEls.h = ohlcH.val;
+        this.ohlcEls.l = ohlcL.val;
+        this.ohlcEls.c = ohlcC.val;
+
+        // ── Collapse arrow wrapper ──
         this.arrowWrapper = document.createElement('div');
         this.arrowWrapper.style.cssText = `
             width: 20px;
@@ -141,16 +148,20 @@ export class MainLegend {
 
         this.arrowWrapper.appendChild(this.arrowEl);
 
+        // ── Assemble: pair · tf · dot · O H L C · arrow ──
         this.container.appendChild(this.nameEl);
         this.container.appendChild(sep1);
         this.container.appendChild(this.timeframeEl);
         this.container.appendChild(sep2);
-        this.container.appendChild(this.priceEl);
         this.container.appendChild(this.dotEl);
+        this.container.appendChild(sep3);
+        [ohlcO, ohlcH, ohlcL, ohlcC].forEach(({ cell }) => this.container!.appendChild(cell));
         this.container.appendChild(this.arrowWrapper);
 
         return this.container;
     }
+
+    // ==================== HELPERS ====================
 
     private makeSep(): HTMLElement {
         const sep = document.createElement('span');
@@ -163,25 +174,67 @@ export class MainLegend {
         return sep;
     }
 
+    private makeOhlcItem(label: string): { cell: HTMLElement; val: HTMLElement } {
+        const cell = document.createElement('span');
+        cell.style.cssText = `
+            display: inline-flex;
+            align-items: baseline;
+            gap: 2px;
+            margin-right: 1px;
+        `;
+
+        const lbl = document.createElement('span');
+        lbl.style.cssText = `
+            color: var(--text-muted);
+            font-size: 9px;
+            font-weight: 600;
+        `;
+        lbl.textContent = label;
+
+        const val = document.createElement('span');
+        val.style.cssText = `
+            color: var(--text-primary);
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            font-size: 10px;
+            white-space: nowrap;
+        `;
+        val.textContent = '--';
+
+        cell.appendChild(lbl);
+        cell.appendChild(val);
+        return { cell, val };
+    }
+
     // ==================== PUBLIC UPDATE ====================
 
     public updateSymbol(symbol: string): void {
         if (this.nameEl) this.nameEl.textContent = getSymbolName(symbol);
     }
 
-    public updatePrice(price: number | null, precision?: number): void {
-        if (precision !== undefined) this.precision = precision;
-
-        // ✅ Keep last known price — don't reset to '--' on crosshair leave
-        if (price === null) return;
-
-        const formatted = formatPrice(price, this.precision);
-        this.lastPrice = formatted;
-        if (this.priceEl) this.priceEl.textContent = formatted;
-    }
-
     public updateTimeframe(timeframe: string): void {
         if (this.timeframeEl) this.timeframeEl.textContent = timeframe;
+    }
+
+    public updatePrecision(precision: number): void {
+        this.precision = precision;
+    }
+
+    public updateOHLC(
+        o: number | null,
+        h: number | null,
+        l: number | null,
+        c: number | null
+    ): void {
+        // ✅ If all null — crosshair left, keep last known values
+        if (o === null && h === null && l === null && c === null) return;
+
+        const fmt = (v: number | null) => v !== null ? formatPrice(v, this.precision) : '--';
+
+        if (this.ohlcEls.o) this.ohlcEls.o.textContent = fmt(o);
+        if (this.ohlcEls.h) this.ohlcEls.h.textContent = fmt(h);
+        if (this.ohlcEls.l) this.ohlcEls.l.textContent = fmt(l);
+        if (this.ohlcEls.c) this.ohlcEls.c.textContent = fmt(c);
     }
 
     public updateStatus(status: ConnectionStatus): void {
@@ -203,11 +256,11 @@ export class MainLegend {
     public destroy(): void {
         this.container    = null;
         this.nameEl       = null;
-        this.priceEl      = null;
         this.timeframeEl  = null;
         this.dotEl        = null;
         this.arrowEl      = null;
         this.arrowWrapper = null;
+        this.ohlcEls      = { o: null, h: null, l: null, c: null };
         this.onToggleCollapse = null;
     }
 }

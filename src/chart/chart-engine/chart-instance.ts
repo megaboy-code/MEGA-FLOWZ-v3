@@ -10,7 +10,7 @@ import {
     LineStyle
 } from 'lightweight-charts';
 import { createDynamicPriceFormatter } from '../chart-utils';
-import { ChartColors, DEFAULT_CHART_COLORS } from '../chart-types';
+import { ChartColors, DEFAULT_CHART_COLORS, DARK_CHART_COLORS, LIGHT_CHART_COLORS } from '../chart-types';
 
 const DEFAULT_FONT_SIZE = 9;
 
@@ -26,6 +26,15 @@ export class ChartInstance {
 
     constructor(symbol: string) {
         this.currentSymbol = symbol;
+
+        // ✅ Restore chart colors from saved theme
+        const savedTheme = localStorage.getItem('app-theme') || 'system';
+        const presetMap: Record<string, ChartColors> = {
+            system: DEFAULT_CHART_COLORS,
+            dark:   DARK_CHART_COLORS,
+            light:  LIGHT_CHART_COLORS,
+        };
+        this.chartColors = { ...(presetMap[savedTheme] || DEFAULT_CHART_COLORS) };
     }
 
     public async create(container: HTMLElement): Promise<IChartApi | null> {
@@ -37,13 +46,12 @@ export class ChartInstance {
         const containerHeight = container.clientHeight;
 
         this.chart = createChart(container, {
-            autoSize: true,
+            autoSize: false,
             layout: {
                 background: { type: ColorType.Solid, color: 'transparent' },
                 textColor:  this.chartColors.textColor || '#e2e8f0',
                 fontSize:   DEFAULT_FONT_SIZE,
                 fontFamily: 'Inter, sans-serif'
-                //attributionLogo: false,
             },
             grid: {
                 vertLines: { color: this.chartColors.grid, visible: true, style: 1 },

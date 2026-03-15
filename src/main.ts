@@ -8,6 +8,15 @@ import { HotkeyManager } from './core/hotkey-manager';
 import { initializeTabManager } from './core/tab-manager';
 
 // ================================================================
+// 🎨 THEME RESTORE — must run before DOMContentLoaded
+// ================================================================
+
+(function restoreTheme(): void {
+    const saved = localStorage.getItem('app-theme') || 'system';
+    document.documentElement.setAttribute('data-theme', saved);
+})();
+
+// ================================================================
 // 🧠 MEGA FLOWZ APP
 // ================================================================
 

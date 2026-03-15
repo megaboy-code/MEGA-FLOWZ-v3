@@ -78,7 +78,6 @@ export class ChartDataManager {
 
         if (lastIndex >= 0 && this.ohlcData[lastIndex].time === update.time) {
             if (this.isBaselineActive) {
-                // ✅ Update running sum and recalculate baseline for forming candle
                 this.runningSum = this.runningSum - this.ohlcData[lastIndex].close + update.close;
                 this.calculateBaseline();
             }
@@ -151,6 +150,20 @@ export class ChartDataManager {
 
     public getLatestOHLC(): OHLCData | null {
         return this.ohlcData.length > 0 ? this.ohlcData[this.ohlcData.length - 1] : null;
+    }
+
+    // ✅ Binary search for O(log n) performance on large datasets
+    public getOHLCAtTime(time: number): OHLCData | null {
+        if (this.ohlcData.length === 0) return null;
+        let low = 0, high = this.ohlcData.length - 1;
+        while (low <= high) {
+            const mid = (low + high) >> 1;
+            const t   = this.ohlcData[mid].time as number;
+            if (t === time)    return this.ohlcData[mid];
+            else if (t < time) low = mid + 1;
+            else               high = mid - 1;
+        }
+        return null;
     }
 
     public getOHLCData(): OHLCData[] {

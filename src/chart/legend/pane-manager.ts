@@ -4,17 +4,18 @@
 
 import { removeElement } from './utils';
 
-const MAX_RETRIES = 30;
-
 export class LegendPaneManager {
     private paneContainers: Map<any, HTMLElement> = new Map();
     private itemContainers: Map<any, HTMLElement> = new Map();
     private mainContainer:  HTMLElement | null    = null;
+    private chartContainer: HTMLElement | null    = null;
     private _destroyed:     boolean               = false;
 
-    public setMainContainer(container: HTMLElement): void {
-        this.mainContainer = container;
+    public setMainContainer(container: HTMLElement, chartContainer?: HTMLElement): void {
+        this.mainContainer  = container;
+        this.chartContainer = chartContainer || null;
         this.itemContainers.set(null, container);
+        console.log('🔍 chartContainer set:', this.chartContainer?.id, chartContainer?.id);
     }
 
     public getContainer(pane: any = null): HTMLElement | null {
@@ -23,27 +24,17 @@ export class LegendPaneManager {
 
     public async createPaneContainer(pane: any): Promise<HTMLElement | null> {
         if (this._destroyed) return null;
+        if (this.paneContainers.has(pane)) return this.paneContainers.get(pane)!;
 
-        if (this.paneContainers.has(pane)) {
-            return this.paneContainers.get(pane)!;
-        }
-
-        const paneElement = await this.waitForPaneElement(pane);
-
-        if (!paneElement) {
-            console.error('❌ Pane element never became available');
+        if (!this.chartContainer) {
+            console.error('❌ Chart container not available for pane legend');
             return null;
         }
-
-        if (this._destroyed) return null;
-
-        paneElement.style.position = 'relative';
 
         const legendContainer = document.createElement('div');
         legendContainer.style.cssText = `
             position: absolute;
             left: 12px;
-            top: 12px;
             z-index: 10;
             pointer-events: none;
             user-select: none;
@@ -59,14 +50,35 @@ export class LegendPaneManager {
         `;
 
         legendContainer.appendChild(itemContainer);
-        paneElement.appendChild(legendContainer);
+        this.chartContainer.appendChild(legendContainer);
 
         this.paneContainers.set(pane, legendContainer);
         this.itemContainers.set(pane, itemContainer);
 
-        console.log('✅ Pane legend container created');
+        // ✅ Initial position
+        this.positionLegend(pane, legendContainer);
 
+        // ✅ Reposition on pane resize
+        const resizeHandler = () => {
+            if (!this._destroyed) this.positionLegend(pane, legendContainer);
+        };
+        document.addEventListener('mouseup', resizeHandler);
+
+        console.log('✅ Pane legend container created');
         return legendContainer;
+    }
+
+    private positionLegend(pane: any, legendContainer: HTMLElement): void {
+        try {
+            const paneHeight  = pane.getHeight?.() ?? 120;
+            const totalHeight = this.chartContainer?.clientHeight ?? 0;
+            if (totalHeight > 0 && paneHeight > 0) {
+                legendContainer.style.top = (totalHeight - paneHeight + 8) + 'px';
+                return;
+            }
+        } catch (e) {}
+
+        legendContainer.style.top = '60%';
     }
 
     public removePaneContainer(pane: any): void {
@@ -86,35 +98,10 @@ export class LegendPaneManager {
         if (mainContainer) this.itemContainers.set(null, mainContainer);
     }
 
-    private async waitForPaneElement(
-        pane:    any,
-        retries: number = 0
-    ): Promise<HTMLElement | null> {
-        if (this._destroyed) return null;
-
-        try {
-            // ✅ Get pane DOM element via paneIndex + chartWidget paneWidgets
-            const paneIndex  = pane.paneIndex?.();
-            if (paneIndex !== undefined) {
-                const chartWidget = pane._private__chartWidget;
-                const paneWidget  = chartWidget?._private__paneWidgets?.[paneIndex];
-                const el          = paneWidget?.getElement?.() ?? paneWidget?._private__element;
-                if (el) return el;
-            }
-        } catch (e) {}
-
-        if (retries >= MAX_RETRIES) {
-            console.error(`❌ waitForPaneElement failed after ${MAX_RETRIES} retries`);
-            return null;
-        }
-
-        await new Promise(r => setTimeout(r, 16));
-        return this.waitForPaneElement(pane, retries + 1);
-    }
-
     public destroy(): void {
         this._destroyed = true;
         this.clearAll();
-        this.mainContainer = null;
+        this.mainContainer  = null;
+        this.chartContainer = null;
     }
 }

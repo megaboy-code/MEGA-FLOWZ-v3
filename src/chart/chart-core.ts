@@ -60,12 +60,6 @@ export class ChartModule {
         this.mainChart.onInitialDataLoaded = (detail) => this.onInitialDataLoaded(detail);
 
         this.mainChart.onPriceUpdate = (price) => {
-            if (this.chartLegend) {
-                this.chartLegend.update({
-                    price,
-                    precision: getDecimalPrecision(this._currentSymbol)
-                });
-            }
             const latestOHLC = this.chartDataManager.getLatestOHLC();
             if (latestOHLC) this.indicatorManager?.updateLatestValues(latestOHLC);
         };
@@ -103,16 +97,14 @@ export class ChartModule {
         };
 
         // ✅ Series has data — safe to restore drawings
-        // This fires from inside setData() — perfectly synced
         this.mainChart.onSeriesDataReady = () => {
-            this.drawingModule?.onDataReady()
-        }
+            this.drawingModule?.onDataReady();
+        };
 
         // ✅ Series about to be destroyed — clear tools first
-        // Prevents "Chart API not available" crash
         this.mainChart.onBeforeSeriesRemoved = () => {
-            this.drawingModule?.clearToolsOnly()
-        }
+            this.drawingModule?.clearToolsOnly();
+        };
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.initialize());
@@ -319,20 +311,13 @@ export class ChartModule {
         const series = this.mainChart.getSeries();
         if (!chart || !series) return;
 
-        let lastPrice:      number | null = null;
         let lastUpdateTime: number = 0;
         const THROTTLE_MS = 16;
 
         chart.subscribeCrosshairMove((param: any) => {
             if (!param.time || !param.point) {
-                if (lastPrice !== null) {
-                    lastPrice = null;
-                    if (this.chartLegend) {
-                        this.chartLegend.update({
-                            price:     null,
-                            precision: getDecimalPrecision(this._currentSymbol)
-                        });
-                    }
+                if (this.drawingModule) {
+                    this.drawingModule.onCrosshairMove(param);
                 }
                 return;
             }
@@ -341,23 +326,10 @@ export class ChartModule {
             if (now - lastUpdateTime < THROTTLE_MS) return;
             lastUpdateTime = now;
 
-            const seriesData = param.seriesData?.get(series);
-            if (!seriesData) return;
-
-            const price = this.mainChart.currentChartType === 'candlestick'
-                ? seriesData.close
-                : seriesData.value || seriesData.close;
-
-            if (price === undefined) return;
-
-            if (lastPrice !== price) {
-                lastPrice = price;
-                if (this.chartLegend) {
-                    this.chartLegend.update({
-                        price,
-                        precision: getDecimalPrecision(this._currentSymbol)
-                    });
-                }
+            // ✅ OHLC at crosshair time only
+            const ohlc = this.chartDataManager.getOHLCAtTime(param.time as number);
+            if (ohlc && this.chartLegend) {
+                this.chartLegend.updateOHLC(ohlc.open, ohlc.high, ohlc.low, ohlc.close);
             }
 
             if (this.drawingModule) {
@@ -406,8 +378,6 @@ export class ChartModule {
         }
         if (this.chartUI) this.chartUI.updateSymbol(symbol);
 
-        // ✅ Save + update tracking only
-        // clearToolsOnly + loadDrawings handled by onBeforeSeriesRemoved + onSeriesDataReady
         this.drawingModule?.onSymbolChange(symbol);
     }
 
@@ -423,16 +393,12 @@ export class ChartModule {
         }
         if (this.chartUI) this.chartUI.updateTimeframe(timeframe);
 
-        // ✅ Save + update tracking only
-        // clearToolsOnly + loadDrawings handled by onBeforeSeriesRemoved + onSeriesDataReady
         this.drawingModule?.onTimeframeChange(timeframe);
     }
 
     public handleChartTypeChange(newChartType: string): void {
         if (this.mainChart.currentChartType === newChartType) return;
 
-        // ✅ onBeforeSeriesRemoved will fire inside createSeries()
-        // drawing tools cleared automatically before series destroyed
         this.mainChart.setChartType(newChartType);
 
         if (this.drawingModule) {

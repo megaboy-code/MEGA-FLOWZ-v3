@@ -12,17 +12,15 @@ export class PanelsModule {
     private isPanelExpanded: boolean = false;
     private activeTool: string = 'trading';
 
-    // ✅ Updated panel map — removed calculator, added watchlist and calendar
     private panelMap: PanelMap = {
         'trading':   '.trading-panel',
         'watchlist': '.watchlist-panel',
         'calendar':  '.calendar-panel',
         'alerts':    '.alerts-panel',
-        'journal':   '.journal-panel'
     };
 
-    // ✅ Tools that do NOT expand the panel — just trigger modals
-    private modalTools: string[] = ['settings'];
+    // ✅ Tools that do NOT expand the panel — trigger modals or tabs
+    private modalTools: string[] = ['settings', 'journal'];
 
     // DOM Elements
     private panel: HTMLElement | null = null;
@@ -59,8 +57,8 @@ export class PanelsModule {
     }
 
     private cacheElements(): void {
-        this.panel = document.getElementById('toolsPanel');
-        this.toolIcons = document.querySelectorAll('.tool-icon');
+        this.panel         = document.getElementById('toolsPanel');
+        this.toolIcons     = document.querySelectorAll('.tool-icon');
         this.panelContents = document.querySelectorAll('.panel-content');
         this.mainChartArea = document.getElementById('mainChartArea');
     }
@@ -77,7 +75,7 @@ export class PanelsModule {
                 const tool = (icon as HTMLElement).getAttribute('data-tool');
                 if (!tool) return;
 
-                // ✅ Settings — open modal, don't expand panel
+                // ✅ Modal/tab tools — never expand panel
                 if (this.modalTools.includes(tool)) {
                     this.handleModalTool(tool);
                     return;
@@ -107,9 +105,12 @@ export class PanelsModule {
     private handleModalTool(tool: string): void {
         switch (tool) {
             case 'settings':
-                console.log('⚙️ Opening settings modal');
-                document.dispatchEvent(new CustomEvent('open-modal', {
-                    detail: { modal: 'settings' }
+                document.dispatchEvent(new CustomEvent('chart-settings-modal-request'));
+                break;
+
+            case 'journal':
+                document.dispatchEvent(new CustomEvent('open-tab', {
+                    detail: { tab: 'journal' }
                 }));
                 break;
         }
@@ -164,7 +165,7 @@ export class PanelsModule {
         this.toolIcons?.forEach(icon => {
             const tool = icon.getAttribute('data-tool');
 
-            // ✅ Settings never gets active class
+            // ✅ Modal tools never get active class
             if (this.modalTools.includes(tool || '')) return;
 
             icon.classList.toggle('active', tool === this.activeTool);
@@ -202,7 +203,7 @@ export class PanelsModule {
     public getState(): PanelState {
         return {
             isExpanded: this.isPanelExpanded,
-            isLocked: false,
+            isLocked:   false,
             activeTool: this.activeTool
         };
     }
