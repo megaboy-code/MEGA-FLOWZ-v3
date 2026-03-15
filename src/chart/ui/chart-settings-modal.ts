@@ -4,7 +4,8 @@
 
 import { SettingsModalConfig, ChartColors, DEFAULT_CHART_COLORS, DARK_CHART_COLORS, LIGHT_CHART_COLORS } from '../chart-types';
 
-const TEMPLATES_KEY = 'mega_flowz_chart_templates';
+const TEMPLATES_KEY       = 'mega_flowz_chart_templates';
+const ACTIVE_TEMPLATE_KEY = 'mega_flowz_active_template';
 
 const CANDLE_ICON = `
 <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -81,11 +82,11 @@ export class ChartSettingsModal {
     private config:         SettingsModalConfig;
     private overlay:        HTMLElement | null = null;
     private activeCategory: string = 'symbol';
-    private liveColors:     Record<string, string> = {};
+    private liveColors:     Record<string, any> = {};
     private bgMode:         'solid' | 'gradient' = 'solid';
 
-    private boundKeyDown:     (e: KeyboardEvent) => void;
-    private boundOutsideClick:(e: MouseEvent)    => void;
+    private boundKeyDown:      (e: KeyboardEvent) => void;
+    private boundOutsideClick: (e: MouseEvent)    => void;
 
     constructor(config: SettingsModalConfig) {
         this.config     = { ...config };
@@ -176,17 +177,17 @@ export class ChartSettingsModal {
                         <div class="settings-themes">
                             <div class="settings-themes-title">Themes</div>
                             <div class="settings-theme-item" data-theme="system">
-                                <div class="settings-theme-dot" style="background:#0b0f14; border-color:#2c3b55;"></div>
+                                <div class="settings-theme-dot" style="background:#0f1724; border-color:#2a384a;"></div>
                                 System
                                 <i class="fas fa-check"></i>
                             </div>
                             <div class="settings-theme-item" data-theme="dark">
-                                <div class="settings-theme-dot" style="background:#030507; border-color:#1f2b39;"></div>
+                                <div class="settings-theme-dot" style="background:#0a0e13; border-color:#1e2a3a;"></div>
                                 Dark
                                 <i class="fas fa-check"></i>
                             </div>
                             <div class="settings-theme-item" data-theme="light">
-                                <div class="settings-theme-dot" style="background:#f7f4ef; border-color:#ddd8d0;"></div>
+                                <div class="settings-theme-dot" style="background:#f8f9fc; border-color:#ccd3e0;"></div>
                                 Light
                                 <i class="fas fa-check"></i>
                             </div>
@@ -295,8 +296,8 @@ export class ChartSettingsModal {
                         <div class="settings-content" data-content="trading">
                             <div class="settings-section">
                                 <div class="settings-section-title">Price Display</div>
-                                ${this.toggleColorRow('Show Ask Price',  'showAsk',  true,  'askColor',      this.c('bull'))}
-                                ${this.toggleColorRow('Show Bid Price',  'showBid',  true,  'bidColor',      this.c('bear'))}
+                                ${this.toggleColorRow('Show Ask Price',  'showAsk',  true,  'askColor',  this.c('bull'))}
+                                ${this.toggleColorRow('Show Bid Price',  'showBid',  true,  'bidColor',  this.c('bear'))}
                                 ${this.toggleRow('Show Spread Body', 'showSpread', false)}
                             </div>
                             <div class="settings-section">
@@ -393,7 +394,7 @@ export class ChartSettingsModal {
 
         document.body.appendChild(this.overlay);
 
-        // Sync active theme item on open
+        // ✅ Sync active theme item on open
         const currentTheme = document.documentElement.getAttribute('data-theme') || 'system';
         this.overlay.querySelectorAll('.settings-theme-item').forEach(item => {
             item.classList.toggle('active', (item as HTMLElement).dataset.theme === currentTheme);
@@ -505,7 +506,7 @@ export class ChartSettingsModal {
         });
 
         // Close
-        this.overlay.querySelector('#settingsClose')?.addEventListener('click', () => this.close());
+        this.overlay.querySelector('#settingsClose')?.addEventListener('click',  () => this.close());
         this.overlay.querySelector('#settingsCancel')?.addEventListener('click', () => this.close());
 
         // Apply
@@ -719,17 +720,16 @@ export class ChartSettingsModal {
     // ==================== THEMES ====================
 
     private applyTheme(theme: string): void {
-
-        // ── Switch app theme — CSS variables update automatically ──
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('app-theme', theme);
 
-        // ── Sync tab strip theme buttons ──
+        // ✅ Clear active template — theme resets everything
+        localStorage.removeItem(ACTIVE_TEMPLATE_KEY);
+
         document.querySelectorAll('.theme-btn').forEach(btn => {
             btn.classList.toggle('active', (btn as HTMLElement).dataset.theme === theme);
         });
 
-        // ── Get correct chart color preset ──
         const presetMap: Record<string, ChartColors> = {
             system: DEFAULT_CHART_COLORS,
             dark:   DARK_CHART_COLORS,
@@ -739,10 +739,8 @@ export class ChartSettingsModal {
         const preset = presetMap[theme];
         if (!preset) return;
 
-        // ── Apply preset to liveColors ──
         this.liveColors = { ...preset };
 
-        // ── Update swatch buttons ──
         this.overlay?.querySelectorAll('.settings-color-swatch').forEach(swatch => {
             const key = (swatch as HTMLElement).dataset.key;
             if (key && (this.liveColors as any)[key]) {
@@ -792,6 +790,9 @@ export class ChartSettingsModal {
 
         if (!btn || !popup) return;
 
+        // ✅ Prevent popup clicks from bubbling to outside click handler
+        popup.addEventListener('click', (e) => e.stopPropagation());
+
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const isOpen = popup.style.display !== 'none';
@@ -802,11 +803,13 @@ export class ChartSettingsModal {
             }
         });
 
-        save?.addEventListener('click', () => {
+        save?.addEventListener('click', (e) => {
+            e.stopPropagation();
             const name = input?.value.trim();
             if (!name) return;
+            const currentSettings = this.captureCurrentSettings();
             const all = this.loadTemplates();
-            all.push({ name, settings: { ...this.liveColors } as any });
+            all.push({ name, settings: currentSettings });
             this.saveTemplates(all);
             if (input) input.value = '';
             this.renderTemplates();
@@ -817,6 +820,55 @@ export class ChartSettingsModal {
         });
 
         document.addEventListener('click', this.boundOutsideClick);
+    }
+
+    // ✅ Capture all current modal state into AllSettings
+    private captureCurrentSettings(): Partial<AllSettings> {
+        if (!this.overlay) return { ...this.liveColors } as any;
+
+        const settings: Partial<AllSettings> = {};
+
+        // Colors from liveColors
+        Object.assign(settings, this.liveColors);
+
+        // Toggles
+        this.overlay.querySelectorAll('.settings-toggle input').forEach(el => {
+            const input = el as HTMLInputElement;
+            const key   = input.dataset.key;
+            if (key) (settings as any)[key] = input.checked;
+        });
+
+        // Ranges
+        this.overlay.querySelectorAll('.settings-range').forEach(el => {
+            const input = el as HTMLInputElement;
+            const key   = input.dataset.key;
+            if (key) (settings as any)[key] = parseInt(input.value);
+        });
+
+        // Scale mode
+        const activeScale = this.overlay.querySelector('.settings-mode-btn[data-scale].active') as HTMLElement;
+        if (activeScale) (settings as any).scaleMode = activeScale.dataset.scale;
+
+        // Scale position
+        const scalePos = this.overlay.querySelector('input[name="scalePos"]:checked') as HTMLInputElement;
+        if (scalePos) settings.scalePosition = scalePos.value as 'right' | 'left';
+
+        // Legend position
+        const legendPos = this.overlay.querySelector('input[name="legendPos"]:checked') as HTMLInputElement;
+        if (legendPos) settings.legendPosition = legendPos.value as 'top-left' | 'top-right';
+
+        // Legend size
+        const activeSize = this.overlay.querySelector('.settings-mode-btn[data-size].active') as HTMLElement;
+        if (activeSize) settings.legendSize = activeSize.dataset.size as 'small' | 'medium' | 'large';
+
+        // Crosshair style
+        const crosshairSelect = this.overlay.querySelector('[data-key="crosshairStyle"]') as HTMLSelectElement;
+        if (crosshairSelect) settings.crosshairStyle = crosshairSelect.value;
+
+        // BG mode
+        settings.bgMode = this.bgMode;
+
+        return settings;
     }
 
     private handleOutsideClick(e: MouseEvent): void {
@@ -852,12 +904,16 @@ export class ChartSettingsModal {
                 <i class="fas fa-times settings-template-delete"></i>
             `;
 
-            item.querySelector('span')?.addEventListener('click', () => {
+            // ✅ Click anywhere on item except delete — applies template
+            item.addEventListener('click', (e) => {
+                if ((e.target as HTMLElement).classList.contains('settings-template-delete')) return;
+                e.stopPropagation();
                 this.applyTemplateSettings(t.settings);
                 const popup = this.overlay?.querySelector('#settingsTemplatePopup') as HTMLElement;
                 if (popup) popup.style.display = 'none';
             });
 
+            // ✅ Delete button
             item.querySelector('.settings-template-delete')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const all = this.loadTemplates();
@@ -870,19 +926,142 @@ export class ChartSettingsModal {
         });
     }
 
+    // ✅ Apply all settings from template and save as active
     private applyTemplateSettings(settings: Partial<AllSettings>): void {
-        Object.entries(settings).forEach(([k, v]) => {
-            this.liveColors[k] = v as string;
+
+        // Colors
+        const colorKeys = ['background', 'grid', 'bull', 'bear', 'line', 'volumeBull', 'volumeBear',
+                           'scaleBorder', 'crosshair', 'textColor', 'wickBull', 'wickBear',
+                           'borderBull', 'borderBear'];
+        colorKeys.forEach(key => {
+            if ((settings as any)[key] !== undefined) {
+                this.liveColors[key] = (settings as any)[key];
+            }
         });
+
+        // Update swatch buttons
         this.overlay?.querySelectorAll('.settings-color-swatch').forEach(swatch => {
             const key = (swatch as HTMLElement).dataset.key;
             if (key && this.liveColors[key]) {
                 (swatch as HTMLElement).style.background = this.liveColors[key];
             }
         });
+
+        // Dispatch chart colors
         document.dispatchEvent(new CustomEvent('chart-colors-change', {
             detail: { colors: { ...this.liveColors } }
         }));
+
+        // Toggles
+        const toggleMap: Record<string, string> = {
+            gridVertical:     'chart-toggle-grid-vertical',
+            gridHorizontal:   'chart-toggle-grid-horizontal',
+            timescaleVisible: 'chart-toggle-timescale',
+        };
+        const toggleKeys = ['gridVertical', 'gridHorizontal', 'timescaleVisible', 'timeVisible',
+                            'showWatermark', 'autoScale', 'showAsk', 'showBid', 'showSpread',
+                            'showDepth', 'showBuyArrows', 'showSellArrows'];
+        toggleKeys.forEach(key => {
+            if ((settings as any)[key] !== undefined) {
+                const value = (settings as any)[key] as boolean;
+                if (toggleMap[key]) {
+                    document.dispatchEvent(new CustomEvent(toggleMap[key]));
+                } else if (key === 'timeVisible') {
+                    document.dispatchEvent(new CustomEvent('chart-time-visible', { detail: { visible: value } }));
+                } else if (key === 'showWatermark') {
+                    document.dispatchEvent(new CustomEvent('chart-watermark', { detail: { visible: value } }));
+                } else if (key === 'autoScale') {
+                    document.dispatchEvent(new CustomEvent('chart-scale-change', { detail: { autoScale: value } }));
+                } else {
+                    document.dispatchEvent(new CustomEvent('chart-setting-toggle', { detail: { key, value } }));
+                }
+            }
+        });
+
+        // Ranges
+        if (settings.barSpacing !== undefined) {
+            document.dispatchEvent(new CustomEvent('chart-bar-spacing', { detail: { spacing: settings.barSpacing } }));
+        }
+        if (settings.fontSize !== undefined) {
+            document.dispatchEvent(new CustomEvent('chart-font-size', { detail: { size: settings.fontSize } }));
+        }
+        if (settings.marginTop !== undefined || settings.marginBottom !== undefined) {
+            document.dispatchEvent(new CustomEvent('chart-scale-margins', {
+                detail: {
+                    top:    (settings.marginTop    ?? 10) / 100,
+                    bottom: (settings.marginBottom ?? 10) / 100
+                }
+            }));
+        }
+        if (settings.watermarkOpacity !== undefined) {
+            document.dispatchEvent(new CustomEvent('chart-watermark', {
+                detail: { opacity: settings.watermarkOpacity / 100 }
+            }));
+        }
+
+        // Scale mode
+        if (settings.scaleMode) {
+            document.dispatchEvent(new CustomEvent('chart-scale-change', {
+                detail: {
+                    logScale:     settings.scaleMode === 'log',
+                    percentScale: settings.scaleMode === 'percent',
+                }
+            }));
+        }
+
+        // Scale position
+        if (settings.scalePosition) {
+            document.dispatchEvent(new CustomEvent('chart-scale-position', {
+                detail: { position: settings.scalePosition }
+            }));
+        }
+
+        // Crosshair style
+        if (settings.crosshairStyle) {
+            document.dispatchEvent(new CustomEvent('chart-crosshair-style', {
+                detail: { style: settings.crosshairStyle }
+            }));
+        }
+
+        // Legend
+        if (settings.legendPosition) {
+            document.dispatchEvent(new CustomEvent('legend-position-change', {
+                detail: { position: settings.legendPosition }
+            }));
+        }
+        if (settings.legendSize) {
+            document.dispatchEvent(new CustomEvent('legend-size-change', {
+                detail: { size: settings.legendSize }
+            }));
+        }
+
+        // ✅ Save as active template for refresh survival
+        localStorage.setItem(ACTIVE_TEMPLATE_KEY, JSON.stringify(settings));
+
+        console.log('✅ Template applied:', settings);
+    }
+
+    // ✅ Public static — called on chart ready to restore last template
+    public static restoreActiveTemplate(): void {
+        try {
+            const saved = localStorage.getItem(ACTIVE_TEMPLATE_KEY);
+            if (!saved) return;
+            const settings = JSON.parse(saved) as Partial<AllSettings>;
+
+            const colorKeys = ['background', 'grid', 'bull', 'bear', 'line', 'volumeBull', 'volumeBear',
+                               'scaleBorder', 'crosshair', 'textColor', 'wickBull', 'wickBear',
+                               'borderBull', 'borderBear'];
+            const colors: Record<string, string> = {};
+            colorKeys.forEach(key => {
+                if ((settings as any)[key]) colors[key] = (settings as any)[key];
+            });
+
+            if (Object.keys(colors).length > 0) {
+                document.dispatchEvent(new CustomEvent('chart-colors-change', {
+                    detail: { colors }
+                }));
+            }
+        } catch (e) {}
     }
 
     private loadTemplates(): SavedTemplate[] {
@@ -960,5 +1139,4 @@ export class ChartSettingsModal {
     public destroy(): void {
         this.close();
     }
-
 }

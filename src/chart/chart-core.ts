@@ -10,6 +10,7 @@ import { UserPriceAlerts } from './price-alerts';
 import { getDecimalPrecision, getPriceFormatter } from './chart-utils';
 import { ChartUI } from './ui/chart-ui';
 import { ChartContextMenu } from './ui/context-menu';
+import { ChartSettingsModal } from './ui/chart-settings-modal';
 import { DrawingToolsConfig, LegendItem } from './chart-types';
 import { WebSocketMessage } from '../types';
 
@@ -162,6 +163,9 @@ export class ChartModule {
         this.initializeChartUI();
         this.initializeContextMenu();
         this.setupCrosshairTracking();
+
+        // ✅ Restore last applied template after chart is ready
+        ChartSettingsModal.restoreActiveTemplate();
 
         document.dispatchEvent(new CustomEvent('chart-ready', {
             detail: {
@@ -493,14 +497,12 @@ export class ChartModule {
         }, { signal });
 
         document.addEventListener('chart-settings-modal-request', () => {
-            import('./ui/chart-settings-modal').then(({ ChartSettingsModal }) => {
-                const modal = new ChartSettingsModal({
-                    colors:    this.mainChart.getColors(),
-                    chartType: this.mainChart.currentChartType,
-                    symbol:    this._currentSymbol
-                });
-                modal.open();
+            const modal = new ChartSettingsModal({
+                colors:    this.mainChart.getColors(),
+                chartType: this.mainChart.currentChartType,
+                symbol:    this._currentSymbol
             });
+            modal.open();
         }, { signal });
 
         document.addEventListener('chart-colors-change', (e: Event) => {

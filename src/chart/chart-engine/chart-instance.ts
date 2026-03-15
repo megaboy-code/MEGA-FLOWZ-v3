@@ -40,7 +40,14 @@ export class ChartInstance {
     public async create(container: HTMLElement): Promise<IChartApi | null> {
         this.container = container;
 
-        container.style.backgroundColor = this.chartColors.background;
+        // ✅ Pre-set background immediately — prevents flash
+        const bgMap: Record<string, string> = {
+            system: '#0f1724',
+            dark:   '#0f1724',
+            light:  '#f8f9fc',
+        };
+        const savedTheme = localStorage.getItem('app-theme') || 'system';
+        container.style.backgroundColor = bgMap[savedTheme] || this.chartColors.background;
 
         const containerWidth  = container.clientWidth;
         const containerHeight = container.clientHeight;
@@ -49,7 +56,7 @@ export class ChartInstance {
             autoSize: false,
             layout: {
                 background: { type: ColorType.Solid, color: 'transparent' },
-                textColor:  this.chartColors.textColor || '#e2e8f0',
+                textColor:  this.chartColors.textColor || '#c8d4e8',
                 fontSize:   DEFAULT_FONT_SIZE,
                 fontFamily: 'Inter, sans-serif'
             },
@@ -61,12 +68,12 @@ export class ChartInstance {
                 mode: CrosshairMode.Normal,
                 vertLine: {
                     width: 1,
-                    color: this.chartColors.crosshair || '#4b5563',
+                    color: this.chartColors.crosshair || '#3a4a5c',
                     style: LineStyle.Dashed
                 },
                 horzLine: {
                     width: 1,
-                    color: this.chartColors.crosshair || '#4b5563',
+                    color: this.chartColors.crosshair || '#3a4a5c',
                     style: LineStyle.Dashed
                 }
             },

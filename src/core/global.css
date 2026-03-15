@@ -2,33 +2,33 @@
    🌐 GLOBAL STYLES - MEGA FLOWZ Professional Trading Platform
    =============================================================== */
 
-/* ==================== SYSTEM THEME — Default ==================== */
-:root, [data-theme="system"] {
+/* ==================== DARK THEME — Primary ==================== */
+:root, [data-theme="system"], [data-theme="dark"] {
 
     /* ── BACKGROUNDS ── */
-    --bg-body:     #0b0f14;
-    --bg-card:     #111827;
-    --bg-elevated: #182233;
-    --bg-base:     #0f1724;
-    --bg-hover:    #22304a;
-    --bg-active:   rgba(76, 141, 255, 0.1);
-    --bg-surface:  #111827;
+    --bg-body:     oklch(14% 0.01 255);
+    --bg-card:     oklch(17% 0.012 255);
+    --bg-elevated: oklch(20% 0.014 255);
+    --bg-base:     oklch(15% 0.011 255);
+    --bg-hover:    oklch(23% 0.016 255);
+    --bg-active:   oklch(40% 0.08 255 / 0.12);
+    --bg-surface:  oklch(17% 0.012 255);
 
     /* ── BORDERS ── */
-    --border:       #2c3b55;
-    --border-light: #334563;
+    --border:       oklch(28% 0.018 255);
+    --border-light: oklch(32% 0.02 255);
 
     /* ── TEXT ── */
-    --text-primary:   #f5f7fb;
-    --text-secondary: #b9c3d4;
-    --text-muted:     #7f8da3;
-    --text-dim:       #b9c3d4;
+    --text-primary:   oklch(97% 0.004 255);
+    --text-secondary: oklch(75% 0.012 255);
+    --text-muted:     oklch(55% 0.014 255);
+    --text-dim:       oklch(65% 0.012 255);
 
     /* ── ACCENTS ── */
-    --accent-buy:     #00e08a;
-    --accent-sell:    #ff3d57;
-    --accent-info:    #4c8dff;
-    --accent-warning: #ffb020;
+    --accent-buy:     oklch(78% 0.17 158);
+    --accent-sell:    oklch(62% 0.22 25);
+    --accent-info:    oklch(65% 0.18 255);
+    --accent-warning: oklch(78% 0.17 75);
 
     /* ── RGB VALUES ── */
     --accent-buy-rgb:  0, 224, 138;
@@ -37,100 +37,49 @@
     --accent-warn-rgb: 255, 176, 32;
 
     /* ── CHART ── */
-    --chart-bull: #00e08a;
-    --chart-bear: #ff3d57;
-    --chart-line: #4c8dff;
+    --chart-bull: oklch(78% 0.17 158);
+    --chart-bear: oklch(62% 0.22 25);
+    --chart-line: oklch(65% 0.18 255);
 
     /* ── SEMANTIC ── */
-    --accent-gold:   #FFD700;
-    --star-inactive: #3a4a5c;
+    --accent-gold:   oklch(82% 0.16 88);
+    --star-inactive: oklch(28% 0.018 255);
 
     /* ── GLASS EFFECTS ── */
-    --glass-gradient:  linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00));
-    --card-shadow:     0 25px 60px rgba(0, 0, 0, 0.55);
-    --shadow-sm:       0 4px 12px rgba(0, 0, 0, 0.3);
-    --btn-buy-shadow:  0 0 18px rgba(0, 224, 138, 0.35);
-    --btn-sell-shadow: 0 0 18px rgba(255, 61, 87, 0.35);
-}
-
-/* ==================== DARK THEME ==================== */
-[data-theme="dark"] {
-
-    /* ── BACKGROUNDS ── */
-    --bg-body:     #030507;
-    --bg-card:     #0a0e13;
-    --bg-elevated: #121a24;
-    --bg-base:     #0b121c;
-    --bg-hover:    #1e2a38;
-    --bg-active:   rgba(76, 141, 255, 0.15);
-    --bg-surface:  #0a0e13;
-
-    /* ── BORDERS ── */
-    --border:       #1f2b39;
-    --border-light: #2a384a;
-
-    /* ── TEXT ── */
-    --text-primary:   #ffffff;
-    --text-secondary: #cbd5e0;
-    --text-muted:     #8a9bb5;
-    --text-dim:       #cbd5e0;
-
-    /* ── ACCENTS ── */
-    --accent-buy:     #00e08a;
-    --accent-sell:    #ff3d57;
-    --accent-info:    #4c8dff;
-    --accent-warning: #ffb020;
-
-    /* ── RGB VALUES ── */
-    --accent-buy-rgb:  0, 224, 138;
-    --accent-sell-rgb: 255, 61, 87;
-    --accent-info-rgb: 76, 141, 255;
-    --accent-warn-rgb: 255, 176, 32;
-
-    /* ── CHART ── */
-    --chart-bull: #00e08a;
-    --chart-bear: #ff3d57;
-    --chart-line: #4c8dff;
-
-    /* ── SEMANTIC ── */
-    --accent-gold:   #FFD700;
-    --star-inactive: #2a384a;
-
-    /* ── GLASS EFFECTS ── */
-    --glass-gradient:  linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.00));
-    --card-shadow:     0 25px 60px rgba(0, 0, 0, 0.9);
-    --shadow-sm:       0 4px 12px rgba(0, 0, 0, 0.5);
-    --btn-buy-shadow:  0 0 18px rgba(0, 224, 138, 0.25);
-    --btn-sell-shadow: 0 0 18px rgba(255, 61, 87, 0.25);
+    --glass-gradient:  linear-gradient(180deg, oklch(100% 0 0 / 0.03), oklch(100% 0 0 / 0.00));
+    --card-shadow:     0 25px 60px oklch(0% 0 0 / 0.6);
+    --shadow-sm:       0 4px 12px oklch(0% 0 0 / 0.35);
+    --btn-buy-shadow:  0 0 18px oklch(78% 0.17 158 / 0.3);
+    --btn-sell-shadow: 0 0 18px oklch(62% 0.22 25 / 0.3);
 }
 
 /* ==================== LIGHT THEME ==================== */
 [data-theme="light"] {
 
-    /* ── BACKGROUNDS — warm cream family ── */
-    --bg-body:     #f0ece6;
-    --bg-card:     #f7f4ef;
-    --bg-elevated: #faf8f5;
-    --bg-base:     #ece8e1;
-    --bg-hover:    #e5e0d8;
-    --bg-active:   rgba(29, 91, 181, 0.08);
-    --bg-surface:  #f7f4ef;
+    /* ── BACKGROUNDS ── */
+    --bg-body:     oklch(97% 0.002 255);
+    --bg-card:     oklch(99% 0.001 255);
+    --bg-elevated: oklch(100% 0 0);
+    --bg-base:     oklch(95% 0.003 255);
+    --bg-hover:    oklch(93% 0.004 255);
+    --bg-active:   oklch(55% 0.18 255 / 0.08);
+    --bg-surface:  oklch(98% 0.002 255);
 
     /* ── BORDERS ── */
-    --border:       #ddd8d0;
-    --border-light: #e8e3dc;
+    --border:       oklch(88% 0.006 255);
+    --border-light: oklch(91% 0.004 255);
 
     /* ── TEXT ── */
-    --text-primary:   #1a1814;
-    --text-secondary: #4a4540;
-    --text-muted:     #9c948a;
-    --text-dim:       #4a4540;
+    --text-primary:   oklch(12% 0.008 255);
+    --text-secondary: oklch(32% 0.012 255);
+    --text-muted:     oklch(52% 0.012 255);
+    --text-dim:       oklch(42% 0.012 255);
 
     /* ── ACCENTS ── */
-    --accent-buy:     #00936a;
-    --accent-sell:    #c8202f;
-    --accent-info:    #1d5bb5;
-    --accent-warning: #c97c10;
+    --accent-buy:     oklch(52% 0.16 158);
+    --accent-sell:    oklch(48% 0.2 25);
+    --accent-info:    oklch(48% 0.18 255);
+    --accent-warning: oklch(55% 0.16 75);
 
     /* ── RGB VALUES ── */
     --accent-buy-rgb:  0, 147, 106;
@@ -139,20 +88,20 @@
     --accent-warn-rgb: 201, 124, 16;
 
     /* ── CHART ── */
-    --chart-bull: #00936a;
-    --chart-bear: #c8202f;
-    --chart-line: #1d5bb5;
+    --chart-bull: oklch(52% 0.16 158);
+    --chart-bear: oklch(48% 0.2 25);
+    --chart-line: oklch(48% 0.18 255);
 
     /* ── SEMANTIC ── */
-    --accent-gold:   #b8860b;
-    --star-inactive: #c8c0b4;
+    --accent-gold:   oklch(58% 0.14 88);
+    --star-inactive: oklch(82% 0.008 255);
 
     /* ── GLASS EFFECTS ── */
-    --glass-gradient:  linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0.0));
-    --card-shadow:     0 2px 16px rgba(60, 40, 20, 0.08), 0 1px 3px rgba(60, 40, 20, 0.05);
-    --shadow-sm:       0 2px 8px rgba(60, 40, 20, 0.06);
-    --btn-buy-shadow:  0 0 14px rgba(0, 147, 106, 0.22);
-    --btn-sell-shadow: 0 0 14px rgba(200, 32, 47, 0.22);
+    --glass-gradient:  linear-gradient(180deg, oklch(100% 0 0 / 0.6), oklch(100% 0 0 / 0.0));
+    --card-shadow:     0 2px 16px oklch(12% 0.008 255 / 0.08), 0 1px 3px oklch(12% 0.008 255 / 0.05);
+    --shadow-sm:       0 2px 8px oklch(12% 0.008 255 / 0.06);
+    --btn-buy-shadow:  0 0 14px oklch(52% 0.16 158 / 0.22);
+    --btn-sell-shadow: 0 0 14px oklch(48% 0.2 25 / 0.22);
 }
 
 /* ==================== SHARED — Never changes between themes ==================== */
@@ -242,8 +191,6 @@ body {
     min-width: 0;
     -webkit-app-region: no-drag;
 }
-
-/* ✅ .app-logo REMOVED — replaced by .user-menu-btn */
 
 /* ==================== USER MENU ==================== */
 .user-menu-btn {
@@ -362,7 +309,7 @@ body {
 }
 
 .user-menu-item.danger:hover {
-    background: rgba(var(--accent-sell-rgb), 0.1);
+    background: oklch(62% 0.22 25 / 0.1);
     color: var(--accent-sell);
 }
 
@@ -467,7 +414,7 @@ body {
 }
 
 .tab-close-btn:hover {
-    background: rgba(var(--accent-sell-rgb), 0.2);
+    background: oklch(62% 0.22 25 / 0.2);
     color: var(--accent-sell);
 }
 
@@ -521,7 +468,7 @@ body {
 }
 
 .tab-switch input:checked + .slider {
-    background: rgba(var(--accent-buy-rgb), 0.15);
+    background: oklch(78% 0.17 158 / 0.15);
     border-color: var(--accent-buy);
 }
 
@@ -550,7 +497,7 @@ body {
     top: -2px;
     right: -2px;
     background: var(--accent-sell);
-    color: #ffffff;
+    color: oklch(100% 0 0);
     font-size: var(--text-xs);
     font-weight: 700;
     min-width: 13px;
@@ -584,9 +531,9 @@ body {
 }
 
 .add-tab-btn:hover {
-    background: rgba(var(--accent-buy-rgb), 0.1);
+    background: oklch(78% 0.17 158 / 0.1);
     color: var(--accent-buy);
-    border-color: rgba(var(--accent-buy-rgb), 0.3);
+    border-color: oklch(78% 0.17 158 / 0.3);
 }
 
 /* ==================== WINDOW CONTROLS ==================== */
@@ -613,7 +560,7 @@ body {
 }
 
 .window-control-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.close-btn:hover { background: rgba(var(--accent-sell-rgb), 0.15) !important; color: var(--accent-sell) !important; }
+.close-btn:hover { background: oklch(62% 0.22 25 / 0.15) !important; color: var(--accent-sell) !important; }
 
 /* ==================== MAIN WORKSPACE ==================== */
 .workspace-container {
@@ -675,19 +622,16 @@ body {
 
 /* ==================== TAB STATE MANAGEMENT ==================== */
 
-/* Chart tab — default state */
 body.tab-chart-active .main-chart-area  { display: flex; }
 body.tab-chart-active .strategy-studio  { display: none; }
 body.tab-chart-active .journal-studio   { display: none; }
 body.tab-chart-active .top-controls     { display: flex; }
 
-/* Strategy tab */
 body.tab-strategy-active .main-chart-area  { display: none; }
 body.tab-strategy-active .strategy-studio  { display: flex; }
 body.tab-strategy-active .journal-studio   { display: none; }
 body.tab-strategy-active .top-controls     { display: none; }
 
-/* Journal tab */
 body.tab-journal-active .main-chart-area  { display: none; }
 body.tab-journal-active .strategy-studio  { display: none; }
 body.tab-journal-active .journal-studio   { display: flex; }
@@ -695,7 +639,7 @@ body.tab-journal-active .top-controls     { display: none; }
 
 /* ==================== SCROLLBARS ==================== */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 3px; }
+::-webkit-scrollbar-track { background: oklch(0% 0 0 / 0.2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--star-inactive); }
 

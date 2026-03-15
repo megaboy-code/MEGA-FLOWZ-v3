@@ -23,7 +23,7 @@ export interface LegendItem {
     values:    LegendItemValue[];
     icon?:     string;
     pane?:     any;
-    settings?: Record<string, any>; // ✅ actual settings — no more ID parsing
+    settings?: Record<string, any>;
 }
 
 export interface LegendUpdateData {
@@ -90,61 +90,46 @@ export interface ChartColors {
     borderBear?: string;
 }
 
-// ==================== SYSTEM THEME (DEFAULT) ====================
+// ==================== SYSTEM / DARK THEME ====================
+// ✅ Merged — system and dark are the same
 
 export const DEFAULT_CHART_COLORS: ChartColors = {
-    background:  '#0f172a',
-    grid:        '#2d3748',
-    bull:        '#10b981',
-    bear:        '#ef4444',
-    line:        '#3b82f6',
-    volumeBull:  '#10b981',
-    volumeBear:  '#ef4444',
-    scaleBorder: '#475569',
-    crosshair:   '#4b5563',
-    textColor:   '#e2e8f0',
-    wickBull:    '#10b981',
-    wickBear:    '#ef4444',
-    borderBull:  '#10b981',
-    borderBear:  '#ef4444'
-};
-
-// ==================== DARK THEME ====================
-
-export const DARK_CHART_COLORS: ChartColors = {
-    background:  '#0b121c',
-    grid:        '#1f2b39',
+    background:  '#0b111b',
+    grid:        '#1e2a3a',
     bull:        '#00e08a',
     bear:        '#ff3d57',
     line:        '#4c8dff',
     volumeBull:  '#00e08a',
     volumeBear:  '#ff3d57',
     scaleBorder: '#2a384a',
-    crosshair:   '#4b5563',
-    textColor:   '#cbd5e0',
+    crosshair:   '#3a4a5c',
+    textColor:   '#c8d4e8',
     wickBull:    '#00e08a',
     wickBear:    '#ff3d57',
     borderBull:  '#00e08a',
     borderBear:  '#ff3d57'
 };
 
+export const DARK_CHART_COLORS: ChartColors = DEFAULT_CHART_COLORS;
+
 // ==================== LIGHT THEME ====================
+// ✅ Clean cool white — no warm tones
 
 export const LIGHT_CHART_COLORS: ChartColors = {
-    background:  '#f7f4ef',
-    grid:        '#e8e3dc',
-    bull:        '#00936a',
-    bear:        '#c8202f',
-    line:        '#1d5bb5',
-    volumeBull:  '#00936a',
-    volumeBear:  '#c8202f',
-    scaleBorder: '#ddd8d0',
-    crosshair:   '#4b5563',
-    textColor:   '#4a4540',
-    wickBull:    '#00936a',
-    wickBear:    '#c8202f',
-    borderBull:  '#00936a',
-    borderBear:  '#c8202f'
+    background:  '#f8f9fc',
+    grid:        '#e4e8f0',
+    bull:        '#0a8a58',
+    bear:        '#d42030',
+    line:        '#1a54b0',
+    volumeBull:  '#0a8a58',
+    volumeBear:  '#d42030',
+    scaleBorder: '#ccd3e0',
+    crosshair:   '#8896aa',
+    textColor:   '#1a2030',
+    wickBull:    '#0a8a58',
+    wickBear:    '#d42030',
+    borderBull:  '#0a8a58',
+    borderBear:  '#d42030'
 };
 
 // ==================== SETTINGS MODAL ====================

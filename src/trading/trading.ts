@@ -40,10 +40,10 @@ interface TradingState {
 // CONSTANTS
 // ════════════════════════════════════════
 
-const CONTRACT_SIZE   = 100_000;
-const MAX_BROKER_LOTS = 50;
-const PIP_SIZE        = 0.0001;
-const PIP_VALUE       = 10;
+const CONTRACT_SIZE     = 100_000;
+const MAX_BROKER_LOTS   = 50;
+const PIP_SIZE          = 0.0001;
+const PIP_VALUE         = 10;
 const TPSL_DEFAULT_PIPS = 20;
 
 // ════════════════════════════════════════
@@ -98,6 +98,11 @@ export class TradingModule {
     private boundTpSlPresets:    Map<HTMLElement, EventListener> = new Map();
     private boundRiskPctBtns:    Map<HTMLElement, EventListener> = new Map();
 
+    // ✅ Drag cleanup
+    private dragCleanup: (() => void) | null = null;
+
+    private activeRowTicket: string | null = null;
+
     constructor() {
         this.initialize();
     }
@@ -151,7 +156,6 @@ export class TradingModule {
 
     // ════════════════════════════════════════
     // TP/SL BACKGROUND UPDATE
-    // Updates silently every 1min when toggles are OFF
     // ════════════════════════════════════════
 
     private startTpSlBackgroundUpdate(): void {
@@ -432,7 +436,6 @@ export class TradingModule {
                 tpToggle.classList.toggle('active', this.state.tpEnabled);
                 document.getElementById('tpRow')?.classList.toggle('hidden', !this.state.tpEnabled);
 
-                // ✅ Seed with current price + default pips when enabled
                 if (this.state.tpEnabled && this.state.ask > 0) {
                     this.state.tpPrice = this.state.ask + TPSL_DEFAULT_PIPS * PIP_SIZE;
                     const input = document.getElementById('tpInput') as HTMLInputElement;
@@ -452,7 +455,6 @@ export class TradingModule {
                 slToggle.classList.toggle('active', this.state.slEnabled);
                 document.getElementById('slRow')?.classList.toggle('hidden', !this.state.slEnabled);
 
-                // ✅ Seed with current price - default pips when enabled
                 if (this.state.slEnabled && this.state.ask > 0) {
                     this.state.slPrice = this.state.ask - TPSL_DEFAULT_PIPS * PIP_SIZE;
                     const input = document.getElementById('slInput') as HTMLInputElement;
@@ -718,16 +720,23 @@ export class TradingModule {
     // POSITIONS MODAL
     // ════════════════════════════════════════
 
-    private activeRowTicket: string | null = null;
-
     private openPositionsModal(): void {
         const modal = document.getElementById('positionsModal');
         if (!modal) return;
 
+        // ✅ Move to body — escapes panel overflow:hidden and stacking context
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+
         modal.classList.remove('hidden');
         this.renderPositionsTable();
         this.setupModalControls();
-        this.setupDrag();
+
+        // ✅ Only setup drag once
+        if (!this.dragCleanup) {
+            this.dragCleanup = this.setupDrag();
+        }
     }
 
     private closePositionsModal(): void {
@@ -756,49 +765,44 @@ export class TradingModule {
     // DRAG
     // ════════════════════════════════════════
 
-    private setupDrag(): void {
+    private setupDrag(): () => void {
         const modal  = document.getElementById('positionsModal') as HTMLElement;
         const header = document.getElementById('positionsModalHeader') as HTMLElement;
-        if (!modal || !header) return;
+        if (!modal || !header) return () => {};
+
+        // ✅ Initialize position from current CSS on first open
+        if (!modal.dataset.dragged) {
+            const rect            = modal.getBoundingClientRect();
+            modal.style.left      = `${rect.left}px`;
+            modal.style.top       = `${rect.top}px`;
+            modal.style.transform = 'none';
+            modal.style.margin    = '0';
+            modal.dataset.dragged = 'true';
+        }
 
         let isDragging = false;
-        let startX = 0;
-        let startY = 0;
-        let startLeft = 0;
-        let startTop  = 0;
-
-        modal.style.position  = 'fixed';
-        modal.style.transform = 'none';
+        let startX     = 0;
+        let startY     = 0;
+        let startLeft  = 0;
+        let startTop   = 0;
 
         const onMouseDown = (e: MouseEvent) => {
             if ((e.target as HTMLElement).closest('button')) return;
-
-            isDragging = true;
-            startX     = e.clientX;
-            startY     = e.clientY;
-            startLeft  = modal.offsetLeft;
-            startTop   = modal.offsetTop;
-
+            isDragging          = true;
+            startX              = e.clientX;
+            startY              = e.clientY;
+            startLeft           = modal.offsetLeft;
+            startTop            = modal.offsetTop;
             header.style.cursor = 'grabbing';
             e.preventDefault();
         };
 
         const onMouseMove = (e: MouseEvent) => {
             if (!isDragging) return;
-
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-
-            let newLeft = startLeft + dx;
-            let newTop  = startTop  + dy;
-
-            const maxLeft = window.innerWidth  - modal.offsetWidth;
-            const maxTop  = window.innerHeight - modal.offsetHeight;
-
-            // ✅ Allow full overlap including tab strip
-            newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-            newTop  = Math.max(0, Math.min(newTop,  maxTop));
-
+            let newLeft = startLeft + (e.clientX - startX);
+            let newTop  = startTop  + (e.clientY - startY);
+            newLeft = Math.max(0, Math.min(newLeft, window.innerWidth  - modal.offsetWidth));
+            newTop  = Math.max(0, Math.min(newTop,  window.innerHeight - modal.offsetHeight));
             modal.style.left = `${newLeft}px`;
             modal.style.top  = `${newTop}px`;
         };
@@ -811,10 +815,16 @@ export class TradingModule {
         header.addEventListener('mousedown', onMouseDown);
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup',   onMouseUp);
+
+        return () => {
+            header.removeEventListener('mousedown', onMouseDown);
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup',   onMouseUp);
+        };
     }
 
     // ════════════════════════════════════════
-    // POSITIONS TABLE — full rebuild on open
+    // POSITIONS TABLE
     // ════════════════════════════════════════
 
     private renderPositionsTable(): void {
@@ -837,17 +847,16 @@ export class TradingModule {
         tbody.innerHTML = '';
 
         this.state.positions.forEach(pos => {
-            const pnl       = pos.profit ?? 0;
-            const pnlClass  = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
-            const typeClass = pos.type === 'BUY' ? 'type-buy' : 'type-sell';
-            const pnlStr    = `${pnl >= 0 ? '+$' : '-$'}${Math.abs(pnl).toFixed(2)}`;
+            const pnl        = pos.profit ?? 0;
+            const pnlClass   = pnl >= 0 ? 'pnl-positive' : 'pnl-negative';
+            const typeClass  = pos.type === 'BUY' ? 'type-buy' : 'type-sell';
+            const pnlStr     = `${pnl >= 0 ? '+$' : '-$'}${Math.abs(pnl).toFixed(2)}`;
             const isSelected = this.activeRowTicket === String(pos.ticket);
 
             const tr = document.createElement('tr');
             tr.dataset.ticket = String(pos.ticket);
             if (isSelected) tr.classList.add('selected');
 
-            // ✅ X button replaces pen button — click row for editor, X to close
             tr.innerHTML = `
                 <td>${pos.symbol}</td>
                 <td class="${typeClass}">${pos.type}</td>
@@ -864,13 +873,11 @@ export class TradingModule {
                 </td>
             `;
 
-            // Click row → open inline editor
             tr.addEventListener('click', (e) => {
                 if ((e.target as HTMLElement).closest('.row-close-btn')) return;
                 this.toggleInlineEditor(pos);
             });
 
-            // Click ✕ → close trade directly
             tr.querySelector('.row-close-btn')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.submitClosePosition(pos);
@@ -909,7 +916,6 @@ export class TradingModule {
         );
         const newTickets = new Set(this.state.positions.map(p => String(p.ticket)));
 
-        // Remove closed positions
         existingTickets.forEach(ticket => {
             if (!newTickets.has(ticket)) {
                 tbody.querySelector(`tr[data-ticket="${ticket}"]`)?.remove();
@@ -924,7 +930,6 @@ export class TradingModule {
             const existing = tbody.querySelector(`tr[data-ticket="${ticket}"]`) as HTMLElement;
 
             if (existing) {
-                // ✅ Only update current price and pnl — no flicker
                 const cells = existing.querySelectorAll('td');
                 if (cells[4]) cells[4].textContent = String(pos.current_price ?? '—');
                 if (cells[7]) {
@@ -932,7 +937,6 @@ export class TradingModule {
                     cells[7].className   = pnlClass;
                 }
             } else {
-                // New position appeared — full rebuild
                 this.renderPositionsTable();
             }
         });
@@ -953,7 +957,6 @@ export class TradingModule {
 
         const pnlEl = document.getElementById('summaryTotalPnl');
         if (pnlEl) {
-            // ✅ Fixed: minus sign on loss
             pnlEl.textContent = `${totalPnl >= 0 ? '+$' : '-$'}${Math.abs(totalPnl).toFixed(2)}`;
             pnlEl.classList.toggle('positive', totalPnl >= 0);
             pnlEl.classList.toggle('negative', totalPnl <  0);
@@ -992,7 +995,6 @@ export class TradingModule {
         if (slInput) slInput.value = pos.sl ? String(pos.sl) : '';
         if (tpInput) tpInput.value = pos.tp ? String(pos.tp) : '';
 
-        // ✅ Freeze current price at moment of opening editor
         const frozenPrice = pos.current_price ?? this.state.ask;
         this.renderInlinePips(pos);
         this.setupInlinePipPresets(pos, frozenPrice);
@@ -1021,7 +1023,6 @@ export class TradingModule {
 
     // ════════════════════════════════════════
     // INLINE PIP PRESETS
-    // Frozen price — not live updating
     // ════════════════════════════════════════
 
     private setupInlinePipPresets(pos: PositionData, frozenPrice: number): void {
@@ -1030,11 +1031,10 @@ export class TradingModule {
 
         container.innerHTML = '';
 
-        const isBuy    = pos.type === 'BUY' || pos.type === 0;
-        const pipList  = [10, 20, 30, 50, 100];
-        const rrList   = [1, 1.5, 2, 3];
+        const isBuy   = pos.type === 'BUY' || pos.type === 0;
+        const pipList = [10, 20, 30, 50, 100];
+        const rrList  = [1, 1.5, 2, 3];
 
-        // Pip presets
         pipList.forEach(pips => {
             const btn = document.createElement('button');
             btn.className   = 'inline-pip-btn';
@@ -1044,14 +1044,10 @@ export class TradingModule {
                 const tpInput = document.getElementById('inlineTpInput') as HTMLInputElement;
 
                 if (slInput) slInput.value = String(
-                    isBuy
-                        ? frozenPrice - pips * PIP_SIZE
-                        : frozenPrice + pips * PIP_SIZE
+                    isBuy ? frozenPrice - pips * PIP_SIZE : frozenPrice + pips * PIP_SIZE
                 );
                 if (tpInput) tpInput.value = String(
-                    isBuy
-                        ? frozenPrice + pips * PIP_SIZE
-                        : frozenPrice - pips * PIP_SIZE
+                    isBuy ? frozenPrice + pips * PIP_SIZE : frozenPrice - pips * PIP_SIZE
                 );
 
                 this.renderInlinePips(pos);
@@ -1059,7 +1055,6 @@ export class TradingModule {
             container.appendChild(btn);
         });
 
-        // RR presets
         rrList.forEach(rr => {
             const btn = document.createElement('button');
             btn.className   = 'inline-pip-btn rr';
@@ -1071,14 +1066,10 @@ export class TradingModule {
                 const tpPips  = slPips * rr;
 
                 if (slInput) slInput.value = String(
-                    isBuy
-                        ? frozenPrice - slPips * PIP_SIZE
-                        : frozenPrice + slPips * PIP_SIZE
+                    isBuy ? frozenPrice - slPips * PIP_SIZE : frozenPrice + slPips * PIP_SIZE
                 );
                 if (tpInput) tpInput.value = String(
-                    isBuy
-                        ? frozenPrice + tpPips * PIP_SIZE
-                        : frozenPrice - tpPips * PIP_SIZE
+                    isBuy ? frozenPrice + tpPips * PIP_SIZE : frozenPrice - tpPips * PIP_SIZE
                 );
 
                 this.renderInlinePips(pos);
@@ -1164,7 +1155,6 @@ export class TradingModule {
         const pnl      = this.state.floatingPnl;
         const positive = pnl >= 0;
 
-        // ✅ Fixed: Math.abs prevents double minus on percentage
         const pct = this.state.balance > 0
             ? (Math.abs(pnl / this.state.balance) * 100).toFixed(2)
             : '0.00';
@@ -1201,7 +1191,6 @@ export class TradingModule {
     // ════════════════════════════════════════
 
     private renderBuySellPrices(): void {
-        // ✅ Backend formats price — just display as-is
         this.setText('buyBtnPrice',  String(this.state.ask));
         this.setText('sellBtnPrice', String(this.state.bid));
     }
@@ -1244,7 +1233,6 @@ export class TradingModule {
         this.state.positions = positions;
         this.updatePositionsCount();
 
-        // ✅ Reset hero PnL when all positions closed
         if (positions.length === 0) {
             this.state.floatingPnl = 0;
             this.renderHero();
@@ -1289,22 +1277,26 @@ export class TradingModule {
     public destroy(): void {
         console.log('🗑️ Cleaning up Trading Module');
 
-        this.stopTpSlBackgroundUpdate(); // ✅ clear interval
+        this.stopTpSlBackgroundUpdate();
 
-        if (this.boundPriceUpdate)    document.removeEventListener('price-update',     this.boundPriceUpdate);
-        if (this.boundSafeModeToggle) document.getElementById('safeModeToggle')?.removeEventListener('click',  this.boundSafeModeToggle);
-        if (this.boundSlider)         document.getElementById('lotSlider')?.removeEventListener('input',       this.boundSlider);
-        if (this.boundTpToggle)       document.getElementById('tpToggle')?.removeEventListener('click',        this.boundTpToggle);
-        if (this.boundSlToggle)       document.getElementById('slToggle')?.removeEventListener('click',        this.boundSlToggle);
-        if (this.boundTpInput)        document.getElementById('tpInput')?.removeEventListener('input',         this.boundTpInput);
-        if (this.boundSlInput)        document.getElementById('slInput')?.removeEventListener('input',         this.boundSlInput);
-        if (this.boundRiskPctInput)   document.getElementById('riskPctInput')?.removeEventListener('input',    this.boundRiskPctInput);
-        if (this.boundBuyBtn)         document.getElementById('buyButton')?.removeEventListener('click',       this.boundBuyBtn);
-        if (this.boundSellBtn)        document.getElementById('sellButton')?.removeEventListener('click',      this.boundSellBtn);
-        if (this.boundCloseAll)       document.getElementById('closeAllBtn')?.removeEventListener('click',     this.boundCloseAll);
-        if (this.boundHedge)          document.getElementById('hedgeBtn')?.removeEventListener('click',        this.boundHedge);
-        if (this.boundReverse)        document.getElementById('reverseBtn')?.removeEventListener('click',      this.boundReverse);
-        if (this.boundOpenPositions)  document.getElementById('openPositionsBtn')?.removeEventListener('click', this.boundOpenPositions);
+        // ✅ Cleanup drag
+        this.dragCleanup?.();
+        this.dragCleanup = null;
+
+        if (this.boundPriceUpdate)    document.removeEventListener('price-update',      this.boundPriceUpdate);
+        if (this.boundSafeModeToggle) document.getElementById('safeModeToggle')?.removeEventListener('click',    this.boundSafeModeToggle);
+        if (this.boundSlider)         document.getElementById('lotSlider')?.removeEventListener('input',         this.boundSlider);
+        if (this.boundTpToggle)       document.getElementById('tpToggle')?.removeEventListener('click',          this.boundTpToggle);
+        if (this.boundSlToggle)       document.getElementById('slToggle')?.removeEventListener('click',          this.boundSlToggle);
+        if (this.boundTpInput)        document.getElementById('tpInput')?.removeEventListener('input',           this.boundTpInput);
+        if (this.boundSlInput)        document.getElementById('slInput')?.removeEventListener('input',           this.boundSlInput);
+        if (this.boundRiskPctInput)   document.getElementById('riskPctInput')?.removeEventListener('input',      this.boundRiskPctInput);
+        if (this.boundBuyBtn)         document.getElementById('buyButton')?.removeEventListener('click',         this.boundBuyBtn);
+        if (this.boundSellBtn)        document.getElementById('sellButton')?.removeEventListener('click',        this.boundSellBtn);
+        if (this.boundCloseAll)       document.getElementById('closeAllBtn')?.removeEventListener('click',       this.boundCloseAll);
+        if (this.boundHedge)          document.getElementById('hedgeBtn')?.removeEventListener('click',          this.boundHedge);
+        if (this.boundReverse)        document.getElementById('reverseBtn')?.removeEventListener('click',        this.boundReverse);
+        if (this.boundOpenPositions)  document.getElementById('openPositionsBtn')?.removeEventListener('click',  this.boundOpenPositions);
 
         this.boundLotPresets.forEach((handler, el)  => el.removeEventListener('click', handler));
         this.boundTpSlPresets.forEach((handler, el) => el.removeEventListener('click', handler));
