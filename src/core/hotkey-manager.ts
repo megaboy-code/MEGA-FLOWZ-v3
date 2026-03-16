@@ -49,31 +49,36 @@ export class HotkeyManager {
 
     private handleHotkey(combo: string): boolean {
         const keyMap: { [key: string]: () => void } = {
-            // Panel switching
-            '1': () => this.dispatchPanelSwitch('trading'),
-            '2': () => this.dispatchPanelSwitch('calculator'),
-            '3': () => this.dispatchPanelSwitch('alerts'),
-            '4': () => this.dispatchPanelSwitch('journal'),
-            '5': () => this.dispatchPanelSwitch('heatmap'),
 
-            // Modal toggles
+            // ==================== PANEL SWITCHING ====================
+            '1': () => this.dispatchPanelSwitch('trading'),
+            '2': () => this.dispatchPanelSwitch('watchlist'),
+            '3': () => this.dispatchPanelSwitch('calendar'),
+            '4': () => this.dispatchPanelSwitch('alerts'),
+
+            // ==================== MODALS ====================
             'j': () => {
                 if (this.isJournalOnCooldown()) return;
                 this.setJournalCooldown();
-                this.dispatchModalToggle('full-journal');
+                document.dispatchEvent(new CustomEvent('open-tab', {
+                    detail: { tab: 'journal' }
+                }));
             },
-            's': () => this.dispatchModalToggle('strategies'),
-            'n': () => this.dispatchModalToggle('notification'),
+            's':   () => this.dispatchModalToggle('strategies'),
+            'n':   () => this.dispatchModalToggle('notification'),
+            'p':   () => this.dispatchGlobalAction('open-positions-modal'),
+            ',':   () => this.dispatchGlobalAction('open-settings-modal'),
 
-            // Global actions
+            // ==================== GLOBAL ACTIONS ====================
             'escape': () => this.dispatchGlobalAction('close-all-modals'),
+            'f':      () => this.dispatchGlobalAction('fullscreen'),
+            'r':      () => this.dispatchGlobalAction('chart-reset'),
+            'd':      () => this.dispatchGlobalAction('chart-download'),
 
-            // Chart actions
-            'f': () => this.dispatchGlobalAction('fullscreen'),
-            'r': () => this.dispatchGlobalAction('chart-reset'),
-            'd': () => this.dispatchGlobalAction('chart-download'),
+            // ==================== DRAWING TOOLS ====================
+            'l': () => this.dispatchGlobalAction('lock-tools'),
 
-            // Trading shortcuts
+            // ==================== TRADING ====================
             'ctrl+b':       () => this.dispatchTradeAction('buy'),
             'ctrl+shift+s': () => this.dispatchTradeAction('sell'),
             'alt+s':        () => this.dispatchTradeAction('sell'),

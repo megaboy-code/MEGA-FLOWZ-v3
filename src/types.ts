@@ -2,96 +2,106 @@
 // ⚡ MEGA FLOWZ DASHBOARD - TYPE DEFINITIONS
 // ================================================================
 
-// WebSocket message types from Python backend
+// ==================== WEBSOCKET ====================
+
 export interface WebSocketMessage {
-    type: string;
-    account?: AccountInfo;
-    positions?: PositionData[];
-    candles?: CandleData[];
-    symbol?: string;
-    bid?: number;
-    ask?: number;
-    spread?: number;
-    change?: number;
-    direction?: string;
+    type:        string;
+    account?:    AccountInfo;
+    positions?:  PositionData[];
+    candles?:    CandleData[];
+    symbol?:     string;
+    timeframe?:  string;
+    bid?:        number;
+    ask?:        number;
+    spread?:     number;
+    change?:     number;
+    direction?:  string;
     strategy_id?: string;
-    timestamp?: string;
-    data?: any;
+    timestamp?:  string;
+    data?:       any;
     [key: string]: any;
 }
 
+// ==================== CANDLE ====================
+
 export interface CandleData {
-    time: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
+    time:    number;       // ✅ Unix timestamp seconds — not string
+    open:    number;
+    high:    number;
+    low:     number;
+    close:   number;
     volume?: number;
 }
 
+// ==================== TRADE ====================
+
 export interface TradeData {
-    symbol: string;
-    direction: 'BUY' | 'SELL';
-    volume: number;
-    price: number;
-    ticket?: number;
-    timestamp: string;
+    symbol:     string;
+    direction:  'BUY' | 'SELL';
+    volume:     number;
+    price:      number;
+    ticket?:    number;
+    timestamp:  string;
 }
+
+// ==================== ACCOUNT ====================
 
 export interface AccountInfo {
-    balance: number;
-    equity: number;
-    margin?: number;
-    free_margin?: number;
+    balance:       number;
+    equity:        number;
+    margin?:       number;
+    free_margin?:  number;
     margin_level?: number;
-    currency?: string;
-    server?: string;
+    leverage?:     number;
+    currency?:     string;
+    server?:       string;
 }
+
+// ==================== POSITION ====================
 
 export interface PositionData {
-    ticket: string | number;
-    symbol: string;
-    type: 'BUY' | 'SELL' | 0 | 1;
-    volume: number;
-    openPrice?: number;
-    entry_price?: number;
-    price_open?: number;
-    profit?: number;
-    pl?: number;
-    unrealizedPL?: number;
-    id?: string | number;
+    ticket:        number;
+    symbol:        string;
+    type:          'BUY' | 'SELL';
+    volume:        number;
+    open_price:    number;      // ✅ was entry_price / openPrice / price_open
+    current_price: number;      // ✅ live price
+    sl:            number | null; // ✅ null when not set
+    tp:            number | null; // ✅ null when not set
+    profit:        number;
+    swap?:         number;
+    commission?:   number;
+    open_time:     number;      // ✅ was time — Unix timestamp seconds
 }
 
-// Strategy command types
+// ==================== STRATEGY ====================
+
 export interface StrategyCommand {
-    type: 'activate_strategy' | 'backtest_strategy' | 'enable_strategies' |
-          'disable_strategies' | 'pause_all_strategies' | 'stop_all_strategies' |
-          'remove_strategy' | 'strategy_chart_data' | 'auto_trade_execute';
-    strategy?: any;
+    type:        'activate_strategy' | 'backtest_strategy' | 'enable_strategies' |
+                 'disable_strategies' | 'pause_all_strategies' | 'stop_all_strategies' |
+                 'remove_strategy' | 'strategy_chart_data' | 'auto_trade_execute';
+    strategy?:   any;
     strategyId?: string;
-    category?: string;
-    symbol?: string;
-    timeframe?: string;
+    category?:   string;
+    symbol?:     string;
+    timeframe?:  string;
     parameters?: any;
-    days?: number;
+    days?:       number;
 }
 
-// Module interfaces
+// ==================== MODULES ====================
+
 export interface NotificationModule {
-    success: (message: string, options?: any) => void;
-    error: (message: string, options?: any) => void;
-    warning: (message: string, options?: any) => void;
-    info: (message: string, options?: any) => void;
+    success:      (message: string, options?: any) => void;
+    error:        (message: string, options?: any) => void;
+    warning:      (message: string, options?: any) => void;
+    info:         (message: string, options?: any) => void;
     toggleModal?: () => void;
-    hideModal?: () => void;
+    hideModal?:   () => void;
 }
 
 export interface JournalModule {
     initialize?: () => void;
-    switchTab?: (tab: string) => void;
-    destroy?: () => void;
-}
-
-export interface CalculatorModule {
-    // Add specific methods if needed
+    switchTab?:  (tab: string) => void;
+    destroy?:    () => void;
 }
