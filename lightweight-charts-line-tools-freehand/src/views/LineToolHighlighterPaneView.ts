@@ -210,9 +210,9 @@ export class LineToolHighlighterPaneView<HorzScaleItem> extends LineToolPaneView
 		(this._renderer as CompositeRenderer<HorzScaleItem>).append(this._polygonRenderer);
 
 		// 4. Add Anchors
-		//if (this.areAnchorsVisible()) {
+		if (this.areAnchorsVisible()) {
 			this._addAnchors(this._renderer as CompositeRenderer<HorzScaleItem>);
-		//}
+		}
 	}
 
 	/**
@@ -229,6 +229,13 @@ export class LineToolHighlighterPaneView<HorzScaleItem> extends LineToolPaneView
 	 */
 	protected override _addAnchors(renderer: CompositeRenderer<HorzScaleItem>): void {
 		if (this._points.length === 0) return;
+
+		const options = this._tool.options() as LineToolOptionsInternal<'Highlighter'>;
+		
+		// Don't add anchors if locked
+		if (options.locked) {
+			return;
+		}
 
 		// Find the center of the bounding box of the drawn points
 		const avgX = this._points.reduce((sum, p) => sum + p.x, 0) / this._points.length;

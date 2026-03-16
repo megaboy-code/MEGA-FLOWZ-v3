@@ -370,9 +370,9 @@ export class LineToolPriceRangePaneView<HorzScaleItem> extends LineToolPaneView<
 
 
 		// --- 7. Anchors ---
-		//if (this.areAnchorsVisible()) {
+		if (this.areAnchorsVisible()) {
 			this._addAnchors(compositeRenderer);
-		//}
+		}
 	}
 
 	/**
@@ -501,6 +501,13 @@ export class LineToolPriceRangePaneView<HorzScaleItem> extends LineToolPaneView<
 	 */
 	protected override _addAnchors(renderer: CompositeRenderer<any>): void {
 		if (this._points.length < 2) return;
+
+		const options = this._tool.options() as LineToolOptionsInternal<'PriceRange'>;
+		
+		// Don't add anchors if locked
+		if (options.locked) {
+			return;
+		}
 
 		const P0 = this._points[0]; // Start Point (Index 0)
 		const P1 = this._points[1]; // End Point (Index 1)

@@ -214,9 +214,9 @@ export class LineToolParallelChannelPaneView<HorzScaleItem> extends LineToolPane
 		}
 
 		// 4. Add Anchors (always last for hit-test priority)
-		//if (this.areAnchorsVisible()) {
+		if (this.areAnchorsVisible()) {
 			this._addAnchors(compositeRenderer);
-		//}
+		}
 	}
 	
 	/**
@@ -234,6 +234,13 @@ export class LineToolParallelChannelPaneView<HorzScaleItem> extends LineToolPane
 	 */
 	protected override _addAnchors(renderer: CompositeRenderer<HorzScaleItem>): void {
 		if (this._points.length < 3) return;
+
+		const options = this._tool.options() as LineToolOptionsInternal<'ParallelChannel'>;
+		
+		// Don't add anchors if locked
+		if (options.locked) {
+			return;
+		}
 
 		// P0, P1, P2 are screen points from _points array
 		const [p0Screen, p1Screen, p2Screen] = this._points;

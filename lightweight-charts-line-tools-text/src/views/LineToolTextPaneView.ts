@@ -237,9 +237,9 @@ export class LineToolTextPaneView<HorzScaleItem> extends LineToolPaneView<HorzSc
 
 		// 3. Line Anchors (Handles for P0)
 
-		//if (this.areAnchorsVisible()) {
+		if (this.areAnchorsVisible()) {
 			this._addAnchors(this._compositeRenderer);
-		//}
+		}
 
 		this._renderer = this._compositeRenderer;
 	}
@@ -255,6 +255,13 @@ export class LineToolTextPaneView<HorzScaleItem> extends LineToolPaneView<HorzSc
 	 */
 	protected override _addAnchors(renderer: CompositeRenderer<HorzScaleItem>): void {
 		if (this._points.length < 1) return;
+
+		const options = this._tool.options() as LineToolOptionsInternal<'Text'>;
+		
+		// Don't add anchors if locked
+		if (options.locked) {
+			return;
+		}
 
 		const [anchorPoint] = this._points;
 		

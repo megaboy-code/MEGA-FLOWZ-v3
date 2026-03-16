@@ -159,9 +159,9 @@ export class LineToolPathPaneView<HorzScaleItem> extends LineToolPaneView<HorzSc
 		(this._renderer as CompositeRenderer<HorzScaleItem>).append(this._polygonRenderer);
 
 		// 3. Add Anchors
-		//if (this.areAnchorsVisible()) {
+		if (this.areAnchorsVisible()) {
 			this._addAnchors(this._renderer as CompositeRenderer<HorzScaleItem>);
-		//}
+		}
 	}
 
 	/**
@@ -178,6 +178,13 @@ export class LineToolPathPaneView<HorzScaleItem> extends LineToolPaneView<HorzSc
 	 */
 	protected override _addAnchors(renderer: CompositeRenderer<HorzScaleItem>): void {
 		if (this._points.length === 0) return;
+
+		const options = this._tool.options() as LineToolOptionsInternal<'Path'>;
+		
+		// Don't add anchors if locked
+		if (options.locked) {
+			return;
+		}
 
 		const anchorPoints: AnchorPoint[] = this._points.map((p, index) => {
 			// Creates an anchor for each point. We use the point's index as its ID.
