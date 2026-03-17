@@ -102,6 +102,9 @@ export class ChartSettingsModal {
         this.createModal();
         this.setupHandlers();
         this.switchCategory(this.activeCategory);
+
+        // ✅ Listen for close event from hotkey toggle
+        document.addEventListener('close-settings-modal', () => this.close(), { once: true });
     }
 
     public close(): void {
@@ -790,7 +793,6 @@ export class ChartSettingsModal {
 
         if (!btn || !popup) return;
 
-        // ✅ Prevent popup clicks from bubbling to outside click handler
         popup.addEventListener('click', (e) => e.stopPropagation());
 
         btn.addEventListener('click', (e) => {
@@ -822,50 +824,40 @@ export class ChartSettingsModal {
         document.addEventListener('click', this.boundOutsideClick);
     }
 
-    // ✅ Capture all current modal state into AllSettings
     private captureCurrentSettings(): Partial<AllSettings> {
         if (!this.overlay) return { ...this.liveColors } as any;
 
         const settings: Partial<AllSettings> = {};
 
-        // Colors from liveColors
         Object.assign(settings, this.liveColors);
 
-        // Toggles
         this.overlay.querySelectorAll('.settings-toggle input').forEach(el => {
             const input = el as HTMLInputElement;
             const key   = input.dataset.key;
             if (key) (settings as any)[key] = input.checked;
         });
 
-        // Ranges
         this.overlay.querySelectorAll('.settings-range').forEach(el => {
             const input = el as HTMLInputElement;
             const key   = input.dataset.key;
             if (key) (settings as any)[key] = parseInt(input.value);
         });
 
-        // Scale mode
         const activeScale = this.overlay.querySelector('.settings-mode-btn[data-scale].active') as HTMLElement;
         if (activeScale) (settings as any).scaleMode = activeScale.dataset.scale;
 
-        // Scale position
         const scalePos = this.overlay.querySelector('input[name="scalePos"]:checked') as HTMLInputElement;
         if (scalePos) settings.scalePosition = scalePos.value as 'right' | 'left';
 
-        // Legend position
         const legendPos = this.overlay.querySelector('input[name="legendPos"]:checked') as HTMLInputElement;
         if (legendPos) settings.legendPosition = legendPos.value as 'top-left' | 'top-right';
 
-        // Legend size
         const activeSize = this.overlay.querySelector('.settings-mode-btn[data-size].active') as HTMLElement;
         if (activeSize) settings.legendSize = activeSize.dataset.size as 'small' | 'medium' | 'large';
 
-        // Crosshair style
         const crosshairSelect = this.overlay.querySelector('[data-key="crosshairStyle"]') as HTMLSelectElement;
         if (crosshairSelect) settings.crosshairStyle = crosshairSelect.value;
 
-        // BG mode
         settings.bgMode = this.bgMode;
 
         return settings;
@@ -904,7 +896,6 @@ export class ChartSettingsModal {
                 <i class="fas fa-times settings-template-delete"></i>
             `;
 
-            // ✅ Click anywhere on item except delete — applies template
             item.addEventListener('click', (e) => {
                 if ((e.target as HTMLElement).classList.contains('settings-template-delete')) return;
                 e.stopPropagation();
@@ -913,7 +904,6 @@ export class ChartSettingsModal {
                 if (popup) popup.style.display = 'none';
             });
 
-            // ✅ Delete button
             item.querySelector('.settings-template-delete')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const all = this.loadTemplates();
@@ -926,10 +916,8 @@ export class ChartSettingsModal {
         });
     }
 
-    // ✅ Apply all settings from template and save as active
     private applyTemplateSettings(settings: Partial<AllSettings>): void {
 
-        // Colors
         const colorKeys = ['background', 'grid', 'bull', 'bear', 'line', 'volumeBull', 'volumeBear',
                            'scaleBorder', 'crosshair', 'textColor', 'wickBull', 'wickBear',
                            'borderBull', 'borderBear'];
@@ -939,7 +927,6 @@ export class ChartSettingsModal {
             }
         });
 
-        // Update swatch buttons
         this.overlay?.querySelectorAll('.settings-color-swatch').forEach(swatch => {
             const key = (swatch as HTMLElement).dataset.key;
             if (key && this.liveColors[key]) {
@@ -947,12 +934,10 @@ export class ChartSettingsModal {
             }
         });
 
-        // Dispatch chart colors
         document.dispatchEvent(new CustomEvent('chart-colors-change', {
             detail: { colors: { ...this.liveColors } }
         }));
 
-        // Toggles
         const toggleMap: Record<string, string> = {
             gridVertical:     'chart-toggle-grid-vertical',
             gridHorizontal:   'chart-toggle-grid-horizontal',
@@ -978,7 +963,6 @@ export class ChartSettingsModal {
             }
         });
 
-        // Ranges
         if (settings.barSpacing !== undefined) {
             document.dispatchEvent(new CustomEvent('chart-bar-spacing', { detail: { spacing: settings.barSpacing } }));
         }
@@ -999,7 +983,6 @@ export class ChartSettingsModal {
             }));
         }
 
-        // Scale mode
         if (settings.scaleMode) {
             document.dispatchEvent(new CustomEvent('chart-scale-change', {
                 detail: {
@@ -1009,21 +992,18 @@ export class ChartSettingsModal {
             }));
         }
 
-        // Scale position
         if (settings.scalePosition) {
             document.dispatchEvent(new CustomEvent('chart-scale-position', {
                 detail: { position: settings.scalePosition }
             }));
         }
 
-        // Crosshair style
         if (settings.crosshairStyle) {
             document.dispatchEvent(new CustomEvent('chart-crosshair-style', {
                 detail: { style: settings.crosshairStyle }
             }));
         }
 
-        // Legend
         if (settings.legendPosition) {
             document.dispatchEvent(new CustomEvent('legend-position-change', {
                 detail: { position: settings.legendPosition }

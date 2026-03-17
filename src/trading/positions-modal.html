@@ -90,8 +90,9 @@
                     <label class="inline-field-label sl-label">
                         <i class="fas fa-arrow-down"></i> Stop Loss
                     </label>
+                    <!-- ✅ step="any" — prevents browser forcing decimal display -->
                     <input type="number" class="inline-field-input" id="inlineSlInput"
-                           step="0.00001" placeholder="0.00000">
+                           step="any" placeholder="0.00">
                     <span class="inline-field-pips negative" id="inlineSlPips">—</span>
                 </div>
 
@@ -99,8 +100,9 @@
                     <label class="inline-field-label tp-label">
                         <i class="fas fa-arrow-up"></i> Take Profit
                     </label>
+                    <!-- ✅ step="any" — prevents browser forcing decimal display -->
                     <input type="number" class="inline-field-input" id="inlineTpInput"
-                           step="0.00001" placeholder="0.00000">
+                           step="any" placeholder="0.00">
                     <span class="inline-field-pips positive" id="inlineTpPips">—</span>
                 </div>
 

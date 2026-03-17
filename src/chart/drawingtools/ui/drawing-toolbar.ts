@@ -89,14 +89,12 @@ export class DrawingToolbar {
       }
     });
 
-    // Keep selectedTool in sync
     this.selectedTool.options = {
       ...this.selectedTool.options,
       ...updates
     };
   }
 
-  // ✅ Strip locked/editable before saving — lock should never persist
   private saveTemplate(toolType: string, options: any): void {
     const { locked, editable, ...cleanOptions } = options;
     saveToolTemplate(toolType, cleanOptions);
@@ -140,7 +138,6 @@ export class DrawingToolbar {
       onLockToggle: (toolId: string, locked: boolean) => {
         this.applyToolOptions({ locked, editable: !locked });
         this.lockTool(toolId, locked);
-        // ✅ Never save lock state to template
       },
 
       onDelete: (toolId: string) => {
@@ -221,7 +218,6 @@ export class DrawingToolbar {
     this.activeDrawingTool = toolId;
     this.setDrawingState(true);
 
-    // ✅ Pass saved template as options — tool starts with saved settings immediately
     const template = loadToolTemplate(toolId);
     this.startDrawing(toolId, template || undefined);
   }
@@ -254,10 +250,10 @@ export class DrawingToolbar {
     if (this.drawingModule.subscribeLineToolsAfterEdit) {
       this.drawingModule.subscribeLineToolsAfterEdit((payload: any) => {
         if (payload?.stage === 'lineToolFinished') {
-  this.deactivateAllTools();
-  this.quickToolbar?.hide(); // ✅ Hide quick toolbar on finish
-  return;
-}
+          this.deactivateAllTools();
+          this.quickToolbar?.hide();
+          return;
+        }
         const tool = payload?.selectedLineTool || payload;
         if (tool?.id) this.selectedTool = tool;
       });
@@ -308,8 +304,11 @@ export class DrawingToolbar {
         this.quickToolbar?.hide();
       }
 
+      // ✅ p — open tool properties only when a tool is selected
+      // stopPropagation prevents hotkey-manager from also catching p
       if ((e.key === 'p' || e.key === 'P') && this.selectedTool) {
         e.preventDefault();
+        e.stopPropagation();
         this.showToolProperties(this.selectedTool);
       }
 
@@ -340,7 +339,6 @@ export class DrawingToolbar {
         onToolLock: (toolId: string, locked: boolean) => {
           this.applyToolOptions({ locked, editable: !locked });
           this.lockTool(toolId, locked);
-          // ✅ Never save lock to template
           this.quickToolbar?.updateTool(this.selectedTool);
         },
 

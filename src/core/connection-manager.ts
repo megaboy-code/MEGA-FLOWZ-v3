@@ -151,8 +151,18 @@ export class ConnectionManager {
 
     // ==================== TRADING COMMANDS ====================
 
-    public executeTrade(direction: 'BUY' | 'SELL', symbol: string, volume: number, price: number): void {
-        this.sendCommand(`TRADE_${direction}_${symbol}_${volume}_${price}`);
+    public executeTrade(
+        direction: 'BUY' | 'SELL',
+        symbol: string,
+        volume: number,
+        price: number,
+        tp: number | null = null,
+        sl: number | null = null
+    ): void {
+        // ✅ sl first, tp second to match trade_handler parsing
+        const slStr = sl !== null ? String(sl) : '0';
+        const tpStr = tp !== null ? String(tp) : '0';
+        this.sendCommand(`TRADE_${direction}_${symbol}_${volume}_${price}_${slStr}_${tpStr}`);
     }
 
     public closeAllPositions(): void { this.sendCommand('CLOSE_ALL'); }

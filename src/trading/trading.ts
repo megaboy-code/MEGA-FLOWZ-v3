@@ -5,6 +5,7 @@
 // ================================================================
 
 import { AccountInfo, PositionData, WebSocketMessage } from '../types';
+import { formatPrice, getPipSize, getPipValue, getContractSize } from '../core/price-utils';
 
 // ════════════════════════════════════════
 // INTERFACES
@@ -30,20 +31,36 @@ interface TradingState {
 
     tpEnabled:   boolean;
     slEnabled:   boolean;
-    tpPrice:     number;
-    slPrice:     number;
+    tpPips:      number;
+    slPips:      number;
 
     positions:   PositionData[];
+}
+
+// ════════════════════════════════════════
+// INTERFACES — INLINE EDITOR STATE
+// ════════════════════════════════════════
+
+interface InlineEditorState {
+    active:   boolean;
+    ticket:   string | null;
+    isBuy:    boolean;
+    symbol:   string;
+
+    slFixed:  boolean;
+    slPrice:  number;
+    slPips:   number;
+
+    tpFixed:  boolean;
+    tpPrice:  number;
+    tpPips:   number;
 }
 
 // ════════════════════════════════════════
 // CONSTANTS
 // ════════════════════════════════════════
 
-const CONTRACT_SIZE     = 100_000;
 const MAX_BROKER_LOTS   = 50;
-const PIP_SIZE          = 0.0001;
-const PIP_VALUE         = 10;
 const TPSL_DEFAULT_PIPS = 20;
 
 // ════════════════════════════════════════
@@ -72,10 +89,25 @@ export class TradingModule {
 
         tpEnabled:   false,
         slEnabled:   false,
-        tpPrice:     0,
-        slPrice:     0,
+        tpPips:      TPSL_DEFAULT_PIPS,
+        slPips:      TPSL_DEFAULT_PIPS,
 
         positions:   [],
+    };
+
+    private inlineEditor: InlineEditorState = {
+        active:   false,
+        ticket:   null,
+        isBuy:    true,
+        symbol:   'EURUSD',
+
+        slFixed:  false,
+        slPrice:  0,
+        slPips:   TPSL_DEFAULT_PIPS,
+
+        tpFixed:  false,
+        tpPrice:  0,
+        tpPips:   TPSL_DEFAULT_PIPS,
     };
 
     private tpSlUpdateInterval: ReturnType<typeof setInterval> | null = null;
@@ -94,14 +126,14 @@ export class TradingModule {
     private boundHedge:          EventListener | null = null;
     private boundReverse:        EventListener | null = null;
     private boundOpenPositions:  EventListener | null = null;
+    private boundHotkeyAction:   EventListener | null = null;
+    private boundHotkeyTrade:    EventListener | null = null;
     private boundLotPresets:     Map<HTMLElement, EventListener> = new Map();
     private boundTpSlPresets:    Map<HTMLElement, EventListener> = new Map();
     private boundRiskPctBtns:    Map<HTMLElement, EventListener> = new Map();
 
-    // ✅ Drag cleanup
-    private dragCleanup: (() => void) | null = null;
-
-    private activeRowTicket: string | null = null;
+    private dragCleanup:     (() => void) | null = null;
+    private activeRowTicket: string | null       = null;
 
     constructor() {
         this.initialize();
@@ -122,6 +154,7 @@ export class TradingModule {
             this.setupTradeButtons();
             this.setupQuickActions();
             this.setupPositionsButton();
+            this.setupHotkeyListeners();
             this.startTpSlBackgroundUpdate();
             this.renderAll();
             console.log('✅ Trading Module initialized');
@@ -138,20 +171,142 @@ export class TradingModule {
         this.boundPriceUpdate = (e: Event) => {
             const { bid, ask, symbol } = (e as CustomEvent).detail;
 
+            // ✅ Update input steps when symbol changes
+            if (symbol && symbol !== this.state.symbol) {
+                this.updateInputSteps(symbol);
+            }
+
             this.state.bid    = bid    ?? this.state.bid;
             this.state.ask    = ask    ?? this.state.ask;
             this.state.symbol = symbol ?? this.state.symbol;
 
             this.renderBuySellPrices();
-            this.renderTpSlPips();
             this.renderLotStats();
 
+            // ✅ Recalculate maxSafeLots on every tick
+            if (this.state.ask > 0) {
+                this.state.maxSafeLots = this.calcMaxSafeLots();
+                this.applySafeMode();
+            }
+
+            // ✅ Update TP/SL panel inputs from pip distances
+            if (this.state.tpEnabled || this.state.slEnabled) {
+                this.renderTpSlInputsFromPips();
+            }
+
+            // ✅ Update inline editor on tick
+            if (this.inlineEditor.active) {
+                this.updateInlineOnTick();
+            }
+
+            // ✅ Recalculate risk% lot size on tick
             if (this.state.riskPct > 0 && this.state.slEnabled) {
                 this.applyRiskPct(this.state.riskPct);
             }
+
+            this.renderTpSlPips();
         };
 
         document.addEventListener('price-update', this.boundPriceUpdate);
+    }
+
+    // ════════════════════════════════════════
+    // UPDATE INPUT STEPS PER SYMBOL
+    // ════════════════════════════════════════
+
+    private updateInputSteps(symbol: string): void {
+        const step = String(getPipSize(symbol));
+        ['tpInput', 'slInput', 'inlineSlInput', 'inlineTpInput'].forEach(id => {
+            const el = document.getElementById(id) as HTMLInputElement;
+            if (el) el.step = step;
+        });
+    }
+
+    // ════════════════════════════════════════
+    // TP/SL PANEL INPUT DISPLAY
+    // ════════════════════════════════════════
+
+    private renderTpSlInputsFromPips(): void {
+        const price   = this.state.ask;
+        const symbol  = this.state.symbol;
+        const pipSize = getPipSize(symbol);
+
+        if (this.state.tpEnabled) {
+            const tpInput = document.getElementById('tpInput') as HTMLInputElement;
+            if (tpInput && document.activeElement !== tpInput) {
+                tpInput.value = formatPrice(symbol, price + this.state.tpPips * pipSize);
+            }
+        }
+
+        if (this.state.slEnabled) {
+            const slInput = document.getElementById('slInput') as HTMLInputElement;
+            if (slInput && document.activeElement !== slInput) {
+                slInput.value = formatPrice(symbol, price - this.state.slPips * pipSize);
+            }
+        }
+    }
+
+    // ════════════════════════════════════════
+    // INLINE EDITOR TICK UPDATE
+    // ════════════════════════════════════════
+
+    private updateInlineOnTick(): void {
+        const price   = this.state.ask;
+        const symbol  = this.inlineEditor.symbol;
+        const pipSize = getPipSize(symbol);
+        const isBuy   = this.inlineEditor.isBuy;
+
+        const slInput = document.getElementById('inlineSlInput') as HTMLInputElement;
+        const tpInput = document.getElementById('inlineTpInput') as HTMLInputElement;
+
+        // ✅ SL — if not fixed, update price live from pip distance
+        if (!this.inlineEditor.slFixed) {
+            const slPrice = isBuy
+                ? price - this.inlineEditor.slPips * pipSize
+                : price + this.inlineEditor.slPips * pipSize;
+            // ✅ Round to correct precision
+            this.inlineEditor.slPrice = parseFloat(formatPrice(symbol, slPrice));
+            if (slInput && document.activeElement !== slInput) {
+                slInput.value = formatPrice(symbol, slPrice);
+            }
+        }
+
+        // ✅ TP — if not fixed, update price live from pip distance
+        if (!this.inlineEditor.tpFixed) {
+            const tpPrice = isBuy
+                ? price + this.inlineEditor.tpPips * pipSize
+                : price - this.inlineEditor.tpPips * pipSize;
+            // ✅ Round to correct precision
+            this.inlineEditor.tpPrice = parseFloat(formatPrice(symbol, tpPrice));
+            if (tpInput && document.activeElement !== tpInput) {
+                tpInput.value = formatPrice(symbol, tpPrice);
+            }
+        }
+
+        // ✅ Always update pip display
+        this.renderInlinePipsFromState();
+    }
+
+    // ════════════════════════════════════════
+    // HOTKEY LISTENERS
+    // ════════════════════════════════════════
+
+    private setupHotkeyListeners(): void {
+        this.boundHotkeyAction = (e: Event) => {
+            const { action } = (e as CustomEvent).detail;
+            switch (action) {
+                case 'open-positions-modal': this.openPositionsModal();  break;
+                case 'close-all-modals':     this.closePositionsModal(); break;
+            }
+        };
+        document.addEventListener('hotkey-global-action', this.boundHotkeyAction);
+
+        this.boundHotkeyTrade = (e: Event) => {
+            const { direction } = (e as CustomEvent).detail;
+            if (direction === 'buy')  this.executeTrade('BUY');
+            if (direction === 'sell') this.executeTrade('SELL');
+        };
+        document.addEventListener('hotkey-trade-action', this.boundHotkeyTrade);
     }
 
     // ════════════════════════════════════════
@@ -160,12 +315,8 @@ export class TradingModule {
 
     private startTpSlBackgroundUpdate(): void {
         this.tpSlUpdateInterval = setInterval(() => {
-            if (!this.state.tpEnabled && this.state.ask > 0) {
-                this.state.tpPrice = this.state.ask + TPSL_DEFAULT_PIPS * PIP_SIZE;
-            }
-            if (!this.state.slEnabled && this.state.ask > 0) {
-                this.state.slPrice = this.state.ask - TPSL_DEFAULT_PIPS * PIP_SIZE;
-            }
+            if (!this.state.tpEnabled) this.state.tpPips = TPSL_DEFAULT_PIPS;
+            if (!this.state.slEnabled) this.state.slPips = TPSL_DEFAULT_PIPS;
         }, 60_000);
     }
 
@@ -196,7 +347,7 @@ export class TradingModule {
         const toggle   = document.getElementById('safeModeToggle');
         const icon     = document.getElementById('safeModeIcon');
         const label    = document.getElementById('safeModeLabel');
-        const slider   = document.getElementById('lotSlider')  as HTMLInputElement;
+        const slider   = document.getElementById('lotSlider') as HTMLInputElement;
         const maxBadge = document.getElementById('lotMaxBadge');
         const maxLabel = document.getElementById('sliderMaxLabel');
 
@@ -307,8 +458,9 @@ export class TradingModule {
     private applyRiskPct(pct: number): void {
         this.state.riskPct = pct;
 
-        const badge = document.getElementById('riskPctBadge');
-        const note  = document.getElementById('riskPctNote');
+        const pipValue = getPipValue(this.state.symbol);
+        const badge    = document.getElementById('riskPctBadge');
+        const note     = document.getElementById('riskPctNote');
 
         if (badge) badge.textContent = `${pct}%`;
 
@@ -320,11 +472,11 @@ export class TradingModule {
             return;
         }
 
-        const slPips = Math.abs(this.state.ask - this.state.slPrice) / PIP_SIZE;
+        const slPips = this.state.slPips;
         if (slPips === 0) return;
 
         const riskAmount = this.state.balance * (pct / 100);
-        const lotSize    = riskAmount / (slPips * PIP_VALUE);
+        const lotSize    = riskAmount / (slPips * pipValue);
         const rounded    = Math.max(0.01, parseFloat(lotSize.toFixed(2)));
 
         const finalLot = this.state.safeMode
@@ -367,16 +519,14 @@ export class TradingModule {
     // ════════════════════════════════════════
 
     private renderLotStats(): void {
-        const lot    = this.state.lotSize;
-        const margin = lot * CONTRACT_SIZE / this.state.leverage;
-        const value  = lot * CONTRACT_SIZE * this.state.ask;
+        const lot          = this.state.lotSize;
+        const contractSize = getContractSize(this.state.symbol);
+        const margin       = lot * contractSize * this.state.ask / this.state.leverage;
 
-        this.setText('marginAmount',  `$${margin.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
-        this.setText('positionValue', `$${Math.round(value).toLocaleString()}`);
+        this.setText('marginAmount', `$${margin.toLocaleString('en-US', { maximumFractionDigits: 2 })}`);
 
         if (this.state.slEnabled) {
-            const slPips = Math.abs(this.state.ask - this.state.slPrice) / PIP_SIZE;
-            const risk   = lot * PIP_VALUE * slPips;
+            const risk = lot * getPipValue(this.state.symbol) * this.state.slPips;
             this.setText('riskAmount', `$${risk.toFixed(2)}`);
         } else {
             this.setText('riskAmount', '--');
@@ -393,8 +543,9 @@ export class TradingModule {
     // ════════════════════════════════════════
 
     private checkMarginWarning(): void {
-        const margin     = this.state.lotSize * CONTRACT_SIZE / this.state.leverage;
-        const overMargin = margin > this.state.freeMargin;
+        const contractSize = getContractSize(this.state.symbol);
+        const margin       = this.state.lotSize * contractSize * this.state.ask / this.state.leverage;
+        const overMargin   = margin > this.state.freeMargin;
 
         if (!this.state.safeMode && overMargin) {
             const shortfall = (margin - this.state.freeMargin).toFixed(2);
@@ -416,7 +567,9 @@ export class TradingModule {
     }
 
     private calcMaxSafeLots(): number {
-        const max = this.state.freeMargin / (CONTRACT_SIZE / this.state.leverage);
+        if (this.state.ask <= 0) return 2.72;
+        const contractSize = getContractSize(this.state.symbol);
+        const max          = this.state.freeMargin / (contractSize * this.state.ask / this.state.leverage);
         return parseFloat(max.toFixed(2));
     }
 
@@ -437,9 +590,12 @@ export class TradingModule {
                 document.getElementById('tpRow')?.classList.toggle('hidden', !this.state.tpEnabled);
 
                 if (this.state.tpEnabled && this.state.ask > 0) {
-                    this.state.tpPrice = this.state.ask + TPSL_DEFAULT_PIPS * PIP_SIZE;
-                    const input = document.getElementById('tpInput') as HTMLInputElement;
-                    if (input) input.value = String(this.state.tpPrice);
+                    this.state.tpPips = TPSL_DEFAULT_PIPS;
+                    const tpInput     = document.getElementById('tpInput') as HTMLInputElement;
+                    if (tpInput) tpInput.value = formatPrice(
+                        this.state.symbol,
+                        this.state.ask + this.state.tpPips * getPipSize(this.state.symbol)
+                    );
                 }
 
                 this.checkTpSlEmpty();
@@ -456,9 +612,12 @@ export class TradingModule {
                 document.getElementById('slRow')?.classList.toggle('hidden', !this.state.slEnabled);
 
                 if (this.state.slEnabled && this.state.ask > 0) {
-                    this.state.slPrice = this.state.ask - TPSL_DEFAULT_PIPS * PIP_SIZE;
-                    const input = document.getElementById('slInput') as HTMLInputElement;
-                    if (input) input.value = String(this.state.slPrice);
+                    this.state.slPips = TPSL_DEFAULT_PIPS;
+                    const slInput     = document.getElementById('slInput') as HTMLInputElement;
+                    if (slInput) slInput.value = formatPrice(
+                        this.state.symbol,
+                        this.state.ask - this.state.slPips * getPipSize(this.state.symbol)
+                    );
                 }
 
                 this.checkTpSlEmpty();
@@ -472,7 +631,10 @@ export class TradingModule {
 
         if (tpInput) {
             this.boundTpInput = () => {
-                this.state.tpPrice = parseFloat(tpInput.value) || this.state.tpPrice;
+                const price = parseFloat(tpInput.value);
+                if (!isNaN(price) && this.state.ask > 0) {
+                    this.state.tpPips = Math.abs(price - this.state.ask) / getPipSize(this.state.symbol);
+                }
                 this.renderTpSlPips();
                 this.renderRR();
             };
@@ -481,7 +643,10 @@ export class TradingModule {
 
         if (slInput) {
             this.boundSlInput = () => {
-                this.state.slPrice = parseFloat(slInput.value) || this.state.slPrice;
+                const price = parseFloat(slInput.value);
+                if (!isNaN(price) && this.state.ask > 0) {
+                    this.state.slPips = Math.abs(price - this.state.ask) / getPipSize(this.state.symbol);
+                }
                 this.renderTpSlPips();
                 this.renderLotStats();
                 this.renderRR();
@@ -505,20 +670,19 @@ export class TradingModule {
     }
 
     private applyPipPreset(pips: number): void {
-        const price = this.state.ask;
+        const symbol  = this.state.symbol;
+        const pipSize = getPipSize(symbol);
 
         if (this.state.tpEnabled) {
-            const tp = price + pips * PIP_SIZE;
-            this.state.tpPrice = tp;
+            this.state.tpPips = pips;
             const tpInput = document.getElementById('tpInput') as HTMLInputElement;
-            if (tpInput) tpInput.value = String(tp);
+            if (tpInput) tpInput.value = formatPrice(symbol, this.state.ask + pips * pipSize);
         }
 
         if (this.state.slEnabled) {
-            const sl = price - pips * PIP_SIZE;
-            this.state.slPrice = sl;
+            this.state.slPips = pips;
             const slInput = document.getElementById('slInput') as HTMLInputElement;
-            if (slInput) slInput.value = String(sl);
+            if (slInput) slInput.value = formatPrice(symbol, this.state.ask - pips * pipSize);
         }
 
         this.renderTpSlPips();
@@ -530,22 +694,21 @@ export class TradingModule {
     }
 
     private applyRRPreset(ratio: number): void {
-        const price  = this.state.ask;
-        const slPips = TPSL_DEFAULT_PIPS;
-        const tpPips = slPips * ratio;
+        const symbol  = this.state.symbol;
+        const pipSize = getPipSize(symbol);
+        const slPips  = TPSL_DEFAULT_PIPS;
+        const tpPips  = slPips * ratio;
 
         if (this.state.slEnabled) {
-            const sl = price - slPips * PIP_SIZE;
-            this.state.slPrice = sl;
+            this.state.slPips = slPips;
             const slInput = document.getElementById('slInput') as HTMLInputElement;
-            if (slInput) slInput.value = String(sl);
+            if (slInput) slInput.value = formatPrice(symbol, this.state.ask - slPips * pipSize);
         }
 
         if (this.state.tpEnabled) {
-            const tp = price + tpPips * PIP_SIZE;
-            this.state.tpPrice = tp;
+            this.state.tpPips = tpPips;
             const tpInput = document.getElementById('tpInput') as HTMLInputElement;
-            if (tpInput) tpInput.value = String(tp);
+            if (tpInput) tpInput.value = formatPrice(symbol, this.state.ask + tpPips * pipSize);
         }
 
         this.renderTpSlPips();
@@ -557,23 +720,19 @@ export class TradingModule {
     }
 
     private renderTpSlPips(): void {
-        const price = this.state.ask;
-
         if (this.state.tpEnabled) {
-            const tpPips = ((this.state.tpPrice - price) / PIP_SIZE).toFixed(1);
             const el = document.getElementById('tpPips');
             if (el) {
-                el.textContent = `${parseFloat(tpPips) >= 0 ? '+' : ''}${tpPips}p`;
-                el.className   = `tpsl-pips ${parseFloat(tpPips) >= 0 ? 'positive' : 'negative'}`;
+                el.textContent = `+${this.state.tpPips.toFixed(1)}p`;
+                el.className   = 'tpsl-pips positive';
             }
         }
 
         if (this.state.slEnabled) {
-            const slPips = ((this.state.slPrice - price) / PIP_SIZE).toFixed(1);
             const el = document.getElementById('slPips');
             if (el) {
-                el.textContent = `${parseFloat(slPips) >= 0 ? '+' : ''}${slPips}p`;
-                el.className   = `tpsl-pips ${parseFloat(slPips) >= 0 ? 'positive' : 'negative'}`;
+                el.textContent = `-${this.state.slPips.toFixed(1)}p`;
+                el.className   = 'tpsl-pips negative';
             }
         }
     }
@@ -587,13 +746,10 @@ export class TradingModule {
 
         rrDisplay?.classList.remove('hidden');
 
-        const price  = this.state.ask;
-        const tpPips = Math.abs(this.state.tpPrice - price);
-        const slPips = Math.abs(this.state.slPrice - price);
-
+        const slPips = this.state.slPips;
         if (slPips === 0) return;
 
-        const rr = (tpPips / slPips).toFixed(2);
+        const rr = (this.state.tpPips / slPips).toFixed(2);
         this.setText('rrValue', `1 : ${rr}`);
     }
 
@@ -622,11 +778,26 @@ export class TradingModule {
     }
 
     private executeTrade(direction: 'BUY' | 'SELL'): void {
-        const price  = direction === 'BUY' ? this.state.ask : this.state.bid;
-        const symbol = this.state.symbol;
-        const volume = this.state.lotSize;
-        const tp     = this.state.tpEnabled ? this.state.tpPrice : null;
-        const sl     = this.state.slEnabled ? this.state.slPrice  : null;
+        const price   = direction === 'BUY' ? this.state.ask : this.state.bid;
+        const symbol  = this.state.symbol;
+        const volume  = this.state.lotSize;
+        const pipSize = getPipSize(symbol);
+
+        // ✅ Direction-aware TP/SL at execution time
+        let tp: number | null = null;
+        let sl: number | null = null;
+
+        if (this.state.tpEnabled) {
+            tp = direction === 'BUY'
+                ? price + this.state.tpPips * pipSize
+                : price - this.state.tpPips * pipSize;
+        }
+
+        if (this.state.slEnabled) {
+            sl = direction === 'BUY'
+                ? price - this.state.slPips * pipSize
+                : price + this.state.slPips * pipSize;
+        }
 
         const command = `TRADE_${direction}_${symbol}_${volume}_${price}`;
 
@@ -673,12 +844,9 @@ export class TradingModule {
 
         document.dispatchEvent(new CustomEvent('execute-trade', {
             detail: {
-                command: JSON.stringify({
-                    action: 'TRADE', direction,
-                    symbol: this.state.symbol,
-                    volume: this.state.lotSize,
-                    tp: null, sl: null,
-                })
+                command: `TRADE_${direction}_${this.state.symbol}_${this.state.lotSize}_${direction === 'BUY' ? this.state.ask : this.state.bid}`,
+                tp: null,
+                sl: null,
             }
         }));
     }
@@ -693,12 +861,9 @@ export class TradingModule {
 
             document.dispatchEvent(new CustomEvent('execute-trade', {
                 detail: {
-                    command: JSON.stringify({
-                        action: 'TRADE', direction,
-                        symbol: this.state.symbol,
-                        volume: this.state.lotSize,
-                        tp: null, sl: null,
-                    })
+                    command: `TRADE_${direction}_${this.state.symbol}_${this.state.lotSize}_${direction === 'BUY' ? this.state.ask : this.state.bid}`,
+                    tp: null,
+                    sl: null,
                 }
             }));
         }, 300);
@@ -724,7 +889,6 @@ export class TradingModule {
         const modal = document.getElementById('positionsModal');
         if (!modal) return;
 
-        // ✅ Move to body — escapes panel overflow:hidden and stacking context
         if (modal.parentElement !== document.body) {
             document.body.appendChild(modal);
         }
@@ -733,7 +897,6 @@ export class TradingModule {
         this.renderPositionsTable();
         this.setupModalControls();
 
-        // ✅ Only setup drag once
         if (!this.dragCleanup) {
             this.dragCleanup = this.setupDrag();
         }
@@ -770,7 +933,6 @@ export class TradingModule {
         const header = document.getElementById('positionsModalHeader') as HTMLElement;
         if (!modal || !header) return () => {};
 
-        // ✅ Initialize position from current CSS on first open
         if (!modal.dataset.dragged) {
             const rect            = modal.getBoundingClientRect();
             modal.style.left      = `${rect.left}px`;
@@ -861,7 +1023,7 @@ export class TradingModule {
                 <td>${pos.symbol}</td>
                 <td class="${typeClass}">${pos.type}</td>
                 <td>${pos.volume ?? '—'}</td>
-                <td>${(pos.openPrice ?? pos.entry_price ?? pos.price_open) ?? '—'}</td>
+                <td>${pos.open_price ?? '—'}</td>
                 <td>${pos.current_price ?? '—'}</td>
                 <td>${pos.sl ?? '—'}</td>
                 <td>${pos.tp ?? '—'}</td>
@@ -911,10 +1073,13 @@ export class TradingModule {
         empty?.classList.add('hidden');
         table?.classList.remove('hidden');
 
-        const existingTickets = new Set(
-            Array.from(tbody.querySelectorAll('tr')).map(tr => (tr as HTMLElement).dataset.ticket)
-        );
         const newTickets = new Set(this.state.positions.map(p => String(p.ticket)));
+
+        const existingTickets = new Set(
+            Array.from(tbody.querySelectorAll('tr'))
+                .map(tr => (tr as HTMLElement).dataset.ticket)
+                .filter((t): t is string => t !== undefined)
+        );
 
         existingTickets.forEach(ticket => {
             if (!newTickets.has(ticket)) {
@@ -989,15 +1154,57 @@ export class TradingModule {
         this.setText('inlineEditorTicket', `#${ticket}`);
         this.setText('inlineEditorTime',   this.formatTime(pos.open_time));
 
+        const price   = this.state.ask;
+        const symbol  = pos.symbol;
+        const pipSize = getPipSize(symbol);
+        const isBuy   = pos.type === 'BUY';
+
+        // ✅ Set input steps for this position's symbol
+        this.updateInputSteps(symbol);
+
+        this.inlineEditor.active = true;
+        this.inlineEditor.ticket = ticket;
+        this.inlineEditor.isBuy  = isBuy;
+        this.inlineEditor.symbol = symbol;
+
+        if (pos.sl) {
+            // ✅ Has existing SL — fixed, pip display updates live
+            this.inlineEditor.slFixed = true;
+            // ✅ Round to correct precision
+            this.inlineEditor.slPrice = parseFloat(formatPrice(symbol, pos.sl));
+            this.inlineEditor.slPips  = Math.abs(pos.sl - price) / pipSize;
+        } else {
+            // ✅ No SL — live updating like panel
+            this.inlineEditor.slFixed = false;
+            this.inlineEditor.slPips  = TPSL_DEFAULT_PIPS;
+            this.inlineEditor.slPrice = parseFloat(formatPrice(symbol,
+                isBuy ? price - TPSL_DEFAULT_PIPS * pipSize : price + TPSL_DEFAULT_PIPS * pipSize
+            ));
+        }
+
+        if (pos.tp) {
+            // ✅ Has existing TP — fixed, pip display updates live
+            this.inlineEditor.tpFixed = true;
+            // ✅ Round to correct precision
+            this.inlineEditor.tpPrice = parseFloat(formatPrice(symbol, pos.tp));
+            this.inlineEditor.tpPips  = Math.abs(pos.tp - price) / pipSize;
+        } else {
+            // ✅ No TP — live updating like panel
+            this.inlineEditor.tpFixed = false;
+            this.inlineEditor.tpPips  = TPSL_DEFAULT_PIPS;
+            this.inlineEditor.tpPrice = parseFloat(formatPrice(symbol,
+                isBuy ? price + TPSL_DEFAULT_PIPS * pipSize : price - TPSL_DEFAULT_PIPS * pipSize
+            ));
+        }
+
         const slInput = document.getElementById('inlineSlInput') as HTMLInputElement;
         const tpInput = document.getElementById('inlineTpInput') as HTMLInputElement;
 
-        if (slInput) slInput.value = pos.sl ? String(pos.sl) : '';
-        if (tpInput) tpInput.value = pos.tp ? String(pos.tp) : '';
+        if (slInput) slInput.value = formatPrice(symbol, this.inlineEditor.slPrice);
+        if (tpInput) tpInput.value = formatPrice(symbol, this.inlineEditor.tpPrice);
 
-        const frozenPrice = pos.current_price ?? this.state.ask;
-        this.renderInlinePips(pos);
-        this.setupInlinePipPresets(pos, frozenPrice);
+        this.renderInlinePipsFromState();
+        this.setupInlinePipPresets(pos);
 
         document.getElementById('inlineEditor')?.classList.remove('hidden');
 
@@ -1017,21 +1224,40 @@ export class TradingModule {
         newClose?.addEventListener('click',  () => this.submitClosePosition(pos));
         newCancel?.addEventListener('click', () => this.collapseInlineEditor());
 
-        document.getElementById('inlineSlInput')?.addEventListener('input', () => this.renderInlinePips(pos));
-        document.getElementById('inlineTpInput')?.addEventListener('input', () => this.renderInlinePips(pos));
+        // ✅ Manual input — fix price and recalculate pip distance
+        document.getElementById('inlineSlInput')?.addEventListener('input', () => {
+            const val = parseFloat((document.getElementById('inlineSlInput') as HTMLInputElement).value);
+            if (!isNaN(val)) {
+                this.inlineEditor.slFixed = true;
+                this.inlineEditor.slPrice = val;
+                this.inlineEditor.slPips  = Math.abs(val - this.state.ask) / getPipSize(symbol);
+            }
+            this.renderInlinePipsFromState();
+        });
+
+        document.getElementById('inlineTpInput')?.addEventListener('input', () => {
+            const val = parseFloat((document.getElementById('inlineTpInput') as HTMLInputElement).value);
+            if (!isNaN(val)) {
+                this.inlineEditor.tpFixed = true;
+                this.inlineEditor.tpPrice = val;
+                this.inlineEditor.tpPips  = Math.abs(val - this.state.ask) / getPipSize(symbol);
+            }
+            this.renderInlinePipsFromState();
+        });
     }
 
     // ════════════════════════════════════════
     // INLINE PIP PRESETS
     // ════════════════════════════════════════
 
-    private setupInlinePipPresets(pos: PositionData, frozenPrice: number): void {
+    private setupInlinePipPresets(pos: PositionData): void {
         const container = document.getElementById('inlinePipPresets');
         if (!container) return;
 
         container.innerHTML = '';
 
-        const isBuy   = pos.type === 'BUY' || pos.type === 0;
+        const symbol  = pos.symbol;
+        const pipSize = getPipSize(symbol);
         const pipList = [10, 20, 30, 50, 100];
         const rrList  = [1, 1.5, 2, 3];
 
@@ -1040,17 +1266,26 @@ export class TradingModule {
             btn.className   = 'inline-pip-btn';
             btn.textContent = `${pips}p`;
             btn.addEventListener('click', () => {
+                const price = this.state.ask;
+                const isBuy = this.inlineEditor.isBuy;
+
+                this.inlineEditor.slFixed = true;
+                this.inlineEditor.tpFixed = true;
+                this.inlineEditor.slPips  = pips;
+                this.inlineEditor.tpPips  = pips;
+                this.inlineEditor.slPrice = parseFloat(formatPrice(symbol,
+                    isBuy ? price - pips * pipSize : price + pips * pipSize
+                ));
+                this.inlineEditor.tpPrice = parseFloat(formatPrice(symbol,
+                    isBuy ? price + pips * pipSize : price - pips * pipSize
+                ));
+
                 const slInput = document.getElementById('inlineSlInput') as HTMLInputElement;
                 const tpInput = document.getElementById('inlineTpInput') as HTMLInputElement;
+                if (slInput) slInput.value = formatPrice(symbol, this.inlineEditor.slPrice);
+                if (tpInput) tpInput.value = formatPrice(symbol, this.inlineEditor.tpPrice);
 
-                if (slInput) slInput.value = String(
-                    isBuy ? frozenPrice - pips * PIP_SIZE : frozenPrice + pips * PIP_SIZE
-                );
-                if (tpInput) tpInput.value = String(
-                    isBuy ? frozenPrice + pips * PIP_SIZE : frozenPrice - pips * PIP_SIZE
-                );
-
-                this.renderInlinePips(pos);
+                this.renderInlinePipsFromState();
             });
             container.appendChild(btn);
         });
@@ -1060,45 +1295,57 @@ export class TradingModule {
             btn.className   = 'inline-pip-btn rr';
             btn.textContent = `1:${rr}`;
             btn.addEventListener('click', () => {
+                const price  = this.state.ask;
+                const isBuy  = this.inlineEditor.isBuy;
+                const slPips = TPSL_DEFAULT_PIPS;
+                const tpPips = slPips * rr;
+
+                this.inlineEditor.slFixed = true;
+                this.inlineEditor.tpFixed = true;
+                this.inlineEditor.slPips  = slPips;
+                this.inlineEditor.tpPips  = tpPips;
+                this.inlineEditor.slPrice = parseFloat(formatPrice(symbol,
+                    isBuy ? price - slPips * pipSize : price + slPips * pipSize
+                ));
+                this.inlineEditor.tpPrice = parseFloat(formatPrice(symbol,
+                    isBuy ? price + tpPips * pipSize : price - tpPips * pipSize
+                ));
+
                 const slInput = document.getElementById('inlineSlInput') as HTMLInputElement;
                 const tpInput = document.getElementById('inlineTpInput') as HTMLInputElement;
-                const slPips  = 20;
-                const tpPips  = slPips * rr;
+                if (slInput) slInput.value = formatPrice(symbol, this.inlineEditor.slPrice);
+                if (tpInput) tpInput.value = formatPrice(symbol, this.inlineEditor.tpPrice);
 
-                if (slInput) slInput.value = String(
-                    isBuy ? frozenPrice - slPips * PIP_SIZE : frozenPrice + slPips * PIP_SIZE
-                );
-                if (tpInput) tpInput.value = String(
-                    isBuy ? frozenPrice + tpPips * PIP_SIZE : frozenPrice - tpPips * PIP_SIZE
-                );
-
-                this.renderInlinePips(pos);
+                this.renderInlinePipsFromState();
             });
             container.appendChild(btn);
         });
     }
 
-    private renderInlinePips(pos: PositionData): void {
-        const price   = pos.current_price ?? this.state.ask;
-        const slInput = document.getElementById('inlineSlInput') as HTMLInputElement;
-        const tpInput = document.getElementById('inlineTpInput') as HTMLInputElement;
+    // ════════════════════════════════════════
+    // INLINE PIPS RENDER FROM STATE
+    // ════════════════════════════════════════
 
-        if (slInput?.value) {
-            const slPips = ((parseFloat(slInput.value) - price) / PIP_SIZE).toFixed(1);
-            const el     = document.getElementById('inlineSlPips');
-            if (el) {
-                el.textContent = `${parseFloat(slPips) >= 0 ? '+' : ''}${slPips}p`;
-                el.className   = `inline-field-pips ${parseFloat(slPips) >= 0 ? 'positive' : 'negative'}`;
-            }
+    private renderInlinePipsFromState(): void {
+        const price   = this.state.ask;
+        const pipSize = getPipSize(this.inlineEditor.symbol);
+        const isBuy   = this.inlineEditor.isBuy;
+
+        // ✅ Live pip distance from current price to fixed SL/TP prices
+        const slPips = Math.abs(this.inlineEditor.slPrice - price) / pipSize;
+        const tpPips = Math.abs(this.inlineEditor.tpPrice - price) / pipSize;
+
+        const slEl = document.getElementById('inlineSlPips');
+        const tpEl = document.getElementById('inlineTpPips');
+
+        if (slEl) {
+            slEl.textContent = `${isBuy ? '-' : '+'}${slPips.toFixed(1)}p`;
+            slEl.className   = `inline-field-pips ${isBuy ? 'negative' : 'positive'}`;
         }
 
-        if (tpInput?.value) {
-            const tpPips = ((parseFloat(tpInput.value) - price) / PIP_SIZE).toFixed(1);
-            const el     = document.getElementById('inlineTpPips');
-            if (el) {
-                el.textContent = `${parseFloat(tpPips) >= 0 ? '+' : ''}${tpPips}p`;
-                el.className   = `inline-field-pips ${parseFloat(tpPips) >= 0 ? 'positive' : 'negative'}`;
-            }
+        if (tpEl) {
+            tpEl.textContent = `${isBuy ? '+' : '-'}${tpPips.toFixed(1)}p`;
+            tpEl.className   = `inline-field-pips ${isBuy ? 'positive' : 'negative'}`;
         }
     }
 
@@ -1130,7 +1377,11 @@ export class TradingModule {
         document.querySelectorAll('#positionsTableBody tr').forEach(tr => {
             tr.classList.remove('selected');
         });
-        this.activeRowTicket = null;
+        this.inlineEditor.active  = false;
+        this.inlineEditor.ticket  = null;
+        this.inlineEditor.slFixed = false;
+        this.inlineEditor.tpFixed = false;
+        this.activeRowTicket      = null;
     }
 
     // ════════════════════════════════════════
@@ -1191,8 +1442,8 @@ export class TradingModule {
     // ════════════════════════════════════════
 
     private renderBuySellPrices(): void {
-        this.setText('buyBtnPrice',  String(this.state.ask));
-        this.setText('sellBtnPrice', String(this.state.bid));
+        this.setText('buyBtnPrice',  formatPrice(this.state.symbol, this.state.ask));
+        this.setText('sellBtnPrice', formatPrice(this.state.symbol, this.state.bid));
     }
 
     // ════════════════════════════════════════
@@ -1215,7 +1466,7 @@ export class TradingModule {
         this.state.freeMargin  = account.free_margin ?? this.state.freeMargin;
         this.state.margin      = account.margin      ?? this.state.margin;
         this.state.leverage    = account.leverage    ?? this.state.leverage;
-        this.state.floatingPnl = (account.equity ?? 0) - (account.balance ?? 0);
+        this.state.floatingPnl = (account.equity ?? this.state.equity) - (account.balance ?? this.state.balance);
 
         this.state.maxSafeLots = this.calcMaxSafeLots();
         this.applySafeMode();
@@ -1231,12 +1482,14 @@ export class TradingModule {
 
     public updatePositions(positions: PositionData[]): void {
         this.state.positions = positions;
-        this.updatePositionsCount();
 
-        if (positions.length === 0) {
-            this.state.floatingPnl = 0;
-            this.renderHero();
-        }
+        // ✅ Update floating P&L and equity from live position data
+        this.state.floatingPnl = positions.reduce((sum, p) => sum + (p.profit ?? 0), 0);
+        this.state.equity      = this.state.balance + this.state.floatingPnl;
+
+        this.updatePositionsCount();
+        this.renderHero();
+        this.renderMetrics();
 
         const modal = document.getElementById('positionsModal');
         if (modal && !modal.classList.contains('hidden')) {
@@ -1264,9 +1517,9 @@ export class TradingModule {
         })}`;
     }
 
-    private formatTime(timestamp?: string | number): string {
+    private formatTime(timestamp?: number): string {
         if (!timestamp) return '—';
-        const d = new Date(timestamp);
+        const d = new Date(timestamp * 1000);
         return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     }
 
@@ -1279,11 +1532,13 @@ export class TradingModule {
 
         this.stopTpSlBackgroundUpdate();
 
-        // ✅ Cleanup drag
         this.dragCleanup?.();
         this.dragCleanup = null;
 
-        if (this.boundPriceUpdate)    document.removeEventListener('price-update',      this.boundPriceUpdate);
+        if (this.boundPriceUpdate)   document.removeEventListener('price-update',        this.boundPriceUpdate);
+        if (this.boundHotkeyAction)  document.removeEventListener('hotkey-global-action', this.boundHotkeyAction);
+        if (this.boundHotkeyTrade)   document.removeEventListener('hotkey-trade-action',  this.boundHotkeyTrade);
+
         if (this.boundSafeModeToggle) document.getElementById('safeModeToggle')?.removeEventListener('click',    this.boundSafeModeToggle);
         if (this.boundSlider)         document.getElementById('lotSlider')?.removeEventListener('input',         this.boundSlider);
         if (this.boundTpToggle)       document.getElementById('tpToggle')?.removeEventListener('click',          this.boundTpToggle);

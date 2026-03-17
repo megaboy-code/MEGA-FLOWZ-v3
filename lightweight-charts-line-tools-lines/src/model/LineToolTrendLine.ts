@@ -76,21 +76,46 @@ export const TrendLineOptionDefaults: LineToolOptionsInternal<'TrendLine'> = {
 	},
 	text: {
 		value: '',
-		padding: 0,
-		wordWrapWidth: 0,
+		padding: 8,
+		wordWrapWidth: 200,
 		forceTextAlign: false,
 		forceCalculateMaxLineWidth: false,
 		alignment: TextAlignment.Center,
-		font: { family: 'sans-serif', color: '#2962ff', size: 12, bold: false, italic: false },
+		font: { 
+			family: 'sans-serif', 
+			color: '#2962ff', 
+			size: 12, 
+			bold: false, 
+			italic: false 
+		},
 		box: { 
 			scale: 1, 
 			angle: 0, 
-			alignment: { vertical: BoxVerticalAlignment.Middle, horizontal: BoxHorizontalAlignment.Center },
-			// Default box and shadow options
+			alignment: { 
+				vertical: BoxVerticalAlignment.Middle, 
+				horizontal: BoxHorizontalAlignment.Center 
+			},
+			background: {
+				color: '#ffffff',
+				transparent: false,
+				inflation: {x: 0, y: 0 }
+			},
+			border: {
+				color: '#2962ff',
+				width: 1,
+				style: LineStyle.Solid,
+				radius: 4,
+				highlight: false
+			},
+			shadow: {
+				color: 'rgba(0,0,0,0.1)',
+				blur: 4,
+				offset: { x: 2, y: 2 }
+			},
+			padding: { x: 8, y: 4 }
 		},
-	} as TextOptions, // Ensure the structure of TextOptions is complete if TextToolOptions requires it
+	} as TextOptions,
 };
-
 
 /**
  * Concrete implementation of the standard Trend Line drawing tool.
@@ -131,7 +156,7 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 	 * @returns `1`
 	 */
 	public maxAnchorIndex(): number {
-		return 1; // Anchors are indexed from 0 to 1.
+		return 1;
 	}
 	
 	/**
@@ -146,7 +171,7 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 	 * @returns `true`
 	 */
 	public supportsClickClickCreation(): boolean {
-		return true; // TrendLine supports click-click creation
+		return true;
 	}
 
 	/**
@@ -161,7 +186,7 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 	 * @returns `true`
 	 */
 	public supportsClickDragCreation(): boolean {
-		return true; // TrendLine supports click-drag creation
+		return true;
 	}
 
 	/**
@@ -174,7 +199,7 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 	 * @returns `true`
 	 */
 	public supportsShiftClickClickConstraint(): boolean {
-		return true; // TrendLine supports Shift constraint during click-click creation
+		return true;
 	}
 
 	/**
@@ -187,7 +212,7 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 	 * @returns `true`
 	 */
 	public supportsShiftClickDragConstraint(): boolean {
-		return true; // TrendLine supports Shift constraint during click-drag creation
+		return true;
 	}
 
 	/**
@@ -230,7 +255,6 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 			priceAxisLabelStackingManager
 		);
 
-		// A PaneView is responsible for rendering the tool on the chart.
 		this._setPaneViews([new LineToolTrendLinePaneView(this, this._chart, this._series)]);
 	}
 	
@@ -257,42 +281,31 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 		pointIndex: number, 
 		rawScreenPoint: Point, 
 		phase: InteractionPhase,
-		originalLogicalPoint: LineToolPoint, // This is the *dragged* point's original logical state
-		allOriginalLogicalPoints: LineToolPoint[] // This is the *entire array* of all points' original logical states
+		originalLogicalPoint: LineToolPoint,
+		allOriginalLogicalPoints: LineToolPoint[]
 	): ConstraintResult {
 		
-		// The Y-constraint always comes from the "other" (non-moving) point.
 		let constraintSourceLogicalPoint: LineToolPoint | null = null;
 
 		if (phase === InteractionPhase.Creation) {
-			// During Creation, P0 (index 0) is the fixed point, and P1 (index 1) is being dragged.
-			// The constraint is always on P0's original Y-position.
-			// In the InteractionManager, for creation, 'originalLogicalPoint' is P0's position.
-			constraintSourceLogicalPoint = originalLogicalPoint; // P0's original position
-		} else { // InteractionPhase.Editing
-			// During Editing, the constraint is on the *other* anchor's original Y-position.
-			// If pointIndex is 0, constraint is from P1 (index 1). If pointIndex is 1, constraint is from P0 (index 0).
+			constraintSourceLogicalPoint = originalLogicalPoint;
+		} else {
 			const otherPointIndex = pointIndex === 0 ? 1 : 0;
 			constraintSourceLogicalPoint = allOriginalLogicalPoints[otherPointIndex];
 		}
 		
 		if (!constraintSourceLogicalPoint) {
-			// Safety fallback: if the constraint source point doesn't exist, return raw.
 			return {point: rawScreenPoint, snapAxis: 'none'};
 		}
 
-		// Convert the constraint source's logical position to its current screen coordinates
 		const constraintSourceScreenPoint = this.pointToScreenPoint(constraintSourceLogicalPoint);
 		
 		if (!constraintSourceScreenPoint) {
-			// Safety fallback: if conversion fails, return the raw mouse point.
 			return {point: rawScreenPoint, snapAxis: 'none'};
 		}
 
-		// Apply the Constraint: Force the new point's Y-coordinate to match the Y-coordinate of the constraint source.
 		const constrainedY = constraintSourceScreenPoint.y;
 
-		// Return the new screen point (X from raw mouse, Y from constraint source)
 		return {
 			point: new Point(rawScreenPoint.x, constrainedY),
 			snapAxis: 'price',
@@ -316,26 +329,19 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 			return;
 		}
 
-		// Use local variables to avoid accessing _points multiple times during conditional checks
 		let [p0, p1] = this._points;
 
-		// The primary check is Time. If P0 > P1 in time, they must be swapped.
 		if (p0.timestamp > p1.timestamp) {
-			this._points = [p1, p0]; // Swap the references in the array
+			this._points = [p1, p0];
 			return;
 		}
 
-		// Tie-Breaker: If times are identical (vertical line segment)
 		if (p0.timestamp === p1.timestamp) {
-			// Use price as a stable tie-breaker to ensure a predictable order (e.g., P0 is always the lower price)
 			if (p0.price > p1.price) {
-				this._points = [p1, p0]; // Swap if P0 is higher price
+				this._points = [p1, p0];
 				return;
 			}
-			// If prices are identical, no swap is necessary, and the tool is effectively a single point.
 		}
-
-		// If no swap was necessary, the array remains [p0, p1], and they are already in the correct order.
 	}
 
 	/**
@@ -349,8 +355,6 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 	 * @override
 	 */
 	public override setPoint(index: number, point: LineToolPoint): void {
-		// The InteractionManager should handle the actual constraint (Y = P1.Y) based on ShiftKey.
-		// We can simply pass the constrained point to the base model.
 		super.setPoint(index, point);
 	}
 
@@ -371,28 +375,18 @@ export class LineToolTrendLine<HorzScaleItem> extends BaseLineTool<HorzScaleItem
 	 */
 	public override _internalHitTest(x: Coordinate, y: Coordinate): HitTestResult<LineToolHitTestData> | null {
 
-		// This guards against hitTest being called after the tool has been destroyed and _paneViews cleared.
 		if (!this._paneViews || this._paneViews.length === 0 || !this._paneViews[0]) {
 			return null;
 		}
 
-		
-		// 1. Get the PaneView that contains the Composite Renderer
 		const paneView = this._paneViews[0] as LineToolTrendLinePaneView<HorzScaleItem>;
-
-		// 2. Get the Composite Renderer from the PaneView
-		const compositeRenderer = paneView.renderer() as CompositeRenderer<HorzScaleItem>; // Type assert to Composite
+		const compositeRenderer = paneView.renderer() as CompositeRenderer<HorzScaleItem>;
 
 		if (!compositeRenderer || !compositeRenderer.hitTest) {
 			return null;
 		}
 
-		// 3. Delegate the hit test to the Composite Renderer
 		const hitResult = compositeRenderer.hitTest(x, y);
-
-		// This Composite Renderer will automatically prioritize the Anchor hit (ChangePoint)
-		// over the Segment hit (MovePointBackground) because Anchors are appended LAST
-		// and the CompositeRenderer iterates backwards for hit testing priority.
 		
 		return hitResult;
 	}

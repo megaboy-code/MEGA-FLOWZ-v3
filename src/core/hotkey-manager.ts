@@ -66,7 +66,8 @@ export class HotkeyManager {
             },
             's':   () => this.dispatchModalToggle('strategies'),
             'n':   () => this.dispatchModalToggle('notification'),
-            'p':   () => this.dispatchGlobalAction('open-positions-modal'),
+            // ✅ Changed from 'p' to 'o' — p is used by drawing tools for properties
+            'o':   () => this.dispatchGlobalAction('open-positions-modal'),
             ',':   () => this.dispatchGlobalAction('open-settings-modal'),
 
             // ==================== GLOBAL ACTIONS ====================

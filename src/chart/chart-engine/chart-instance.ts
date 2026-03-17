@@ -43,7 +43,7 @@ export class ChartInstance {
         // ✅ Pre-set background immediately — prevents flash
         const bgMap: Record<string, string> = {
             system: '#0f1724',
-            dark:   '#0f1724',
+            dark:   '#0b111b',
             light:  '#f8f9fc',
         };
         const savedTheme = localStorage.getItem('app-theme') || 'system';

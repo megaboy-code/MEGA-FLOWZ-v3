@@ -94,12 +94,19 @@ export class ModuleManager {
             this.tradingInstance?.updatePositions(positions);
         });
 
-        // Trade executed → Notification + Trading
+        // ✅ Trade executed → check success before showing notification
         this.connectionManager.onTradeExecuted((data: WebSocketMessage) => {
-            this.notifications.success(
-                `Trade ${data.direction || 'executed'} successfully`,
-                { title: 'Trade Executed' }
-            );
+            if (data.success) {
+                this.notifications.success(
+                    `Trade ${data.direction || 'executed'} successfully`,
+                    { title: 'Trade Executed' }
+                );
+            } else {
+                this.notifications.error(
+                    data.message || 'Trade execution failed',
+                    { title: 'Trade Failed' }
+                );
+            }
             this.tradingInstance?.handleTradeConfirmation(data);
         });
 
@@ -150,12 +157,16 @@ export class ModuleManager {
             const { symbol } = (e as CustomEvent).detail;
             if (!symbol) return;
             this.connectionManager.setSymbol(symbol);
+            // ✅ Update chart legend and UI when symbol changes from any source
+            this.chart?.handleSymbolChange(symbol);
         });
 
         document.addEventListener('timeframe-changed', (e: Event) => {
             const { timeframe } = (e as CustomEvent).detail;
             if (!timeframe) return;
             this.connectionManager.setTimeframe(timeframe);
+            // ✅ Update chart legend and UI when timeframe changes from any source
+            this.chart?.handleTimeframeChange(timeframe);
         });
 
         document.addEventListener('chart-initial-data-loaded', () => {
@@ -173,8 +184,20 @@ export class ModuleManager {
         });
 
         document.addEventListener('execute-trade', (e: Event) => {
-            const { command } = (e as CustomEvent).detail;
-            if (command) this.connectionManager.sendCommand(command);
+            const { command, tp, sl } = (e as CustomEvent).detail;
+            if (!command) return;
+
+            // ✅ Parse direction, symbol, volume, price from command string
+            const parts = command.split('_');
+            if (parts.length >= 5) {
+                const direction = parts[1] as 'BUY' | 'SELL';
+                const symbol    = parts[2];
+                const volume    = parseFloat(parts[3]);
+                const price     = parseFloat(parts[4]);
+                this.connectionManager.executeTrade(direction, symbol, volume, price, tp ?? null, sl ?? null);
+            } else {
+                this.connectionManager.sendCommand(command);
+            }
         });
 
         document.addEventListener('close-position', (e: Event) => {
@@ -184,6 +207,13 @@ export class ModuleManager {
 
         document.addEventListener('close-all-positions', () => {
             this.connectionManager.closeAllPositions();
+        });
+
+        document.addEventListener('modify-position', (e: Event) => {
+            const { ticket, sl, tp } = (e as CustomEvent).detail;
+            if (ticket) this.connectionManager.sendCommand(
+                `MODIFY_POSITION_${ticket}_${sl ?? 0}_${tp ?? 0}`
+            );
         });
 
         // Strategy commands — lazy load strategy module on demand
@@ -373,14 +403,14 @@ export class ModuleManager {
 
     // ==================== GETTERS ====================
 
-    public getChart(): ChartModuleImpl | null            { return this.chart; }
-    public getTradingModule()                             { return this.tradingInstance; }
-    public getJournalModule()                             { return this.journalInstance; }
-    public getStrategyModule()                            { return this.strategyInstance; }
-    public getWatchlistModule(): WatchlistModule | null   { return this.watchlistInstance; }
-    public getCalendarModule(): EconomicCalendarModule | null { return this.calendarInstance; }
-    public getAlertsModule(): AlertsModule | null         { return this.alertsInstance; }
-    public getConnectionManager(): ConnectionManager      { return this.connectionManager; }
-    public getPanelsModule(): typeof Panels               { return this.panels; }
-    public getNotificationModule(): typeof Notification   { return this.notifications; }
+    public getChart(): ChartModuleImpl | null                 { return this.chart; }
+    public getTradingModule()                                  { return this.tradingInstance; }
+    public getJournalModule()                                  { return this.journalInstance; }
+    public getStrategyModule()                                 { return this.strategyInstance; }
+    public getWatchlistModule(): WatchlistModule | null        { return this.watchlistInstance; }
+    public getCalendarModule(): EconomicCalendarModule | null  { return this.calendarInstance; }
+    public getAlertsModule(): AlertsModule | null              { return this.alertsInstance; }
+    public getConnectionManager(): ConnectionManager           { return this.connectionManager; }
+    public getPanelsModule(): typeof Panels                    { return this.panels; }
+    public getNotificationModule(): typeof Notification        { return this.notifications; }
 }

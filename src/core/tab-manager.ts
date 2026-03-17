@@ -2,6 +2,8 @@
 // ⚡ TAB MANAGER - TradingView-style tab interface
 // ================================================================
 
+import { formatPrice } from '../core/price-utils';
+
 interface Tab {
     id: string;
     title: string;
@@ -26,7 +28,6 @@ export class TabManager {
     private lastDirectionChange: number = 0;
     private readonly DIRECTION_COOLDOWN = 300;
 
-    // ✅ Strategy removed from defaultTabs — opens on demand only
     private readonly defaultTabs: Tab[] = [
         {
             id: 'chart',
@@ -82,7 +83,8 @@ export class TabManager {
             }
 
             this.lastPrice = newPrice;
-            this.currentPrice = newPrice.toFixed(5);
+            // ✅ Use formatPrice for correct decimal places per symbol
+            this.currentPrice = formatPrice(this.currentSymbol, newPrice);
             this.updateChartTabLabel();
         });
 
@@ -106,9 +108,8 @@ export class TabManager {
             }
         });
 
-        // ✅ Listen for on-demand tab open requests from other modules
         document.addEventListener('open-strategy-tab', () => this.openStrategyTab());
-        document.addEventListener('open-journal-tab', () => this.openJournalTab());
+        document.addEventListener('open-journal-tab',  () => this.openJournalTab());
     }
 
     // ==================== CHART TAB LABEL UPDATE ====================
@@ -117,7 +118,7 @@ export class TabManager {
         const tabEl = this.container?.querySelector('[data-tab-id="chart"]');
         if (!tabEl) return;
 
-        const titleEl = tabEl.querySelector('.tab-title') as HTMLElement;
+        const titleEl = tabEl.querySelector('.tab-title')      as HTMLElement;
         const priceEl = tabEl.querySelector('.tab-live-price') as HTMLElement;
         const arrowEl = tabEl.querySelector('.tab-live-arrow') as HTMLElement;
 
@@ -127,12 +128,12 @@ export class TabManager {
 
         if (priceEl) {
             priceEl.textContent = this.currentPrice;
-            priceEl.className = `tab-live-price ${this.priceDirection}`;
+            priceEl.className   = `tab-live-price ${this.priceDirection}`;
         }
 
         if (arrowEl) {
-            arrowEl.className = `tab-live-arrow ${this.priceDirection}`;
-            arrowEl.textContent = this.priceDirection === 'up' ? '▲'
+            arrowEl.className   = `tab-live-arrow ${this.priceDirection}`;
+            arrowEl.textContent = this.priceDirection === 'up'   ? '▲'
                                 : this.priceDirection === 'down' ? '▼' : '';
         }
     }
@@ -147,7 +148,6 @@ export class TabManager {
         const leftSection = document.createElement('div');
         leftSection.className = 'tab-strip-left';
 
-        // ✅ LOGO REMOVED — replaced with user icon menu
         this.createUserMenu(leftSection);
 
         const tabsContainer = document.createElement('div');
@@ -229,7 +229,6 @@ export class TabManager {
 
     private createUserMenu(leftSection: HTMLElement): void {
 
-        // USER ICON BUTTON
         const userMenuBtn = document.createElement('div');
         userMenuBtn.className = 'user-menu-btn';
         userMenuBtn.id = 'userMenuBtn';
@@ -237,7 +236,6 @@ export class TabManager {
         userMenuBtn.innerHTML = `<i class="fas fa-user-circle"></i>`;
         leftSection.appendChild(userMenuBtn);
 
-        // DROPDOWN
         const userDropdown = document.createElement('div');
         userDropdown.className = 'user-menu-dropdown';
         userDropdown.id = 'userMenuDropdown';
@@ -253,9 +251,31 @@ export class TabManager {
             <div class="user-menu-item" id="menuProfile">
                 <i class="fas fa-id-card"></i> Profile
             </div>
-            <div class="user-menu-item" id="menuTheme">
-                <i class="fas fa-palette"></i> Theme
+
+            <!-- ✅ Theme item with inline submenu -->
+            <div class="user-menu-item user-menu-item-theme" id="menuTheme">
+                <i class="fas fa-palette"></i>
+                <span>Theme</span>
+                <i class="fas fa-chevron-right user-menu-chevron"></i>
             </div>
+            <div class="user-theme-submenu" id="userThemeSubmenu">
+                <div class="user-theme-option" data-theme="system">
+                    <div class="user-theme-dot" style="background:#0b111b; border:1px solid #2a384a;"></div>
+                    <span>System</span>
+                    <i class="fas fa-check user-theme-check"></i>
+                </div>
+                <div class="user-theme-option" data-theme="dark">
+                    <div class="user-theme-dot" style="background:#0a0e13; border:1px solid #1e2a3a;"></div>
+                    <span>Dark</span>
+                    <i class="fas fa-check user-theme-check"></i>
+                </div>
+                <div class="user-theme-option" data-theme="light">
+                    <div class="user-theme-dot" style="background:#f8f9fc; border:1px solid #ccd3e0;"></div>
+                    <span>Light</span>
+                    <i class="fas fa-check user-theme-check"></i>
+                </div>
+            </div>
+
             <div class="user-menu-divider"></div>
             <div class="user-menu-item" id="menuHotkeys">
                 <i class="fas fa-keyboard"></i> Hotkeys
@@ -270,23 +290,44 @@ export class TabManager {
         // TOGGLE DROPDOWN
         userMenuBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            const isOpen = userDropdown.classList.contains('open');
             userDropdown.classList.toggle('open');
+            if (!isOpen) this.syncThemeSelection();
         });
 
-        // CLOSE ON OUTSIDE CLICK
+        // ✅ Close dropdown and reset submenu on outside click
         document.addEventListener('click', () => {
             userDropdown.classList.remove('open');
+            (userDropdown.querySelector('#userThemeSubmenu') as HTMLElement)?.classList.remove('open');
+        });
+
+        // PREVENT DROPDOWN FROM CLOSING ON INSIDE CLICK
+        userDropdown.addEventListener('click', (e) => e.stopPropagation());
+
+        // THEME ITEM — TOGGLE SUBMENU
+        userDropdown.querySelector('#menuTheme')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const submenu = userDropdown.querySelector('#userThemeSubmenu') as HTMLElement;
+            submenu.classList.toggle('open');
+        });
+
+        // THEME OPTIONS
+        userDropdown.querySelectorAll('.user-theme-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const theme = (option as HTMLElement).dataset.theme!;
+                this.applyTheme(theme);
+                this.syncThemeSelection();
+                // ✅ Close submenu and dropdown after selection
+                (userDropdown.querySelector('#userThemeSubmenu') as HTMLElement)?.classList.remove('open');
+                userDropdown.classList.remove('open');
+            });
         });
 
         // MENU ITEM ACTIONS
         userDropdown.querySelector('#menuProfile')?.addEventListener('click', () => {
             userDropdown.classList.remove('open');
             document.dispatchEvent(new CustomEvent('open-profile'));
-        });
-
-        userDropdown.querySelector('#menuTheme')?.addEventListener('click', () => {
-            userDropdown.classList.remove('open');
-            document.dispatchEvent(new CustomEvent('open-theme'));
         });
 
         userDropdown.querySelector('#menuHotkeys')?.addEventListener('click', () => {
@@ -300,9 +341,56 @@ export class TabManager {
         });
     }
 
+    // ==================== THEME ====================
+
+    private applyTheme(theme: string): void {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('app-theme', theme);
+
+        // ✅ Remove active template so chart colors reset to theme defaults
+        localStorage.removeItem('mega_flowz_active_template');
+
+        // ✅ Dispatch theme change so chart updates
+        document.dispatchEvent(new CustomEvent('theme-changed', { detail: { theme } }));
+
+        // ✅ Apply chart colors for the theme
+        const colorMap: Record<string, any> = {
+            system: { background: '#0b111b', grid: '#1e2a3a', bull: '#00e08a', bear: '#ff3d57',
+                       line: '#4c8dff', scaleBorder: '#2a384a', crosshair: '#3a4a5c',
+                       textColor: '#c8d4e8', wickBull: '#00e08a', wickBear: '#ff3d57',
+                       borderBull: '#00e08a', borderBear: '#ff3d57' },
+            dark:   { background: '#0b111b', grid: '#1e2a3a', bull: '#00e08a', bear: '#ff3d57',
+                       line: '#4c8dff', scaleBorder: '#2a384a', crosshair: '#3a4a5c',
+                       textColor: '#c8d4e8', wickBull: '#00e08a', wickBear: '#ff3d57',
+                       borderBull: '#00e08a', borderBear: '#ff3d57' },
+            light:  { background: '#f8f9fc', grid: '#e4e8f0', bull: '#0a8a58', bear: '#d42030',
+                       line: '#1a54b0', scaleBorder: '#ccd3e0', crosshair: '#8896aa',
+                       textColor: '#1a2030', wickBull: '#0a8a58', wickBear: '#d42030',
+                       borderBull: '#0a8a58', borderBear: '#d42030' },
+        };
+
+        const colors = colorMap[theme];
+        if (colors) {
+            document.dispatchEvent(new CustomEvent('chart-colors-change', {
+                detail: { colors }
+            }));
+        }
+
+        console.log(`🎨 Theme applied: ${theme}`);
+    }
+
+    private syncThemeSelection(): void {
+        const current = localStorage.getItem('app-theme') || 'system';
+        document.querySelectorAll('.user-theme-option').forEach(option => {
+            const check = option.querySelector('.user-theme-check') as HTMLElement;
+            const isActive = (option as HTMLElement).dataset.theme === current;
+            option.classList.toggle('active', isActive);
+            if (check) check.style.opacity = isActive ? '1' : '0';
+        });
+    }
+
     // ==================== ON-DEMAND TABS ====================
 
-    // ✅ Opens Strategy tab — triggered by Custom Strategy button in Indicators modal
     public openStrategyTab(): void {
         const existing = this.tabs.find(t => t.id === 'strategy');
         if (existing) {
@@ -323,7 +411,6 @@ export class TabManager {
         console.log('📈 Strategy tab opened');
     }
 
-    // ✅ Opens Journal tab — triggered by "Full Journal" button in right panel
     public openJournalTab(): void {
         const existing = this.tabs.find(t => t.id === 'journal');
         if (existing) {
@@ -383,7 +470,6 @@ export class TabManager {
 
             tabElement.appendChild(title);
 
-            // Live price + arrow — chart tab only
             if (tab.id === 'chart') {
                 const priceEl = document.createElement('span');
                 priceEl.className = `tab-live-price ${this.priceDirection}`;
@@ -392,7 +478,7 @@ export class TabManager {
 
                 const arrowEl = document.createElement('span');
                 arrowEl.className = `tab-live-arrow ${this.priceDirection}`;
-                arrowEl.textContent = this.priceDirection === 'up' ? '▲'
+                arrowEl.textContent = this.priceDirection === 'up'   ? '▲'
                                     : this.priceDirection === 'down' ? '▼' : '';
                 tabElement.appendChild(arrowEl);
             }
@@ -427,25 +513,24 @@ export class TabManager {
     }
 
     private updateSidebars(tabId: string): void {
-        const drawingSidebar = document.querySelector('.drawing-sidebar') as HTMLElement;
-        const toolsPanel = document.querySelector('.tools-panel') as HTMLElement;
+        const drawingSidebar     = document.querySelector('.drawing-sidebar')     as HTMLElement;
+        const toolsPanel         = document.querySelector('.tools-panel')         as HTMLElement;
         const workspaceContainer = document.querySelector('.workspace-container') as HTMLElement;
 
-        // ✅ Hide sidebars for both strategy and journal tabs
         const isFullscreen = tabId === 'strategy' || tabId === 'journal';
 
         if (isFullscreen) {
-            if (drawingSidebar) drawingSidebar.style.display = 'none';
-            if (toolsPanel) toolsPanel.style.display = 'none';
+            if (drawingSidebar)     drawingSidebar.style.display    = 'none';
+            if (toolsPanel)         toolsPanel.style.display        = 'none';
             if (workspaceContainer) {
-                workspaceContainer.style.left = '0';
+                workspaceContainer.style.left  = '0';
                 workspaceContainer.style.right = '0';
             }
         } else {
-            if (drawingSidebar) drawingSidebar.style.display = '';
-            if (toolsPanel) toolsPanel.style.display = '';
+            if (drawingSidebar)     drawingSidebar.style.display    = '';
+            if (toolsPanel)         toolsPanel.style.display        = '';
             if (workspaceContainer) {
-                workspaceContainer.style.left = '';
+                workspaceContainer.style.left  = '';
                 workspaceContainer.style.right = '';
             }
         }
@@ -478,7 +563,6 @@ export class TabManager {
     }
 
     public closeTab(tabId: string): void {
-        // ✅ Only chart is permanent now
         if (tabId === 'chart') return;
 
         const tabIndex = this.tabs.findIndex(t => t.id === tabId);
@@ -498,17 +582,9 @@ export class TabManager {
         tabStrip?.addEventListener('dblclick', () => this.toggleMaximize());
     }
 
-    private minimizeWindow(): void {
-        console.log('Minimize clicked');
-    }
-
-    private toggleMaximize(): void {
-        console.log('Maximize clicked');
-    }
-
-    private closeWindow(): void {
-        console.log('Close clicked');
-    }
+    private minimizeWindow(): void { console.log('Minimize clicked'); }
+    private toggleMaximize(): void { console.log('Maximize clicked'); }
+    private closeWindow(): void    { console.log('Close clicked'); }
 
     public destroy(): void {
         const tabStrip = document.getElementById('electron-tab-strip');

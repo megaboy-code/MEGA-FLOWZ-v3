@@ -465,14 +465,15 @@ export class LineToolPriceRangePaneView<HorzScaleItem> extends LineToolPaneView<
 		finalLabelOptions.box.alignment.horizontal = BoxHorizontalAlignment.Center;
 		finalLabelOptions.box.alignment.vertical = placementVerticalAlignment;
 		finalLabelOptions.alignment = TextAlignment.Center;
-		finalLabelOptions.font.size = 28;
+		
+		// --- MODIFIED: Reduced text size and gap ---
+		finalLabelOptions.font.size = 20;        // Changed from 28 to 20
 		finalLabelOptions.font.bold = true;
 		
-		// IMPORTANT: Check your yOffset logic visually. 
-		// If text is aligned "Top", offset +10 usually pushes it *down* inside. -10 pushes it up outside.
-		// Adjust this based on your preference for "inside" or "outside" the box.
-		// Below assumes pushing it "Inside" away from the edge slightly:
-		finalLabelOptions.box.offset = { x: 0, y: isUpward ? -10 : 10 }; 
+		// Offset: smaller values = smaller gap
+		// -3 for top (was -10), +3 for bottom (was +10)
+		finalLabelOptions.box.offset = { x: 0, y: isUpward ? -3 : 3 }; 
+		// --- END MODIFIED ---
 
 		const textRendererData: TextRendererData = {
 			points: [centerEdgePivot], 

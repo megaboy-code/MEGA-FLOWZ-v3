@@ -330,7 +330,6 @@ export class ChartModule {
             if (now - lastUpdateTime < THROTTLE_MS) return;
             lastUpdateTime = now;
 
-            // ✅ OHLC at crosshair time only
             const ohlc = this.chartDataManager.getOHLCAtTime(param.time as number);
             if (ohlc && this.chartLegend) {
                 this.chartLegend.updateOHLC(ohlc.open, ohlc.high, ohlc.low, ohlc.close);
@@ -465,9 +464,23 @@ export class ChartModule {
         document.addEventListener('hotkey-global-action', (e: Event) => {
             const { action } = (e as CustomEvent).detail;
             switch (action) {
-                case 'fullscreen':     this.toggleFullscreen();      break;
-                case 'chart-reset':    this.mainChart.resetView();   break;
-                case 'chart-download': this.triggerChartDownload();  break;
+                case 'fullscreen':
+                    this.toggleFullscreen();
+                    break;
+                case 'chart-reset':
+                    this.mainChart.resetView();
+                    break;
+                case 'chart-download':
+                    this.triggerChartDownload();
+                    break;
+                // ✅ Toggle settings modal open/close with same key
+                case 'open-settings-modal':
+                    if (document.getElementById('settingsOverlay')) {
+                        document.dispatchEvent(new CustomEvent('close-settings-modal'));
+                    } else {
+                        document.dispatchEvent(new CustomEvent('chart-settings-modal-request'));
+                    }
+                    break;
             }
         }, { signal });
 
