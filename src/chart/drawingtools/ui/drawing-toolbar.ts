@@ -82,10 +82,10 @@ export class DrawingToolbar {
     // ✅ Deep merge to preserve nested properties
     const mergedOptions = this.deepMerge(this.selectedTool.options || {}, updates);
 
+    // ✅ toolType required by core to find and validate the tool
     this.drawingModule.applyLineToolOptions({
       id:       this.selectedTool.id,
       toolType: this.selectedTool.toolType,
-      points:   this.selectedTool.points,
       options:  mergedOptions
     });
 
@@ -93,8 +93,15 @@ export class DrawingToolbar {
     this.selectedTool.options = mergedOptions;
   }
 
+  // ✅ Save template — excludes locked, editable, and text.value
   private saveTemplate(toolType: string, options: any): void {
     const { locked, editable, ...cleanOptions } = options;
+
+    // ✅ Don't save text value — it's user content not a style
+    if (cleanOptions.text?.value !== undefined) {
+      cleanOptions.text = { ...cleanOptions.text, value: '' };
+    }
+
     saveToolTemplate(toolType, cleanOptions);
   }
 
@@ -104,7 +111,6 @@ export class DrawingToolbar {
     const { ToolQuickToolbar } = await import('./tool-quick-toolbar');
 
     this.quickToolbar = new ToolQuickToolbar({
-      // ✅ Single onToolUpdate replaces old color/width/style callbacks
       onToolUpdate: (toolId: string, updates: any) => {
         this.applyToolOptions(updates);
         if (this.selectedTool?.toolType) {
@@ -243,6 +249,7 @@ export class DrawingToolbar {
       });
     }
 
+    // ✅ Double click — show quick toolbar
     if (this.drawingModule.subscribeLineToolsDoubleClick) {
       this.drawingModule.subscribeLineToolsDoubleClick((payload: any) => {
         const tool = payload?.selectedLineTool || payload;

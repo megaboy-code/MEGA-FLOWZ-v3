@@ -155,19 +155,21 @@ export class ToolPropertiesModal {
   private seedLiveColorValues(tool: any, schema: ToolSchema | null): void {
     if (!schema) return;
 
-    // ✅ Standard color properties
     schema.properties.forEach(prop => {
       if (prop.type !== 'color') return;
       const value  = getPropertyValue(tool.options, prop.key) ?? prop.defaultValue;
       this.liveColorValues[prop.key] = this.parseColor(value);
     });
 
-    // ✅ Fib level colors
+    // ✅ Fib level colors — use level.opacity directly not parsed from color string
     const hasFib = schema.properties.some(p => p.type === 'levelArray');
     if (hasFib) {
       const levels = getPropertyValue(tool.options, 'levels') || [];
       levels.forEach((level: any, index: number) => {
-        this.liveColorValues[`fib_level_${index}`] = this.parseColor(level.color || '#ffffff');
+        this.liveColorValues[`fib_level_${index}`] = {
+          hex:     this.parseColor(level.color || '#ffffff').hex,
+          opacity: level.opacity !== undefined ? level.opacity : 1
+        };
       });
     }
   }
@@ -235,10 +237,6 @@ export class ToolPropertiesModal {
               inner.style.opacity    = `${opacity}`;
             }
 
-            const opLabel = this.modal?.querySelector(`#op_fib_level_${index}`) as HTMLElement;
-            if (opLabel) opLabel.textContent = `${Math.round(opacity * 100)}%`;
-
-            // ✅ Live preview — update specific fib level
             if (this.currentTool && this.onToolUpdate) {
               const levels = JSON.parse(JSON.stringify(
                 getPropertyValue(this.currentTool.options, 'levels') || []
@@ -471,18 +469,18 @@ export class ToolPropertiesModal {
                   <span class="tpm-chevron">▼</span>
                 </button>
                 <div class="tpm-dropdown-menu" id="${ddId}Menu" style="min-width:140px;">
-                  <div class="tpm-extend-item">
+                  <label class="tpm-extend-item">
                     <input type="checkbox" class="tpm-ext-chk" id="${ddId}Left"
                            data-side="left" data-prefix="${prop.keyPrefix}"
                            ${extLeft ? 'checked' : ''}>
                     <span>Extend Left</span>
-                  </div>
-                  <div class="tpm-extend-item">
+                  </label>
+                  <label class="tpm-extend-item">
                     <input type="checkbox" class="tpm-ext-chk" id="${ddId}Right"
                            data-side="right" data-prefix="${prop.keyPrefix}"
                            ${extRight ? 'checked' : ''}>
                     <span>Extend Right</span>
-                  </div>
+                  </label>
                 </div>
               </div>
             </div>
@@ -545,8 +543,8 @@ export class ToolPropertiesModal {
       case 'alignment': {
         const ddVId  = `ddAlignV_${prop.key.replace(/\./g,'_')}`;
         const ddHId  = `ddAlignH_${prop.key.replace(/\./g,'_')}`;
-        const alignV = getPropertyValue(tool.options, `${prop.keyPrefix}.alignV`) || 'middle';
-        const alignH = getPropertyValue(tool.options, `${prop.keyPrefix}.alignH`) || 'center';
+        const alignV = getPropertyValue(tool.options, `${prop.keyPrefix}.box.alignment.vertical`)   || 'top';
+        const alignH = getPropertyValue(tool.options, `${prop.keyPrefix}.box.alignment.horizontal`) || 'center';
         const vLabel = alignV.charAt(0).toUpperCase() + alignV.slice(1);
         const hLabel = alignH.charAt(0).toUpperCase() + alignH.slice(1);
         return `
@@ -571,7 +569,9 @@ export class ToolPropertiesModal {
         if (!levels.length) return '';
 
         const levelRows = levels.map((level: any, index: number) => {
-          const parsed = this.parseColor(level.color || '#ffffff');
+          const parsed  = this.parseColor(level.color || '#ffffff');
+          // ✅ Use level.opacity directly — not parsed from color string
+          const opacity = level.opacity !== undefined ? level.opacity : 1;
           return `
             <div class="tpm-fib-row">
               <span class="tpm-fib-coeff">${level.coeff ?? index}</span>
@@ -579,9 +579,8 @@ export class ToolPropertiesModal {
                    data-key="fib_level_${index}"
                    data-fib-index="${index}">
                 <div class="tpm-color-swatch-inner"
-                     style="background:${parsed.hex};opacity:${parsed.opacity};"></div>
+                     style="background:${parsed.hex};opacity:${opacity};"></div>
               </div>
-              <span class="tpm-opacity-label" id="op_fib_level_${index}">${Math.round(parsed.opacity * 100)}%</span>
             </div>
           `;
         }).join('');
@@ -634,11 +633,9 @@ export class ToolPropertiesModal {
   private setupEvents(tool: any, schema: ToolSchema | null): void {
     if (!this.modal) return;
 
-    // Close
     this.modal.querySelector('#tpmClose')?.addEventListener('click',  () => this.hide());
     this.modal.querySelector('#tpmCancel')?.addEventListener('click', () => this.hide());
 
-    // OK
     this.modal.querySelector('#tpmOk')?.addEventListener('click', () => {
       this.applyChanges();
       this.hide();
@@ -655,7 +652,7 @@ export class ToolPropertiesModal {
       });
     });
 
-    // Row checkboxes — toggle disabled
+    // Row checkboxes
     this.modal.querySelectorAll('.tpm-row-chk').forEach(chk => {
       chk.addEventListener('change', (e) => {
         const input  = e.target as HTMLInputElement;
@@ -697,28 +694,27 @@ export class ToolPropertiesModal {
         el.classList.add('selected');
         this.closeDropdowns();
 
-        // ✅ Live preview
         if (this.currentTool && this.onToolUpdate) {
           const currentSchema = getSchemaForTool(this.currentTool.toolType);
           if (!currentSchema) return;
 
           const preview: any = {};
 
-          // ── Alignment dropdowns ──
+          // ✅ Alignment — write to correct core path
           if (ddId.startsWith('ddAlignV_') || ddId.startsWith('ddAlignH_')) {
             const safeKey = ddId.replace(/^ddAlignV_/, '').replace(/^ddAlignH_/, '');
             const prop    = currentSchema.properties.find(p => p.key.replace(/\./g, '_') === safeKey);
             if (prop?.keyPrefix) {
               const subKey = ddId.startsWith('ddAlignV_')
-                ? `${prop.keyPrefix}.alignV`
-                : `${prop.keyPrefix}.alignH`;
+                ? `${prop.keyPrefix}.box.alignment.vertical`
+                : `${prop.keyPrefix}.box.alignment.horizontal`;
               setPropertyValue(preview, subKey, value);
               this.onToolUpdate(this.currentTool.id, preview);
             }
             return;
           }
 
-          // ── Standard dropdowns ──
+          // Standard dropdowns
           const safeKey = ddId.replace(/^dd_/, '');
           const prop    = currentSchema.properties.find(p => p.key.replace(/\./g, '_') === safeKey);
           if (!prop) return;
@@ -754,7 +750,6 @@ export class ToolPropertiesModal {
           labelEl.textContent = l && r ? 'Both' : l ? 'Left' : r ? 'Right' : 'None';
         }
 
-        // ✅ Live preview
         if (this.currentTool && this.onToolUpdate) {
           const preview: any = {};
           setPropertyValue(preview, `${prefix}.extend.left`,  leftChk?.checked  || false);
@@ -764,7 +759,7 @@ export class ToolPropertiesModal {
       });
     });
 
-    // Extend menus — prevent close on inner click
+    // ✅ Extend menus — prevent close on inner click
     this.modal.querySelectorAll('.tpm-dropdown-menu').forEach(menu => {
       if ((menu as HTMLElement).querySelector('.tpm-extend-item')) {
         menu.addEventListener('mousedown', e => e.stopPropagation());
@@ -776,7 +771,6 @@ export class ToolPropertiesModal {
       btn.addEventListener('click', () => {
         btn.classList.toggle('active');
 
-        // ✅ Live preview
         if (this.currentTool && this.onToolUpdate) {
           const el     = btn as HTMLElement;
           const prefix = el.dataset.prefix!;
@@ -905,15 +899,15 @@ export class ToolPropertiesModal {
 
         case 'alignment': {
           const prefix = prop.keyPrefix!;
+          // ✅ Write to correct core path
           const selV   = this.modal!.querySelector(`#ddAlignV_${safeKey}Menu .tpm-dropdown-item.selected`) as HTMLElement;
           const selH   = this.modal!.querySelector(`#ddAlignH_${safeKey}Menu .tpm-dropdown-item.selected`) as HTMLElement;
-          if (selV) setPropertyValue(updates, `${prefix}.alignV`, selV.dataset.value);
-          if (selH) setPropertyValue(updates, `${prefix}.alignH`, selH.dataset.value);
+          if (selV) setPropertyValue(updates, `${prefix}.box.alignment.vertical`,   selV.dataset.value);
+          if (selH) setPropertyValue(updates, `${prefix}.box.alignment.horizontal`, selH.dataset.value);
           break;
         }
 
         case 'levelArray': {
-          // ✅ Collect fib levels from live color values
           const levels = JSON.parse(JSON.stringify(
             getPropertyValue(this.currentTool.options, 'levels') || []
           ));
@@ -1006,7 +1000,6 @@ export class ToolPropertiesModal {
   private handleOutsideClick = (e: MouseEvent): void => {
     if (!this.modal) return;
 
-    // ✅ Don't close if clicking inside color picker
     if ((e.target as HTMLElement).closest('.cp-container')) return;
 
     if (this.modal.contains(e.target as Node)) {
@@ -1087,7 +1080,8 @@ export class ToolPropertiesModal {
         flex-direction: column;
         z-index: 10001;
         overflow: hidden;
-        min-height: 520px;
+        /* ✅ Grows with content, caps at 90vh, content scrolls only when needed */
+        max-height: 90vh;
         font-family: var(--text-sans);
         font-size: var(--text-base);
         color: var(--text-primary);
@@ -1165,6 +1159,7 @@ export class ToolPropertiesModal {
         padding: 14px;
         overflow-y: auto;
         flex: 1;
+        min-height: 0; /* ✅ Critical — allows flex child to shrink and scroll properly */
       }
 
       .tpm-panel { display: none; }
@@ -1313,6 +1308,7 @@ export class ToolPropertiesModal {
         background: rgba(var(--accent-info-rgb), 0.08);
       }
 
+      /* ✅ label tag makes entire row clickable */
       .tpm-extend-item {
         display: flex;
         align-items: center;
@@ -1443,29 +1439,27 @@ export class ToolPropertiesModal {
         font-size: var(--text-sm);
       }
 
-      /* ── FIB LEVELS ── */
+      /* ✅ Fib levels — clean layout no inner scroll no opacity label */
       .tpm-fib-levels {
         padding: 6px 8px;
         background: var(--bg-card);
         border: 1px solid var(--border);
         border-radius: 6px;
         margin-bottom: 10px;
-        max-height: 220px;
-        overflow-y: auto;
       }
 
       .tpm-fib-row {
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 4px 0;
+        gap: 10px;
+        padding: 5px 0;
         border-bottom: 1px solid var(--border);
       }
 
       .tpm-fib-row:last-child { border-bottom: none; }
 
       .tpm-fib-coeff {
-        min-width: 48px;
+        min-width: 52px;
         font-size: var(--text-xs);
         color: var(--text-muted);
         font-family: var(--text-mono);
