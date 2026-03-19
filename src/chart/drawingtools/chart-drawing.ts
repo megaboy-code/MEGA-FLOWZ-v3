@@ -34,7 +34,12 @@ const TOOL_GROUP_MAP: Record<string, string> = {
   Brush:             'freehand',
   Highlighter:       'freehand',
   LongShortPosition: 'position',
+  // ✅ Trade signal arrows — programmatic only, never persisted
+  TradeArrow:        'signals',
 };
+
+// ✅ Tool types that must never be saved to localStorage
+const NON_PERSISTENT_TOOLS = new Set<string>(['TradeArrow']);
 
 const registeredGroups = new Set<string>();
 
@@ -66,9 +71,14 @@ export class ChartDrawingModule {
   private setDrawingStateCallback?:   (active: boolean) => void;
   private setSelectionStateCallback?: (active: boolean) => void;
 
-  // ✅ Dynamic per symbol+TF
+  private themeObserver: MutationObserver | null = null;
+
   private currentSymbol:    string;
   private currentTimeframe: string;
+
+  // ✅ Track arrow visibility state from settings
+  private showBuyArrows:  boolean = true;
+  private showSellArrows: boolean = true;
 
   private get STORAGE_KEY(): string {
     return `chart_drawings_${this.currentSymbol}_${this.currentTimeframe}`;
@@ -120,13 +130,13 @@ export class ChartDrawingModule {
       this.setupToolOptions();
       this.wireChartEvents();
       this.subscribeToToolEvents();
+      this.setupThemeListener();
+      this.setupSettingsListeners(); // ✅ Wire buy/sell arrow toggle
 
       await this.initializeToolbar();
 
       this.isInitialized = true;
 
-      // ✅ Initial load only — safe here because chart already
-      // has data at this point (called from onChartReady)
       await this.loadDrawings();
 
       console.log('✅ Drawing module initialized');
@@ -136,6 +146,73 @@ export class ChartDrawingModule {
       console.error('❌ Failed to initialize drawing tools:', error);
       return false;
     }
+  }
+
+  // ==================== THEME ====================
+
+  private getThemeTextColor(): string {
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    return theme === 'light' ? '#000000' : '#ffffff';
+  }
+
+  private setupThemeListener(): void {
+    this.themeObserver = new MutationObserver(() => {
+      const textColor = this.getThemeTextColor();
+      this.updateAllToolsTextColor(textColor);
+    });
+
+    this.themeObserver.observe(document.documentElement, {
+      attributes:      true,
+      attributeFilter: ['data-theme']
+    });
+  }
+
+  private updateAllToolsTextColor(color: string): void {
+    if (!this.lineTools || !this.isInitialized) return;
+    try {
+      const json  = this.lineTools.exportLineTools();
+      const tools = JSON.parse(json);
+      if (!Array.isArray(tools)) return;
+
+      tools.forEach((tool: any) => {
+        if (tool.options?.text !== undefined) {
+          this.lineTools.applyLineToolOptions({
+            id:       tool.id,
+            toolType: tool.toolType,
+            options:  { text: { font: { color } } }
+          });
+        }
+      });
+
+      this.saveDrawings();
+    } catch (e) {
+      console.error('❌ Failed to update tools text color:', e);
+    }
+  }
+
+  // ==================== SETTINGS LISTENERS ====================
+
+  // ✅ Listen for buy/sell arrow toggle from ChartSettingsModal
+  private setupSettingsListeners(): void {
+    document.addEventListener('chart-setting-toggle', (e: Event) => {
+      const { key, value } = (e as CustomEvent).detail;
+
+      if (key === 'showBuyArrows') {
+        this.showBuyArrows = value as boolean;
+        if (!value) {
+          this.removeTradeArrows('buy');
+          console.log('🚫 Buy arrows hidden and removed');
+        }
+      }
+
+      if (key === 'showSellArrows') {
+        this.showSellArrows = value as boolean;
+        if (!value) {
+          this.removeTradeArrows('sell');
+          console.log('🚫 Sell arrows hidden and removed');
+        }
+      }
+    });
   }
 
   // ==================== LAZY TOOL REGISTRATION ====================
@@ -153,55 +230,49 @@ export class ChartDrawingModule {
         case 'shapes': {
           const { SHAPE_TOOLS } = await import('./tools/shapes');
           Object.entries(SHAPE_TOOLS).forEach(([name, tool]) => {
-            try {
-              this.lineTools.registerLineTool(name, tool);
-            } catch (error) {
-              console.warn(`⚠️ Failed to register tool ${name}:`, error);
-            }
+            try { this.lineTools.registerLineTool(name, tool); }
+            catch (error) { console.warn(`⚠️ Failed to register tool ${name}:`, error); }
           });
           break;
         }
         case 'text': {
           const { TEXT_TOOLS } = await import('./tools/text');
           Object.entries(TEXT_TOOLS).forEach(([name, tool]) => {
-            try {
-              this.lineTools.registerLineTool(name, tool);
-            } catch (error) {
-              console.warn(`⚠️ Failed to register tool ${name}:`, error);
-            }
+            try { this.lineTools.registerLineTool(name, tool); }
+            catch (error) { console.warn(`⚠️ Failed to register tool ${name}:`, error); }
           });
           break;
         }
         case 'advanced': {
           const { ADVANCED_TOOLS } = await import('./tools/advanced');
           Object.entries(ADVANCED_TOOLS).forEach(([name, tool]) => {
-            try {
-              this.lineTools.registerLineTool(name, tool);
-            } catch (error) {
-              console.warn(`⚠️ Failed to register tool ${name}:`, error);
-            }
+            try { this.lineTools.registerLineTool(name, tool); }
+            catch (error) { console.warn(`⚠️ Failed to register tool ${name}:`, error); }
           });
           break;
         }
         case 'freehand': {
           const { FREEHAND_TOOLS } = await import('./tools/freehand');
           Object.entries(FREEHAND_TOOLS).forEach(([name, tool]) => {
-            try {
-              this.lineTools.registerLineTool(name, tool);
-            } catch (error) {
-              console.warn(`⚠️ Failed to register tool ${name}:`, error);
-            }
+            try { this.lineTools.registerLineTool(name, tool); }
+            catch (error) { console.warn(`⚠️ Failed to register tool ${name}:`, error); }
           });
           break;
         }
         case 'position': {
           const { POSITION_TOOLS } = await import('./tools/position');
           Object.entries(POSITION_TOOLS).forEach(([name, tool]) => {
-            try {
-              this.lineTools.registerLineTool(name, tool);
-            } catch (error) {
-              console.warn(`⚠️ Failed to register tool ${name}:`, error);
-            }
+            try { this.lineTools.registerLineTool(name, tool); }
+            catch (error) { console.warn(`⚠️ Failed to register tool ${name}:`, error); }
+          });
+          break;
+        }
+        // ✅ Trade signal arrows
+        case 'signals': {
+          const { SIGNAL_TOOLS } = await import('./tools/signals');
+          Object.entries(SIGNAL_TOOLS).forEach(([name, tool]) => {
+            try { this.lineTools.registerLineTool(name, tool); }
+            catch (error) { console.warn(`⚠️ Failed to register signal tool ${name}:`, error); }
           });
           break;
         }
@@ -221,16 +292,17 @@ export class ChartDrawingModule {
   // ==================== SETUP ====================
 
   private setupToolOptions(): void {
-    if (!this.lineTools) return;
+    if (!this.lineTools || !this.chart) return;
+
+    this.chart.applyOptions({
+      localization: {
+        priceFormatter: this.config.priceFormatter
+      }
+    });
 
     const globalOptions = {
       precision:  this.config.precision,
       showLabels: this.config.showLabels,
-      lineStyle: {
-        color:     '#3b82f6',
-        lineWidth: 2,
-        lineStyle: 0
-      },
       textStyle: {
         fontSize:   12,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -352,53 +424,48 @@ export class ChartDrawingModule {
   // ==================== SYMBOL + TF SWITCHING ====================
 
   public async onTimeframeChange(timeframe: string): Promise<void> {
-    if (this.currentTimeframe === timeframe) return
-    this.saveDrawings()
-    this.currentTimeframe = timeframe
-    console.log(`📐 TF tracking updated: ${timeframe}`)
+    if (this.currentTimeframe === timeframe) return;
+    this.saveDrawings();
+    this.currentTimeframe = timeframe;
+    // ✅ Remove all trade arrows on TF change — they get re-injected fresh
+    this.removeTradeArrows();
+    console.log(`📐 TF tracking updated: ${timeframe}`);
   }
 
   public async onSymbolChange(symbol: string): Promise<void> {
-    if (this.currentSymbol === symbol) return
-    this.saveDrawings()
-    this.currentSymbol = symbol
-    console.log(`📐 Symbol tracking updated: ${symbol}`)
+    if (this.currentSymbol === symbol) return;
+    this.saveDrawings();
+    this.currentSymbol = symbol;
+    // ✅ Remove all trade arrows on symbol change
+    this.removeTradeArrows();
+    console.log(`📐 Symbol tracking updated: ${symbol}`);
   }
 
-  // ✅ Called from onBeforeSeriesRemoved
-  // Clears tools BEFORE series is destroyed
-  // Does NOT touch localStorage — drawings are preserved
   public clearToolsOnly(): void {
-    if (!this.lineTools || !this.isInitialized) return
+    if (!this.lineTools || !this.isInitialized) return;
     try {
       if (typeof this.lineTools.removeAllLineTools === 'function') {
-        this.lineTools.removeAllLineTools()
-        console.log('🧹 Tools cleared before series removal')
+        this.lineTools.removeAllLineTools();
+        console.log('🧹 Tools cleared before series removal');
       }
     } catch (error) {
-      console.error('❌ clearToolsOnly failed:', error)
+      console.error('❌ clearToolsOnly failed:', error);
     }
   }
 
-  // ✅ Called from onSeriesDataReady
-  // Series has data — safe to load drawings
-  // Double rAF ensures render cycle fully completes before mutating tools
   public async onDataReady(): Promise<void> {
-    if (!this.lineTools || !this.isInitialized) return
+    if (!this.lineTools || !this.isInitialized) return;
     try {
-      // ✅ First rAF — lets current render cycle complete
-      // ✅ Second rAF — guarantees we're in a clean new frame
       await new Promise<void>(resolve => requestAnimationFrame(() =>
-          requestAnimationFrame(() => resolve())
-      ))
+        requestAnimationFrame(() => resolve())
+      ));
 
-      // ✅ Guard after async gap — module may have been destroyed
-      if (!this.lineTools || !this.isInitialized) return
+      if (!this.lineTools || !this.isInitialized) return;
 
-      await this.loadDrawings()
-      console.log(`📐 Drawings restored for ${this.currentSymbol} ${this.currentTimeframe}`)
+      await this.loadDrawings();
+      console.log(`📐 Drawings restored for ${this.currentSymbol} ${this.currentTimeframe}`);
     } catch (error) {
-      console.error('❌ onDataReady failed:', error)
+      console.error('❌ onDataReady failed:', error);
     }
   }
 
@@ -451,6 +518,68 @@ export class ChartDrawingModule {
       }
     } catch (error) {
       console.error('❌ Failed to remove selected drawings:', error);
+    }
+  }
+
+  // ==================== TRADE ARROWS ====================
+
+  // ✅ Place a trade signal arrow programmatically
+  public async placeTradeArrow(params: {
+    id:          string;
+    type:        'buy' | 'sell';
+    timestamp:   number;
+    price:       number;
+    priceLabel:  string;
+    color?:      string;
+    priceLine?:  'hover' | 'always';
+  }): Promise<void> {
+    if (!this.lineTools || !this.isInitialized) return;
+
+    // ✅ Respect settings toggle
+    if (params.type === 'buy'  && !this.showBuyArrows)  return;
+    if (params.type === 'sell' && !this.showSellArrows) return;
+
+    try {
+      await this.loadAndRegisterGroup('signals');
+
+      const color = params.color ?? (params.type === 'buy' ? '#238636' : '#da3633');
+
+      this.lineTools.createOrUpdateLineTool(
+        'TradeArrow',
+        [{ timestamp: params.timestamp, price: params.price }],
+        {
+          arrow: {
+            type:       params.type,
+            color,
+            size:       10,
+            stemHeight: 20,
+            priceLine:  params.priceLine ?? 'hover',
+            priceLabel: params.priceLabel,
+          },
+        },
+        params.id
+      );
+
+      console.log(`✅ Trade arrow placed: ${params.type} @ ${params.priceLabel}`);
+
+    } catch (error) {
+      console.error('❌ Failed to place trade arrow:', error);
+    }
+  }
+
+  // ✅ Remove trade arrows by type or all
+  public removeTradeArrows(type?: 'buy' | 'sell'): void {
+    if (!this.lineTools || !this.isInitialized) return;
+    try {
+      if (typeof this.lineTools.removeLineToolsByIdRegex === 'function') {
+        const pattern = type
+          ? new RegExp(`^trade-arrow-${type}`)
+          : /^trade-arrow/;
+        this.lineTools.removeLineToolsByIdRegex(pattern);
+        console.log(`🗑️ Trade arrows removed: ${type ?? 'all'}`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to remove trade arrows:', error);
     }
   }
 
@@ -628,8 +757,15 @@ export class ChartDrawingModule {
   public saveDrawings(): void {
     if (!this.lineTools || !this.isInitialized) return;
     try {
-      const drawings = this.exportDrawings();
-      localStorage.setItem(this.STORAGE_KEY, drawings);
+      const allDrawings = this.exportDrawings();
+      const tools       = JSON.parse(allDrawings);
+
+      // ✅ Filter out non-persistent tools before saving
+      const persistable = Array.isArray(tools)
+        ? tools.filter((t: any) => !NON_PERSISTENT_TOOLS.has(t.toolType))
+        : [];
+
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(persistable));
     } catch (error) {
       console.error('❌ Failed to save drawings:', error);
     }
@@ -640,8 +776,6 @@ export class ChartDrawingModule {
     try {
       const saved = localStorage.getItem(this.STORAGE_KEY);
 
-      // ✅ Always clear first — guarantees clean slate before import
-      // Protects against non-destructive bleed from importLineTools
       this.lineTools.removeAllLineTools();
 
       if (saved && saved !== '[]') {
@@ -649,6 +783,8 @@ export class ChartDrawingModule {
         if (Array.isArray(tools) && tools.length > 0) {
           const groupsNeeded = new Set<string>();
           tools.forEach((tool: any) => {
+            // ✅ Skip non-persistent tools during load
+            if (NON_PERSISTENT_TOOLS.has(tool.toolType)) return;
             const group = TOOL_GROUP_MAP[tool.toolType];
             if (group) groupsNeeded.add(group);
           });
@@ -658,7 +794,15 @@ export class ChartDrawingModule {
           );
         }
 
-        this.importDrawings(saved);
+        // ✅ Only import persistable tools
+        const persistable = Array.isArray(tools)
+          ? tools.filter((t: any) => !NON_PERSISTENT_TOOLS.has(t.toolType))
+          : [];
+
+        if (persistable.length > 0) {
+          this.importDrawings(JSON.stringify(persistable));
+        }
+
         console.log(`✅ Drawings restored for ${this.currentSymbol} ${this.currentTimeframe}`);
 
       } else {
@@ -707,6 +851,14 @@ export class ChartDrawingModule {
 
   public updateConfig(newConfig: Partial<DrawingToolsConfig>): void {
     this.config = { ...this.config, ...newConfig };
+
+    if (this.chart) {
+      this.chart.applyOptions({
+        localization: {
+          priceFormatter: this.config.priceFormatter
+        }
+      });
+    }
 
     if (this.lineTools && typeof this.lineTools.setOptions === 'function') {
       this.lineTools.setOptions({
@@ -774,8 +926,19 @@ export class ChartDrawingModule {
       this.setupToolOptions();
       this.subscribeToToolEvents();
 
+      this.toolbar?.resubscribeCoreEvents();
+
+      // ✅ Only restore persistable tools after series update
       if (savedDrawings && savedDrawings !== '[]') {
-        this.importDrawings(savedDrawings);
+        try {
+          const tools = JSON.parse(savedDrawings);
+          const persistable = Array.isArray(tools)
+            ? tools.filter((t: any) => !NON_PERSISTENT_TOOLS.has(t.toolType))
+            : [];
+          if (persistable.length > 0) {
+            this.importDrawings(JSON.stringify(persistable));
+          }
+        } catch (e) {}
       }
     }
   }
@@ -810,6 +973,11 @@ export class ChartDrawingModule {
     console.log('🧹 Destroying drawing module...');
 
     this.saveDrawings();
+
+    if (this.themeObserver) {
+      this.themeObserver.disconnect();
+      this.themeObserver = null;
+    }
 
     if (this.toolbar) {
       this.toolbar.destroy();

@@ -64,6 +64,8 @@ interface AllSettings {
     buyArrowColor:    string;
     showSellArrows:   boolean;
     sellArrowColor:   string;
+    // ✅ Trade arrow price line setting
+    arrowPriceLine:   'hover' | 'always';
     // Watermark
     showWatermark:    boolean;
     watermarkColor:   string;
@@ -85,6 +87,9 @@ export class ChartSettingsModal {
     private liveColors:     Record<string, any> = {};
     private bgMode:         'solid' | 'gradient' = 'solid';
 
+    // ✅ Track arrow price line setting
+    private arrowPriceLine: 'hover' | 'always' = 'hover';
+
     private boundKeyDown:      (e: KeyboardEvent) => void;
     private boundOutsideClick: (e: MouseEvent)    => void;
 
@@ -103,7 +108,6 @@ export class ChartSettingsModal {
         this.setupHandlers();
         this.switchCategory(this.activeCategory);
 
-        // ✅ Listen for close event from hotkey toggle
         document.addEventListener('close-settings-modal', () => this.close(), { once: true });
     }
 
@@ -311,6 +315,14 @@ export class ChartSettingsModal {
                                 <div class="settings-section-title">Trade Arrows</div>
                                 ${this.toggleColorRow('Buy Arrows',  'showBuyArrows',  true, 'buyArrowColor',  this.c('bull'))}
                                 ${this.toggleColorRow('Sell Arrows', 'showSellArrows', true, 'sellArrowColor', this.c('bear'))}
+                                <!-- ✅ Price line display mode -->
+                                <div class="settings-row">
+                                    <span class="settings-row-label">Price Line</span>
+                                    <div class="settings-mode-group">
+                                        <button class="settings-mode-btn settings-arrow-priceline-btn active" data-priceline="hover">Hover</button>
+                                        <button class="settings-mode-btn settings-arrow-priceline-btn" data-priceline="always">Always</button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -403,7 +415,11 @@ export class ChartSettingsModal {
             item.classList.toggle('active', (item as HTMLElement).dataset.theme === currentTheme);
         });
 
-        // Center on open
+        // ✅ Sync active price line button on open
+        this.overlay.querySelectorAll('.settings-arrow-priceline-btn').forEach(btn => {
+            btn.classList.toggle('active', (btn as HTMLElement).dataset.priceline === this.arrowPriceLine);
+        });
+
         const modal  = this.overlay.querySelector('.settings-modal') as HTMLElement;
         const handle = this.overlay.querySelector('.settings-modal-header') as HTMLElement;
 
@@ -545,6 +561,17 @@ export class ChartSettingsModal {
                             return;
                         }
 
+                        // ✅ Arrow color changes — dispatch to update existing arrows
+                        if (key === 'buyArrowColor' || key === 'sellArrowColor') {
+                            document.dispatchEvent(new CustomEvent('chart-arrow-color-change', {
+                                detail: {
+                                    type:  key === 'buyArrowColor' ? 'buy' : 'sell',
+                                    color: hex,
+                                }
+                            }));
+                            return;
+                        }
+
                         document.dispatchEvent(new CustomEvent('chart-colors-change', {
                             detail: { colors: { ...this.liveColors } }
                         }));
@@ -618,6 +645,18 @@ export class ChartSettingsModal {
                 btn.classList.add('active');
                 document.dispatchEvent(new CustomEvent('legend-size-change', {
                     detail: { size: (btn as HTMLElement).dataset.size }
+                }));
+            });
+        });
+
+        // ✅ Arrow price line buttons
+        this.overlay.querySelectorAll('.settings-arrow-priceline-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.overlay?.querySelectorAll('.settings-arrow-priceline-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.arrowPriceLine = (btn as HTMLElement).dataset.priceline as 'hover' | 'always';
+                document.dispatchEvent(new CustomEvent('chart-arrow-priceline-change', {
+                    detail: { priceLine: this.arrowPriceLine }
                 }));
             });
         });
@@ -726,7 +765,6 @@ export class ChartSettingsModal {
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('app-theme', theme);
 
-        // ✅ Clear active template — theme resets everything
         localStorage.removeItem(ACTIVE_TEMPLATE_KEY);
 
         document.querySelectorAll('.theme-btn').forEach(btn => {
@@ -781,6 +819,11 @@ export class ChartSettingsModal {
                 detail: { position: legendPos.value }
             }));
         }
+
+        // ✅ Apply arrow price line setting
+        document.dispatchEvent(new CustomEvent('chart-arrow-priceline-change', {
+            detail: { priceLine: this.arrowPriceLine }
+        }));
     }
 
     // ==================== TEMPLATES ====================
@@ -858,7 +901,9 @@ export class ChartSettingsModal {
         const crosshairSelect = this.overlay.querySelector('[data-key="crosshairStyle"]') as HTMLSelectElement;
         if (crosshairSelect) settings.crosshairStyle = crosshairSelect.value;
 
-        settings.bgMode = this.bgMode;
+        // ✅ Capture arrow price line setting
+        settings.arrowPriceLine = this.arrowPriceLine;
+        settings.bgMode         = this.bgMode;
 
         return settings;
     }
@@ -1015,13 +1060,18 @@ export class ChartSettingsModal {
             }));
         }
 
-        // ✅ Save as active template for refresh survival
-        localStorage.setItem(ACTIVE_TEMPLATE_KEY, JSON.stringify(settings));
+        // ✅ Restore arrow price line setting
+        if (settings.arrowPriceLine) {
+            this.arrowPriceLine = settings.arrowPriceLine;
+            document.dispatchEvent(new CustomEvent('chart-arrow-priceline-change', {
+                detail: { priceLine: settings.arrowPriceLine }
+            }));
+        }
 
+        localStorage.setItem(ACTIVE_TEMPLATE_KEY, JSON.stringify(settings));
         console.log('✅ Template applied:', settings);
     }
 
-    // ✅ Public static — called on chart ready to restore last template
     public static restoreActiveTemplate(): void {
         try {
             const saved = localStorage.getItem(ACTIVE_TEMPLATE_KEY);
@@ -1039,6 +1089,13 @@ export class ChartSettingsModal {
             if (Object.keys(colors).length > 0) {
                 document.dispatchEvent(new CustomEvent('chart-colors-change', {
                     detail: { colors }
+                }));
+            }
+
+            // ✅ Restore arrow price line on refresh
+            if (settings.arrowPriceLine) {
+                document.dispatchEvent(new CustomEvent('chart-arrow-priceline-change', {
+                    detail: { priceLine: settings.arrowPriceLine }
                 }));
             }
         } catch (e) {}

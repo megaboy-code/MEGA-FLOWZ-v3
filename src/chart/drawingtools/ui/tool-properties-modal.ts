@@ -1,7 +1,6 @@
 // ================================================================
 // 🎨 TOOL PROPERTIES MODAL - Floating properties editor
 // ================================================================
-
 import {
   getSchemaForTool,
   getPropertyValue,
@@ -11,6 +10,36 @@ import {
   ToolSchema,
   PropertyField
 } from './tool-schemas';
+
+// ==================== NAMED TEMPLATE STORAGE ====================
+
+const NAMED_TEMPLATES_KEY = 'drawing_tool_named_templates';
+
+function loadNamedTemplates(toolType: string): Record<string, any> {
+  try {
+    const all = JSON.parse(localStorage.getItem(NAMED_TEMPLATES_KEY) || '{}');
+    return all[toolType] || {};
+  } catch { return {}; }
+}
+
+function saveNamedTemplate(toolType: string, name: string, options: any): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(NAMED_TEMPLATES_KEY) || '{}');
+    if (!all[toolType]) all[toolType] = {};
+    all[toolType][name] = JSON.parse(JSON.stringify(options));
+    localStorage.setItem(NAMED_TEMPLATES_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+function deleteNamedTemplate(toolType: string, name: string): void {
+  try {
+    const all = JSON.parse(localStorage.getItem(NAMED_TEMPLATES_KEY) || '{}');
+    if (all[toolType]) {
+      delete all[toolType][name];
+      localStorage.setItem(NAMED_TEMPLATES_KEY, JSON.stringify(all));
+    }
+  } catch {}
+}
 
 export class ToolPropertiesModal {
   private modal:         HTMLElement | null = null;
@@ -29,6 +58,7 @@ export class ToolPropertiesModal {
   private onToolUpdate?: (toolId: string, updates: any) => void;
   private onToolLock?:   (toolId: string, locked: boolean) => void;
   private onToolDelete?: (toolId: string) => void;
+  private onClose?:      () => void;
 
   constructor(
     drawingModule: any,
@@ -36,13 +66,14 @@ export class ToolPropertiesModal {
       onToolUpdate?: (toolId: string, updates: any) => void;
       onToolLock?:   (toolId: string, locked: boolean) => void;
       onToolDelete?: (toolId: string) => void;
+      onClose?:      () => void;
     }
   ) {
     this.drawingModule = drawingModule;
     this.onToolUpdate  = callbacks?.onToolUpdate;
     this.onToolLock    = callbacks?.onToolLock;
     this.onToolDelete  = callbacks?.onToolDelete;
-    this.injectStyles();
+    this.onClose       = callbacks?.onClose;
   }
 
   // ==================== SHOW / HIDE ====================
@@ -78,6 +109,7 @@ export class ToolPropertiesModal {
     this.destroyModal();
     this.currentTool     = null;
     this.liveColorValues = {};
+    this.onClose?.();
   }
 
   private destroyModal(): void {
@@ -131,8 +163,10 @@ export class ToolPropertiesModal {
               Template <span class="tpm-chevron">▼</span>
             </button>
             <div class="tpm-template-menu" id="tpmTemplateMenu">
-              <div class="tpm-template-item" id="tmplSave">💾 Save as Default</div>
-              <div class="tpm-template-item" id="tmplApply">✓ Apply Default</div>
+              <div class="tpm-template-item" id="tmplApplyDefault">✓ Apply Default</div>
+              <div class="tpm-template-item" id="tmplSaveAs">＋ Save as...</div>
+              <div class="tpm-template-divider" id="tmplDivider" style="display:none;"></div>
+              <div id="tmplNamedList"></div>
             </div>
           </div>
         </div>
@@ -148,6 +182,128 @@ export class ToolPropertiesModal {
     this.setupDragging();
     this.seedLiveColorValues(tool, schema);
     this.attachColorListeners(schema);
+    this.renderNamedTemplates();
+  }
+
+  // ==================== NAMED TEMPLATES ====================
+
+  private renderNamedTemplates(): void {
+    if (!this.modal || !this.currentTool) return;
+    const toolType  = this.currentTool.toolType;
+    const templates = loadNamedTemplates(toolType);
+    const names     = Object.keys(templates);
+    const divider   = this.modal.querySelector('#tmplDivider') as HTMLElement;
+    const list      = this.modal.querySelector('#tmplNamedList') as HTMLElement;
+
+    if (names.length === 0) {
+      if (divider) divider.style.display = 'none';
+      if (list)    list.innerHTML = '';
+      return;
+    }
+
+    if (divider) divider.style.display = 'block';
+    if (list) {
+      list.innerHTML = names.map(name => `
+        <div class="tpm-template-item tpm-template-named" data-name="${name}">
+          <span class="tpm-template-name">${name}</span>
+          <button class="tpm-template-delete" data-name="${name}">✕</button>
+        </div>
+      `).join('');
+
+      list.querySelectorAll('.tpm-template-named').forEach(item => {
+        item.addEventListener('click', (e) => {
+          const target = e.target as HTMLElement;
+          if (target.classList.contains('tpm-template-delete')) return;
+          const name = (item as HTMLElement).dataset.name!;
+          this.applyNamedTemplate(name);
+        });
+      });
+
+      list.querySelectorAll('.tpm-template-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const name = (btn as HTMLElement).dataset.name!;
+          deleteNamedTemplate(toolType, name);
+          this.renderNamedTemplates();
+        });
+      });
+    }
+  }
+
+  private applyNamedTemplate(name: string): void {
+    if (!this.currentTool) return;
+    const toolType  = this.currentTool.toolType;
+    const templates = loadNamedTemplates(toolType);
+    const options   = templates[name];
+    if (!options) return;
+
+    if (this.onToolUpdate) {
+      this.onToolUpdate(this.currentTool.id, options);
+    }
+
+    this.currentTool.options = this.deepMerge(this.currentTool.options || {}, options);
+    this.liveColorValues = {};
+    const schema = getSchemaForTool(toolType);
+    this.seedLiveColorValues(this.currentTool, schema);
+
+    const stylePanel = this.modal?.querySelector('#panel-style');
+    const textPanel  = this.modal?.querySelector('#panel-text');
+
+    if (stylePanel) stylePanel.innerHTML = this.buildStylePanel(this.currentTool, schema);
+    if (textPanel)  textPanel.innerHTML  = this.buildTextPanel(this.currentTool, schema);
+
+    this.attachColorListeners(schema);
+    this.closeDropdowns();
+  }
+
+  private showSaveAsModal(): void {
+    if (!this.currentTool) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'tpm-saveas-overlay';
+    overlay.innerHTML = `
+      <div class="tpm-saveas-modal">
+        <div class="tpm-saveas-title">Save Drawing Template</div>
+        <div class="tpm-saveas-field">
+          <label class="tpm-saveas-label">Template Name</label>
+          <input class="tpm-saveas-input" id="tmplNameInput" type="text"
+                 placeholder="Enter template name..." autocomplete="off">
+        </div>
+        <div class="tpm-saveas-footer">
+          <button class="tpm-btn tpm-btn-cancel" id="tmplSaveAsCancel">Cancel</button>
+          <button class="tpm-btn tpm-btn-ok"     id="tmplSaveAsConfirm">Save</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const input   = overlay.querySelector('#tmplNameInput')     as HTMLInputElement;
+    const cancel  = overlay.querySelector('#tmplSaveAsCancel')  as HTMLButtonElement;
+    const confirm = overlay.querySelector('#tmplSaveAsConfirm') as HTMLButtonElement;
+
+    input.focus();
+
+    const doSave = () => {
+      const name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      const options = this.collectValues();
+      saveNamedTemplate(this.currentTool.toolType, name, options);
+      this.renderNamedTemplates();
+      document.body.removeChild(overlay);
+      this.closeDropdowns();
+    };
+
+    cancel.addEventListener('click',  () => document.body.removeChild(overlay));
+    confirm.addEventListener('click', doSave);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter')  doSave();
+      if (e.key === 'Escape') document.body.removeChild(overlay);
+    });
+
+    overlay.addEventListener('mousedown', (e) => {
+      if (e.target === overlay) document.body.removeChild(overlay);
+    });
   }
 
   // ==================== SEED LIVE COLOR VALUES ====================
@@ -161,7 +317,6 @@ export class ToolPropertiesModal {
       this.liveColorValues[prop.key] = this.parseColor(value);
     });
 
-    // ✅ Fib level colors — use level.opacity directly not parsed from color string
     const hasFib = schema.properties.some(p => p.type === 'levelArray');
     if (hasFib) {
       const levels = getPropertyValue(tool.options, 'levels') || [];
@@ -180,7 +335,6 @@ export class ToolPropertiesModal {
     if (!this.modal || !schema) return;
     const { ColorPicker } = await import('../../../core/color-picker');
 
-    // ✅ Standard color swatches
     this.modal.querySelectorAll('.tpm-color-swatch-wrap[data-key]:not([data-fib-index])').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -216,7 +370,6 @@ export class ToolPropertiesModal {
       });
     });
 
-    // ✅ Fib level color swatches
     this.modal.querySelectorAll('.tpm-color-swatch-wrap[data-fib-index]').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -334,15 +487,14 @@ export class ToolPropertiesModal {
     switch (prop.type) {
 
       case 'color': {
-        const swatchId = `swatch_${prop.key.replace(/\./g, '_')}`;
-        const parsed   = this.parseColor(value);
+        const parsed = this.parseColor(value);
         return `
           <div class="tpm-row" id="${rowId}" data-key="${prop.key}">
             <input type="checkbox" class="tpm-checkbox tpm-row-chk" id="${chkId}" checked
                    data-ctrl="${ctrlId}">
             <span class="tpm-row-label">${prop.label}</span>
             <div class="tpm-row-controls" id="${ctrlId}">
-              <div class="tpm-color-swatch-wrap" id="${swatchId}" data-key="${prop.key}">
+              <div class="tpm-color-swatch-wrap" data-key="${prop.key}">
                 <div class="tpm-color-swatch-inner"
                      style="background:${parsed.hex};opacity:${parsed.opacity};"></div>
               </div>
@@ -454,8 +606,11 @@ export class ToolPropertiesModal {
 
       case 'extend': {
         const ddId     = `dd_${prop.key.replace(/\./g, '_')}`;
-        const extLeft  = getPropertyValue(tool.options, `${prop.keyPrefix}.extend.left`)  || false;
-        const extRight = getPropertyValue(tool.options, `${prop.keyPrefix}.extend.right`) || false;
+        const prefix   = prop.keyPrefix !== undefined ? prop.keyPrefix : '';
+        const leftKey  = prefix ? `${prefix}.extend.left`  : 'extend.left';
+        const rightKey = prefix ? `${prefix}.extend.right` : 'extend.right';
+        const extLeft  = getPropertyValue(tool.options, leftKey)  || false;
+        const extRight = getPropertyValue(tool.options, rightKey) || false;
         const extLabel = extLeft && extRight ? 'Both' : extLeft ? 'Left' : extRight ? 'Right' : 'None';
         return `
           <div class="tpm-row" id="${rowId}" data-key="${prop.key}">
@@ -471,13 +626,19 @@ export class ToolPropertiesModal {
                 <div class="tpm-dropdown-menu" id="${ddId}Menu" style="min-width:140px;">
                   <label class="tpm-extend-item">
                     <input type="checkbox" class="tpm-ext-chk" id="${ddId}Left"
-                           data-side="left" data-prefix="${prop.keyPrefix}"
+                           data-side="left"
+                           data-leftkey="${leftKey}"
+                           data-rightkey="${rightKey}"
+                           data-ddid="${ddId}"
                            ${extLeft ? 'checked' : ''}>
                     <span>Extend Left</span>
                   </label>
                   <label class="tpm-extend-item">
                     <input type="checkbox" class="tpm-ext-chk" id="${ddId}Right"
-                           data-side="right" data-prefix="${prop.keyPrefix}"
+                           data-side="right"
+                           data-leftkey="${leftKey}"
+                           data-rightkey="${rightKey}"
+                           data-ddid="${ddId}"
                            ${extRight ? 'checked' : ''}>
                     <span>Extend Right</span>
                   </label>
@@ -570,7 +731,6 @@ export class ToolPropertiesModal {
 
         const levelRows = levels.map((level: any, index: number) => {
           const parsed  = this.parseColor(level.color || '#ffffff');
-          // ✅ Use level.opacity directly — not parsed from color string
           const opacity = level.opacity !== undefined ? level.opacity : 1;
           return `
             <div class="tpm-fib-row">
@@ -628,6 +788,64 @@ export class ToolPropertiesModal {
     `;
   }
 
+  // ==================== POSITION DROPDOWN (fixed) ====================
+
+  private positionDropdown(btn: HTMLElement, menu: HTMLElement): void {
+    const rect        = btn.getBoundingClientRect();
+    const menuWidth   = menu.offsetWidth  || 120;
+    const menuHeight  = menu.offsetHeight || 200;
+    const viewW       = window.innerWidth;
+    const viewH       = window.innerHeight;
+
+    let top  = rect.bottom + 4;
+    let left = rect.left;
+
+    // ✅ Clamp right edge
+    if (left + menuWidth > viewW - 8) {
+      left = viewW - menuWidth - 8;
+    }
+
+    // ✅ Clamp bottom edge — open upward if no space below
+    if (top + menuHeight > viewH - 8) {
+      top = rect.top - menuHeight - 4;
+    }
+
+    menu.style.top  = `${top}px`;
+    menu.style.left = `${left}px`;
+    menu.style.width = 'auto';
+  }
+
+  // ==================== POSITION TEMPLATE MENU ====================
+
+  private positionTemplateMenu(): void {
+    const btn  = this.modal?.querySelector('#tpmTemplateBtn') as HTMLElement;
+    const menu = this.modal?.querySelector('#tpmTemplateMenu') as HTMLElement;
+    if (!btn || !menu) return;
+
+    const rect      = btn.getBoundingClientRect();
+    const menuWidth = 180;
+    const viewW     = window.innerWidth;
+    const viewH     = window.innerHeight;
+
+    let top  = rect.bottom + 6;
+    let left = rect.left;
+
+    // ✅ Clamp right
+    if (left + menuWidth > viewW - 8) {
+      left = viewW - menuWidth - 8;
+    }
+
+    // ✅ Clamp bottom — open upward if needed
+    const menuHeight = menu.offsetHeight || 120;
+    if (top + menuHeight > viewH - 8) {
+      top = rect.top - menuHeight - 6;
+    }
+
+    menu.style.top  = `${top}px`;
+    menu.style.left = `${left}px`;
+    menu.style.width = `${menuWidth}px`;
+  }
+
   // ==================== SETUP EVENTS ====================
 
   private setupEvents(tool: any, schema: ToolSchema | null): void {
@@ -662,7 +880,7 @@ export class ToolPropertiesModal {
       });
     });
 
-    // Dropdown buttons
+    // ✅ Dropdown buttons — use fixed positioning
     this.modal.querySelectorAll('.tpm-dropdown-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -676,6 +894,8 @@ export class ToolPropertiesModal {
           menu.classList.add('open');
           btnEl.classList.add('open');
           this.openDropdown = menu;
+          // ✅ Position after open so offsetHeight is available
+          requestAnimationFrame(() => this.positionDropdown(btnEl, menu));
         }
       });
     });
@@ -700,7 +920,7 @@ export class ToolPropertiesModal {
 
           const preview: any = {};
 
-          // ✅ Alignment — write to correct core path
+          // ✅ Alignment — correct core path
           if (ddId.startsWith('ddAlignV_') || ddId.startsWith('ddAlignH_')) {
             const safeKey = ddId.replace(/^ddAlignV_/, '').replace(/^ddAlignH_/, '');
             const prop    = currentSchema.properties.find(p => p.key.replace(/\./g, '_') === safeKey);
@@ -714,7 +934,6 @@ export class ToolPropertiesModal {
             return;
           }
 
-          // Standard dropdowns
           const safeKey = ddId.replace(/^dd_/, '');
           const prop    = currentSchema.properties.find(p => p.key.replace(/\./g, '_') === safeKey);
           if (!prop) return;
@@ -732,18 +951,17 @@ export class ToolPropertiesModal {
       });
     });
 
-    // Extend checkboxes — stay open + live preview
+    // ✅ Extend checkboxes
     this.modal.querySelectorAll('.tpm-ext-chk').forEach(chk => {
       chk.addEventListener('change', (e) => {
         e.stopPropagation();
-        const input  = e.target as HTMLInputElement;
-        const prefix = input.dataset.prefix!;
-        const menuEl = input.closest('.tpm-dropdown-menu') as HTMLElement;
-        const labelEl = this.modal!.querySelector(
-          `#${menuEl?.id.replace('Menu', 'Label')}`
-        ) as HTMLElement;
-        const leftChk  = this.modal!.querySelector(`[data-prefix="${prefix}"][data-side="left"]`)  as HTMLInputElement;
-        const rightChk = this.modal!.querySelector(`[data-prefix="${prefix}"][data-side="right"]`) as HTMLInputElement;
+        const input    = e.target as HTMLInputElement;
+        const ddId     = input.dataset.ddid!;
+        const leftKey  = input.dataset.leftkey!;
+        const rightKey = input.dataset.rightkey!;
+        const leftChk  = this.modal!.querySelector(`[data-ddid="${ddId}"][data-side="left"]`)  as HTMLInputElement;
+        const rightChk = this.modal!.querySelector(`[data-ddid="${ddId}"][data-side="right"]`) as HTMLInputElement;
+        const labelEl  = this.modal!.querySelector(`#${ddId}Label`) as HTMLElement;
 
         if (labelEl) {
           const l = leftChk?.checked, r = rightChk?.checked;
@@ -752,39 +970,37 @@ export class ToolPropertiesModal {
 
         if (this.currentTool && this.onToolUpdate) {
           const preview: any = {};
-          setPropertyValue(preview, `${prefix}.extend.left`,  leftChk?.checked  || false);
-          setPropertyValue(preview, `${prefix}.extend.right`, rightChk?.checked || false);
+          setPropertyValue(preview, leftKey,  leftChk?.checked  || false);
+          setPropertyValue(preview, rightKey, rightChk?.checked || false);
           this.onToolUpdate(this.currentTool.id, preview);
         }
       });
     });
 
-    // ✅ Extend menus — prevent close on inner click
+    // Extend menus — prevent close on inner click
     this.modal.querySelectorAll('.tpm-dropdown-menu').forEach(menu => {
       if ((menu as HTMLElement).querySelector('.tpm-extend-item')) {
         menu.addEventListener('mousedown', e => e.stopPropagation());
       }
     });
 
-    // Bold / Italic — live preview
+    // Bold / Italic
     this.modal.querySelectorAll('.tpm-toggle-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         btn.classList.toggle('active');
-
         if (this.currentTool && this.onToolUpdate) {
           const el     = btn as HTMLElement;
           const prefix = el.dataset.prefix!;
           const type   = el.dataset.type!;
           if (!prefix || !type) return;
-          const active   = el.classList.contains('active');
           const preview: any = {};
-          setPropertyValue(preview, `${prefix}.font.${type}`, active);
+          setPropertyValue(preview, `${prefix}.font.${type}`, el.classList.contains('active'));
           this.onToolUpdate(this.currentTool.id, preview);
         }
       });
     });
 
-    // Template
+    // ✅ Template button — fixed positioning, opens downward
     const tmplBtn  = this.modal.querySelector('#tpmTemplateBtn') as HTMLElement;
     const tmplMenu = this.modal.querySelector('#tpmTemplateMenu') as HTMLElement;
 
@@ -795,21 +1011,14 @@ export class ToolPropertiesModal {
       if (!isOpen) {
         tmplMenu.classList.add('open');
         this.openDropdown = tmplMenu;
+        requestAnimationFrame(() => this.positionTemplateMenu());
       }
     });
 
     tmplMenu?.addEventListener('mousedown', e => e.stopPropagation());
 
-    this.modal.querySelector('#tmplSave')?.addEventListener('click', () => {
-      if (this.currentTool) {
-        const updates = this.collectValues();
-        saveToolTemplate(this.currentTool.toolType, updates);
-        console.log(`✅ Template saved for ${this.currentTool.toolType}`);
-      }
-      this.closeDropdowns();
-    });
-
-    this.modal.querySelector('#tmplApply')?.addEventListener('click', () => {
+    // Apply Default
+    this.modal.querySelector('#tmplApplyDefault')?.addEventListener('click', () => {
       if (this.currentTool) {
         const defaults = loadToolTemplate(this.currentTool.toolType);
         if (defaults && this.onToolUpdate) {
@@ -817,6 +1026,12 @@ export class ToolPropertiesModal {
         }
       }
       this.closeDropdowns();
+    });
+
+    // Save as...
+    this.modal.querySelector('#tmplSaveAs')?.addEventListener('click', () => {
+      this.closeDropdowns();
+      this.showSaveAsModal();
     });
   }
 
@@ -880,11 +1095,14 @@ export class ToolPropertiesModal {
         }
 
         case 'extend': {
-          const prefix   = prop.keyPrefix!;
-          const leftChk  = this.modal!.querySelector(`[data-prefix="${prefix}"][data-side="left"]`)  as HTMLInputElement;
-          const rightChk = this.modal!.querySelector(`[data-prefix="${prefix}"][data-side="right"]`) as HTMLInputElement;
-          setPropertyValue(updates, `${prefix}.extend.left`,  leftChk?.checked  || false);
-          setPropertyValue(updates, `${prefix}.extend.right`, rightChk?.checked || false);
+          const prefix   = prop.keyPrefix !== undefined ? prop.keyPrefix : '';
+          const leftKey  = prefix ? `${prefix}.extend.left`  : 'extend.left';
+          const rightKey = prefix ? `${prefix}.extend.right` : 'extend.right';
+          const ddId     = `dd_${safeKey}`;
+          const leftChk  = this.modal!.querySelector(`[data-ddid="${ddId}"][data-side="left"]`)  as HTMLInputElement;
+          const rightChk = this.modal!.querySelector(`[data-ddid="${ddId}"][data-side="right"]`) as HTMLInputElement;
+          setPropertyValue(updates, leftKey,  leftChk?.checked  || false);
+          setPropertyValue(updates, rightKey, rightChk?.checked || false);
           break;
         }
 
@@ -899,7 +1117,6 @@ export class ToolPropertiesModal {
 
         case 'alignment': {
           const prefix = prop.keyPrefix!;
-          // ✅ Write to correct core path
           const selV   = this.modal!.querySelector(`#ddAlignV_${safeKey}Menu .tpm-dropdown-item.selected`) as HTMLElement;
           const selH   = this.modal!.querySelector(`#ddAlignH_${safeKey}Menu .tpm-dropdown-item.selected`) as HTMLElement;
           if (selV) setPropertyValue(updates, `${prefix}.box.alignment.vertical`,   selV.dataset.value);
@@ -961,6 +1178,12 @@ export class ToolPropertiesModal {
       const maxY = window.innerHeight - this.modal.offsetHeight;
       this.modal.style.left = `${Math.max(0, Math.min(x, maxX))}px`;
       this.modal.style.top  = `${Math.max(0, Math.min(y, maxY))}px`;
+      // ✅ Reposition open dropdown when modal is dragged
+      if (this.openDropdown) {
+        const btnId = this.openDropdown.id.replace('Menu', 'Btn');
+        const btn   = this.modal.querySelector(`#${btnId}`) as HTMLElement;
+        if (btn) this.positionDropdown(btn, this.openDropdown);
+      }
     });
 
     document.addEventListener('mouseup', () => {
@@ -979,7 +1202,7 @@ export class ToolPropertiesModal {
     requestAnimationFrame(() => {
       if (!this.modal) return;
       const w = this.modal.offsetWidth  || 380;
-      const h = this.modal.offsetHeight || 520;
+      const h = this.modal.offsetHeight || 400;
       this.modal.style.left = `${Math.max(0, (window.innerWidth  - w) / 2)}px`;
       this.modal.style.top  = `${Math.max(0, (window.innerHeight - h) / 2)}px`;
     });
@@ -1000,12 +1223,19 @@ export class ToolPropertiesModal {
   private handleOutsideClick = (e: MouseEvent): void => {
     if (!this.modal) return;
 
-    if ((e.target as HTMLElement).closest('.cp-container')) return;
+    if ((e.target as HTMLElement).closest('.cp-container'))       return;
+    if ((e.target as HTMLElement).closest('.tpm-saveas-overlay')) return;
 
     if (this.modal.contains(e.target as Node)) {
       const inDropdown = (e.target as HTMLElement).closest('.tpm-dropdown-wrap') ||
                          (e.target as HTMLElement).closest('.tpm-footer-left');
       if (!inDropdown) this.closeDropdowns();
+      return;
+    }
+
+    // ✅ Also check if click is inside a fixed dropdown menu outside modal
+    if ((e.target as HTMLElement).closest('.tpm-dropdown-menu') ||
+        (e.target as HTMLElement).closest('.tpm-template-menu')) {
       return;
     }
 
@@ -1059,499 +1289,5 @@ export class ToolPropertiesModal {
   public destroy(): void {
     document.removeEventListener('mousedown', this.handleOutsideClick);
     this.destroyModal();
-  }
-
-  // ==================== STYLES ====================
-
-  private injectStyles(): void {
-    if (document.getElementById('tpm-styles')) return;
-
-    const style  = document.createElement('style');
-    style.id     = 'tpm-styles';
-    style.textContent = `
-      .tpm-modal {
-        position: fixed;
-        width: 380px;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        box-shadow: var(--card-shadow);
-        display: flex;
-        flex-direction: column;
-        z-index: 10001;
-        overflow: hidden;
-        /* ✅ Grows with content, caps at 90vh, content scrolls only when needed */
-        max-height: 90vh;
-        font-family: var(--text-sans);
-        font-size: var(--text-base);
-        color: var(--text-primary);
-      }
-
-      .tpm-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 11px 14px;
-        background: var(--bg-card);
-        border-bottom: 1px solid var(--border);
-        cursor: grab;
-        user-select: none;
-        flex-shrink: 0;
-      }
-
-      .tpm-header:active { cursor: grabbing; }
-
-      .tpm-title {
-        font-size: var(--text-md);
-        font-weight: 600;
-        color: var(--text-primary);
-      }
-
-      .tpm-close {
-        background: none;
-        border: none;
-        color: var(--text-muted);
-        cursor: pointer;
-        font-size: var(--text-md);
-        padding: 2px 6px;
-        border-radius: 4px;
-        line-height: 1;
-      }
-
-      .tpm-close:hover {
-        color: var(--text-primary);
-        background: var(--bg-hover);
-      }
-
-      .tpm-tabs {
-        display: flex;
-        background: var(--bg-card);
-        border-bottom: 1px solid var(--border);
-        flex-shrink: 0;
-      }
-
-      .tpm-tab {
-        flex: 1;
-        padding: 9px 0;
-        background: none;
-        border: none;
-        border-bottom: 2px solid transparent;
-        color: var(--text-muted);
-        font-size: var(--text-sm);
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.15s;
-        font-family: var(--text-sans);
-      }
-
-      .tpm-tab:hover {
-        color: var(--text-secondary);
-        background: var(--bg-hover);
-      }
-
-      .tpm-tab.active {
-        color: var(--accent-info);
-        border-bottom-color: var(--accent-info);
-        background: rgba(var(--accent-info-rgb), 0.05);
-      }
-
-      .tpm-content {
-        padding: 14px;
-        overflow-y: auto;
-        flex: 1;
-        min-height: 0; /* ✅ Critical — allows flex child to shrink and scroll properly */
-      }
-
-      .tpm-panel { display: none; }
-      .tpm-panel.active { display: block; }
-
-      .tpm-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-        min-height: 30px;
-      }
-
-      .tpm-row-textarea { align-items: flex-start; }
-
-      .tpm-row-label {
-        font-size: var(--text-sm);
-        color: var(--text-secondary);
-        min-width: 80px;
-        flex-shrink: 0;
-      }
-
-      .tpm-row-controls {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex: 1;
-        transition: opacity 0.2s;
-        flex-wrap: wrap;
-      }
-
-      .tpm-row-controls.disabled {
-        opacity: 0.3;
-        pointer-events: none;
-      }
-
-      .tpm-checkbox {
-        width: 14px;
-        height: 14px;
-        cursor: pointer;
-        accent-color: var(--accent-info);
-        flex-shrink: 0;
-      }
-
-      .tpm-color-swatch-wrap {
-        position: relative;
-        width: 30px;
-        height: 24px;
-        border-radius: 4px;
-        border: 1px solid var(--border);
-        cursor: pointer;
-        flex-shrink: 0;
-        overflow: hidden;
-        background-image: linear-gradient(45deg, #808080 25%, transparent 25%),
-          linear-gradient(-45deg, #808080 25%, transparent 25%),
-          linear-gradient(45deg, transparent 75%, #808080 75%),
-          linear-gradient(-45deg, transparent 75%, #808080 75%);
-        background-size: 6px 6px;
-        background-position: 0 0, 0 3px, 3px -3px, -3px 0px;
-        background-color: #b0b0b0;
-        transition: border-color 0.15s;
-      }
-
-      .tpm-color-swatch-wrap:hover { border-color: var(--accent-info); }
-
-      .tpm-color-swatch-inner {
-        position: absolute;
-        inset: 0;
-      }
-
-      .tpm-opacity-label {
-        font-size: var(--text-sm);
-        color: var(--text-muted);
-        font-family: var(--text-mono);
-      }
-
-      .tpm-dropdown-wrap { position: relative; }
-
-      .tpm-dropdown-btn {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        padding: 5px 8px;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 5px;
-        color: var(--text-secondary);
-        font-size: var(--text-sm);
-        cursor: pointer;
-        font-family: var(--text-sans);
-        transition: border-color 0.15s;
-        white-space: nowrap;
-        min-width: 52px;
-        justify-content: space-between;
-      }
-
-      .tpm-dropdown-btn:hover,
-      .tpm-dropdown-btn.open {
-        border-color: var(--accent-info);
-        color: var(--text-primary);
-      }
-
-      .tpm-chevron {
-        font-size: 8px;
-        color: var(--text-muted);
-        flex-shrink: 0;
-      }
-
-      .tpm-dropdown-menu {
-        position: absolute;
-        top: calc(100% + 4px);
-        left: 0;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        box-shadow: var(--card-shadow);
-        z-index: 10010;
-        display: none;
-        flex-direction: column;
-        min-width: 100%;
-        padding: 3px;
-      }
-
-      .tpm-dropdown-menu.open { display: flex; }
-
-      .tpm-dropdown-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: var(--text-sm);
-        color: var(--text-secondary);
-        white-space: nowrap;
-        transition: background 0.1s;
-      }
-
-      .tpm-dropdown-item:hover {
-        background: var(--bg-hover);
-        color: var(--text-primary);
-      }
-
-      .tpm-dropdown-item.selected {
-        color: var(--accent-info);
-        background: rgba(var(--accent-info-rgb), 0.08);
-      }
-
-      /* ✅ label tag makes entire row clickable */
-      .tpm-extend-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 7px 10px;
-        cursor: pointer;
-        font-size: var(--text-sm);
-        color: var(--text-secondary);
-        border-radius: 4px;
-        transition: background 0.1s;
-        user-select: none;
-      }
-
-      .tpm-extend-item:hover {
-        background: var(--bg-hover);
-        color: var(--text-primary);
-      }
-
-      .tpm-extend-item input[type="checkbox"] {
-        accent-color: var(--accent-info);
-        cursor: pointer;
-        width: 13px;
-        height: 13px;
-        flex-shrink: 0;
-      }
-
-      .tpm-width-preview {
-        width: 36px;
-        background: var(--text-secondary);
-        border-radius: 1px;
-        flex-shrink: 0;
-      }
-
-      .tpm-style-line   { width: 36px; height: 0; flex-shrink: 0; }
-      .tpm-style-solid  { border-top: 2px solid var(--text-secondary); }
-      .tpm-style-dashed { border-top: 2px dashed var(--text-secondary); }
-      .tpm-style-dotted { border-top: 2px dotted var(--text-secondary); }
-
-      .tpm-section-divider {
-        height: 1px;
-        background: var(--border);
-        margin: 12px 0;
-      }
-
-      .tpm-textarea {
-        flex: 1;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 5px;
-        color: var(--text-primary);
-        font-size: var(--text-sm);
-        font-family: var(--text-sans);
-        padding: 6px 8px;
-        outline: none;
-        resize: vertical;
-        min-height: 56px;
-        transition: border-color 0.15s;
-        width: 100%;
-      }
-
-      .tpm-textarea:focus { border-color: var(--accent-info); }
-
-      .tpm-text-input {
-        flex: 1;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 5px;
-        color: var(--text-primary);
-        font-size: var(--text-sm);
-        font-family: var(--text-sans);
-        padding: 5px 8px;
-        outline: none;
-        transition: border-color 0.15s;
-        width: 100%;
-      }
-
-      .tpm-text-input:focus { border-color: var(--accent-info); }
-
-      .tpm-toggle-btn {
-        padding: 4px 9px;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 5px;
-        color: var(--text-muted);
-        font-size: var(--text-sm);
-        cursor: pointer;
-        font-family: var(--text-sans);
-        transition: all 0.15s;
-        min-width: 28px;
-        text-align: center;
-      }
-
-      .tpm-toggle-btn.active {
-        background: rgba(var(--accent-info-rgb), 0.15);
-        border-color: rgba(var(--accent-info-rgb), 0.35);
-        color: var(--accent-info);
-      }
-
-      .tpm-coord-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-      }
-
-      .tpm-coord-label {
-        font-size: var(--text-sm);
-        color: var(--text-muted);
-        min-width: 56px;
-        flex-shrink: 0;
-      }
-
-      .tpm-coord-value {
-        font-size: var(--text-sm);
-        color: var(--text-secondary);
-        font-family: var(--text-mono);
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        padding: 5px 8px;
-        flex: 1;
-      }
-
-      .tpm-no-schema {
-        text-align: center;
-        padding: 30px 20px;
-        color: var(--text-muted);
-        font-size: var(--text-sm);
-      }
-
-      /* ✅ Fib levels — clean layout no inner scroll no opacity label */
-      .tpm-fib-levels {
-        padding: 6px 8px;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        margin-bottom: 10px;
-      }
-
-      .tpm-fib-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 5px 0;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .tpm-fib-row:last-child { border-bottom: none; }
-
-      .tpm-fib-coeff {
-        min-width: 52px;
-        font-size: var(--text-xs);
-        color: var(--text-muted);
-        font-family: var(--text-mono);
-        flex-shrink: 0;
-      }
-
-      .tpm-footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 14px;
-        background: var(--bg-card);
-        border-top: 1px solid var(--border);
-        flex-shrink: 0;
-      }
-
-      .tpm-footer-left  { display: flex; gap: 6px; align-items: center; position: relative; }
-      .tpm-footer-right { display: flex; gap: 6px; align-items: center; }
-
-      .tpm-btn {
-        padding: 6px 12px;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: var(--text-sm);
-        font-family: var(--text-sans);
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        transition: filter 0.15s;
-      }
-
-      .tpm-btn:hover { filter: brightness(1.15); }
-
-      .tpm-btn-template {
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        color: var(--text-secondary);
-      }
-
-      .tpm-btn-cancel {
-        background: var(--bg-surface);
-        border: 1px solid var(--border);
-        color: var(--text-secondary);
-      }
-
-      .tpm-btn-ok {
-        background: rgba(var(--accent-info-rgb), 0.15);
-        border: 1px solid rgba(var(--accent-info-rgb), 0.3);
-        color: var(--accent-info);
-        font-weight: 600;
-      }
-
-      .tpm-template-wrap { position: relative; }
-
-      .tpm-template-menu {
-        position: absolute;
-        bottom: calc(100% + 6px);
-        left: 0;
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
-        border-radius: 6px;
-        box-shadow: var(--card-shadow);
-        z-index: 10010;
-        display: none;
-        flex-direction: column;
-        min-width: 160px;
-        padding: 3px;
-      }
-
-      .tpm-template-menu.open { display: flex; }
-
-      .tpm-template-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 7px 10px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: var(--text-sm);
-        color: var(--text-secondary);
-        transition: background 0.1s;
-        white-space: nowrap;
-      }
-
-      .tpm-template-item:hover {
-        background: var(--bg-hover);
-        color: var(--text-primary);
-      }
-    `;
-
-    document.head.appendChild(style);
   }
 }

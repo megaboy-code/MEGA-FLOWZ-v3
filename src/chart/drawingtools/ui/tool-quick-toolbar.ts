@@ -8,8 +8,6 @@ import {
   PropertyField
 } from './tool-schemas';
 
-// ==================== QUICK TOOLBAR CONTROL TYPES ====================
-
 type ControlType = 'color' | 'width' | 'style';
 
 interface QuickControl {
@@ -18,8 +16,6 @@ interface QuickControl {
   label:   string;
   default: any;
 }
-
-// ==================== CONTROL MAP PER TOOL ====================
 
 const QUICK_CONTROLS: Record<string, QuickControl[]> = {
   TrendLine:      lineControls(),
@@ -101,16 +97,12 @@ function lineControls(): QuickControl[] {
   ];
 }
 
-// ==================== CALLBACKS ====================
-
 export interface QuickToolbarCallbacks {
   onToolUpdate:    (toolId: string, updates: any) => void;
   onSettingsClick: (tool: any) => void;
   onLockToggle:    (toolId: string, locked: boolean) => void;
   onDelete:        (toolId: string) => void;
 }
-
-// ==================== CLASS ====================
 
 export class ToolQuickToolbar {
   private container:   HTMLElement | null = null;
@@ -183,6 +175,20 @@ export class ToolQuickToolbar {
       const val = getPropertyValue(options, ctrl.key);
       this.liveValues[ctrl.key] = val !== undefined ? val : ctrl.default;
     });
+
+    // ✅ Always extract text font color if tool has text
+    if (options.text !== undefined) {
+      const textColor = getPropertyValue(options, 'text.font.color');
+      this.liveValues['text.font.color'] = textColor || '#2962ff';
+    }
+  }
+
+  // ✅ Check if tool has text capability
+  private toolHasText(): boolean {
+    const options = this.currentTool?.options;
+    if (!options) return false;
+    // Has text options defined — show T button
+    return options.text !== undefined;
   }
 
   // ==================== CREATE TOOLBAR ====================
@@ -205,6 +211,7 @@ export class ToolQuickToolbar {
   private buildHTML(): string {
     const toolType = this.currentTool?.toolType || '';
     const controls = QUICK_CONTROLS[toolType] || [];
+    const hasText  = this.toolHasText();
 
     let controlsHTML = '';
 
@@ -267,6 +274,25 @@ export class ToolQuickToolbar {
       }
     });
 
+    // ✅ Text color T button — shown for any tool with text options
+    if (hasText) {
+      const textColor = this.liveValues['text.font.color'] || '#2962ff';
+      const displayColor = this.toDisplayColor(textColor);
+      controlsHTML += `
+        <div class="qtb-divider"></div>
+        <div class="qtb-item">
+          <button class="qtb-color-btn qtb-text-color-btn" id="qtbTextColorBtn"
+                  title="Text Color">
+            <div class="qtb-text-color-icon">
+              <span class="qtb-t-letter" id="qtbTLetter">T</span>
+              <div class="qtb-t-underline" id="qtbTUnderline"
+                   style="background:${displayColor};"></div>
+            </div>
+          </button>
+        </div>
+      `;
+    }
+
     return `
       <div class="qtb-drag-handle" title="Drag">
         <i class="fas fa-grip-vertical"></i>
@@ -326,6 +352,12 @@ export class ToolQuickToolbar {
         }
       }
     });
+
+    // ✅ Update T underline color
+    const tUnderline = this.container.querySelector('#qtbTUnderline') as HTMLElement;
+    if (tUnderline) {
+      tUnderline.style.background = this.toDisplayColor(this.liveValues['text.font.color']);
+    }
 
     this.updateLockButton();
   }
@@ -424,11 +456,46 @@ export class ToolQuickToolbar {
       }
     });
 
-    // Settings
+    // ✅ Text color T button
+    const textColorBtn = this.container.querySelector('#qtbTextColorBtn');
+    if (textColorBtn) {
+      textColorBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        this.closeDropdowns();
+
+        const { ColorPicker } = await import('../../../core/color-picker');
+        const current = this.parseToHexOpacity(this.liveValues['text.font.color']);
+
+        const picker = new ColorPicker({
+          color:   current.hex,
+          opacity: current.opacity,
+          onChange: (hex: string, opacity: number) => {
+            const newVal = opacity < 1 ? this.hexToRgba(hex, opacity) : hex;
+            this.liveValues['text.font.color'] = newVal;
+
+            // ✅ Update T underline
+            const tUnderline = this.container?.querySelector('#qtbTUnderline') as HTMLElement;
+            if (tUnderline) tUnderline.style.background = this.toDisplayColor(newVal);
+
+            if (this.currentTool) {
+              const updates: any = {};
+              this.setNestedValue(updates, 'text.font.color', newVal);
+              this.callbacks.onToolUpdate(this.currentTool.id, updates);
+            }
+          }
+        });
+        picker.open(textColorBtn as HTMLElement);
+      });
+    }
+
+    // ✅ Settings — hide quick toolbar then open properties modal
     this.container.querySelector('#qtbSettingsBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.closeDropdowns();
-      if (this.currentTool) this.callbacks.onSettingsClick(this.currentTool);
+      if (this.currentTool) {
+        this.hide();                                          // ✅ hide quick toolbar first
+        this.callbacks.onSettingsClick(this.currentTool);   // ✅ open properties modal
+      }
     });
 
     // Lock
@@ -547,7 +614,6 @@ export class ToolQuickToolbar {
   private handleOutsideClick = (e: MouseEvent): void => {
     if (!this.container) return;
     if (this.container.contains(e.target as Node)) return;
-    // ✅ Don't close if clicking inside color picker
     if ((e.target as HTMLElement).closest('.cp-container')) return;
     this.hide();
   };
@@ -732,6 +798,35 @@ export class ToolQuickToolbar {
       }
 
       .qtb-color-btn:hover .qtb-color-dot { border-color: var(--text-muted); }
+
+      /* ✅ Text color T button */
+      .qtb-text-color-btn {
+        width: 28px;
+        height: 26px;
+        flex-direction: column;
+        gap: 1px;
+      }
+
+      .qtb-text-color-icon {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .qtb-t-letter {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1;
+        font-family: var(--text-sans);
+      }
+
+      .qtb-t-underline {
+        width: 14px;
+        height: 3px;
+        border-radius: 1px;
+      }
 
       .qtb-chevron { font-size: 8px !important; color: var(--text-muted); }
 

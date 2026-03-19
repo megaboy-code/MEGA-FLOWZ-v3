@@ -74,30 +74,32 @@ export class DrawingToolbar {
     this.isInitialized = false;
   }
 
+  // ==================== THEME HELPER ====================
+
+  private getThemeTextColor(): string {
+    const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+    return theme === 'light' ? '#000000' : '#ffffff';
+  }
+
   // ==================== APPLY TOOL OPTIONS ====================
 
   private applyToolOptions(updates: any): void {
     if (!this.selectedTool || !this.drawingModule?.applyLineToolOptions) return;
 
-    // ✅ Deep merge to preserve nested properties
     const mergedOptions = this.deepMerge(this.selectedTool.options || {}, updates);
 
-    // ✅ toolType required by core to find and validate the tool
     this.drawingModule.applyLineToolOptions({
       id:       this.selectedTool.id,
       toolType: this.selectedTool.toolType,
       options:  mergedOptions
     });
 
-    // ✅ Keep selectedTool in sync
     this.selectedTool.options = mergedOptions;
   }
 
-  // ✅ Save template — excludes locked, editable, and text.value
   private saveTemplate(toolType: string, options: any): void {
     const { locked, editable, ...cleanOptions } = options;
 
-    // ✅ Don't save text value — it's user content not a style
     if (cleanOptions.text?.value !== undefined) {
       cleanOptions.text = { ...cleanOptions.text, value: '' };
     }
@@ -119,6 +121,7 @@ export class DrawingToolbar {
       },
 
       onSettingsClick: (tool: any) => {
+        this.quickToolbar?.hide();
         this.showToolProperties(tool);
       },
 
@@ -206,7 +209,20 @@ export class DrawingToolbar {
     this.setDrawingState(true);
 
     const template = loadToolTemplate(toolId);
-    this.startDrawing(toolId, template || undefined);
+
+    if (template) {
+      // ✅ Template exists — override text color with current theme
+      if (template.text?.font) {
+        template.text.font.color = this.getThemeTextColor();
+      }
+      this.startDrawing(toolId, template);
+    } else {
+      // ✅ No template — default text color from current theme
+      const textColor = this.getThemeTextColor();
+      this.startDrawing(toolId, {
+        text: { font: { color: textColor } }
+      });
+    }
   }
 
   private enterSelectionMode(button: HTMLButtonElement): void {
@@ -295,10 +311,10 @@ export class DrawingToolbar {
         this.quickToolbar?.hide();
       }
 
-      // ✅ p — open tool properties only when a tool is selected
       if ((e.key === 'p' || e.key === 'P') && this.selectedTool) {
         e.preventDefault();
         e.stopPropagation();
+        this.quickToolbar?.hide();
         this.showToolProperties(this.selectedTool);
       }
 
@@ -336,6 +352,13 @@ export class DrawingToolbar {
           this.deleteTool(toolId);
           this.selectedTool = null;
           this.quickToolbar?.hide();
+        },
+
+        // ✅ Reshow quick toolbar when properties modal closes
+        onClose: () => {
+          if (this.selectedTool) {
+            this.quickToolbar?.show(this.selectedTool);
+          }
         }
       }
     );
@@ -391,6 +414,13 @@ export class DrawingToolbar {
   }
 
   // ==================== PUBLIC API ====================
+
+  // ✅ Called from ChartDrawingModule.updateSeries()
+  // Resubscribes toolbar events to new lineTools instance
+  // after chart type change — fixes double click not working
+  public resubscribeCoreEvents(): void {
+    this.setupCoreEventSubscriptions();
+  }
 
   public activateTool(toolId: string): void {
     if (!this.drawingToolButtons) return;

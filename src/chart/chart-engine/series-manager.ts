@@ -11,7 +11,7 @@ import {
     AreaSeries,
     BaselineSeries
 } from 'lightweight-charts';
-import { getDecimalPrecision, getMinMove, hexToRgba } from '../chart-utils';
+import { getDecimalPrecision, getMinMove, getPriceFormatter, hexToRgba } from '../chart-utils';
 
 export interface SeriesColors {
     bull:         string;
@@ -43,11 +43,8 @@ export class SeriesManager {
     private askLine: any = null;
     private bidAskVisible: { bid: boolean; ask: boolean } = { bid: true, ask: true };
 
-    // ✅ Fires after setData() completes — series has data, safe to draw
-    public onDataReady: (() => void) | null = null
-
-    // ✅ Fires before series is removed — drawing tools must clear first
-    public onBeforeSeriesRemoved: (() => void) | null = null
+    public onDataReady:          (() => void) | null = null;
+    public onBeforeSeriesRemoved: (() => void) | null = null;
 
     constructor(colors: SeriesColors, symbol: string) {
         this.colors        = colors;
@@ -58,7 +55,6 @@ export class SeriesManager {
         this.chart = chart;
     }
 
-    // ✅ Keep precision in sync when symbol changes
     public setSymbol(symbol: string): void {
         this.currentSymbol = symbol;
     }
@@ -69,19 +65,32 @@ export class SeriesManager {
             return null;
         }
 
-        this.removeBidAskLines()
+        this.removeBidAskLines();
 
         if (this.currentSeries) {
-            // ✅ Notify drawing module BEFORE series is destroyed
-            this.onBeforeSeriesRemoved?.()
-            this.chart.removeSeries(this.currentSeries)
-            this.currentSeries = null
+            this.onBeforeSeriesRemoved?.();
+            this.chart.removeSeries(this.currentSeries);
+            this.currentSeries = null;
         }
 
         try {
             const precision   = getDecimalPrecision(this.currentSymbol);
             const minMove     = getMinMove(this.currentSymbol);
-            const priceFormat = { type: 'price' as const, precision, minMove };
+
+            // ✅ Use custom formatter for consistent price display
+            const priceFormat = {
+                type:      'custom' as const,
+                formatter: (price: number) => price.toFixed(precision),
+                minMove
+            };
+
+            // ✅ Apply chart localization formatter
+            // This is what drawing tools use for price axis labels
+            this.chart.applyOptions({
+                localization: {
+                    priceFormatter: getPriceFormatter(this.currentSymbol)
+                }
+            });
 
             switch (chartType) {
                 case 'candlestick':
@@ -142,13 +151,12 @@ export class SeriesManager {
     }
 
     public setData(data: any[]): void {
-        if (!this.currentSeries || !data.length) return
+        if (!this.currentSeries || !data.length) return;
         try {
-            this.currentSeries.setData(data)
-            // ✅ Data is now ON the series — safe to restore drawings
-            this.onDataReady?.()
+            this.currentSeries.setData(data);
+            this.onDataReady?.();
         } catch (error) {
-            console.error('❌ Failed to set series data:', error)
+            console.error('❌ Failed to set series data:', error);
         }
     }
 
@@ -310,16 +318,15 @@ export class SeriesManager {
     // ==================== DESTROY ====================
 
     public destroy(): void {
-        // ✅ Notify drawing module before series destroyed
-        this.onBeforeSeriesRemoved?.()
+        this.onBeforeSeriesRemoved?.();
         if (this.chart && this.currentSeries) {
             try {
                 this.chart.removeSeries(this.currentSeries);
             } catch (error) {}
         }
-        this.currentSeries = null;
-        this.chart         = null;
-        this.onDataReady          = null
-        this.onBeforeSeriesRemoved = null
+        this.currentSeries         = null;
+        this.chart                 = null;
+        this.onDataReady           = null;
+        this.onBeforeSeriesRemoved = null;
     }
 }

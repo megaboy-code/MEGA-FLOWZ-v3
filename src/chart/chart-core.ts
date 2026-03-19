@@ -25,14 +25,12 @@ export class ChartModule {
     private contextMenu:      ChartContextMenu | null = null;
     private resizeObserver:   ResizeObserver | null = null;
 
-    // ==================== LAZY LOADED MODULES ====================
     private indicatorManager: any | null = null;
     public  strategyManager:  any | null = null;
 
     private indicatorLoading: boolean = false;
     private strategyLoading:  boolean = false;
 
-    // ✅ Modern AbortController — one abort() removes all listeners
     private abortController: AbortController | null = null;
 
     private _currentSymbol:    string;
@@ -164,7 +162,6 @@ export class ChartModule {
         this.initializeContextMenu();
         this.setupCrosshairTracking();
 
-        // ✅ Restore last applied template after chart is ready
         ChartSettingsModal.restoreActiveTemplate();
 
         document.dispatchEvent(new CustomEvent('chart-ready', {
@@ -197,7 +194,8 @@ export class ChartModule {
         });
     }
 
-    private initializeDrawingModule(): void {
+    // ✅ async — awaits initialize() so drawings fully load
+    private async initializeDrawingModule(): Promise<void> {
         const chart  = this.mainChart.getChart();
         const series = this.mainChart.getSeries();
         if (!chart || !series) return;
@@ -216,7 +214,8 @@ export class ChartModule {
             this._currentSymbol,
             this._currentTimeframe
         );
-        this.drawingModule.initialize();
+
+        await this.drawingModule.initialize();
         console.log('✅ Drawing Module initialized');
     }
 
@@ -382,6 +381,12 @@ export class ChartModule {
         if (this.chartUI) this.chartUI.updateSymbol(symbol);
 
         this.drawingModule?.onSymbolChange(symbol);
+
+        // ✅ Update price formatter when symbol changes
+        this.drawingModule?.updateConfig({
+            precision:      getDecimalPrecision(symbol),
+            priceFormatter: getPriceFormatter(symbol)
+        });
     }
 
     public handleTimeframeChange(timeframe: string): void {
@@ -399,15 +404,20 @@ export class ChartModule {
         this.drawingModule?.onTimeframeChange(timeframe);
     }
 
+    // ✅ No longer destroys/reinitializes drawing module
+    // Just saves drawings, updates series reference — drawings persist
     public handleChartTypeChange(newChartType: string): void {
         if (this.mainChart.currentChartType === newChartType) return;
 
+        // ✅ Save drawings BEFORE series changes
+        this.drawingModule?.saveDrawings();
+
         this.mainChart.setChartType(newChartType);
 
-        if (this.drawingModule) {
-            this.drawingModule.destroy();
-            this.drawingModule = null;
-            this.initializeDrawingModule();
+        // ✅ Get new series and reattach drawing module to it
+        const newSeries = this.mainChart.getSeries();
+        if (this.drawingModule && newSeries) {
+            this.drawingModule.updateSeries(newSeries);
         }
 
         this.initializePriceAlerts();
@@ -473,7 +483,6 @@ export class ChartModule {
                 case 'chart-download':
                     this.triggerChartDownload();
                     break;
-                // ✅ Toggle settings modal open/close with same key
                 case 'open-settings-modal':
                     if (document.getElementById('settingsOverlay')) {
                         document.dispatchEvent(new CustomEvent('close-settings-modal'));
@@ -562,8 +571,6 @@ export class ChartModule {
             if (visible !== undefined) this.mainChart.applyWatermark(visible, color);
         }, { signal });
 
-        // ==================== BID / ASK ====================
-
         document.addEventListener('price-update', (e: Event) => {
             const { bid, ask } = (e as CustomEvent).detail;
             if (bid !== undefined && ask !== undefined) {
@@ -576,8 +583,6 @@ export class ChartModule {
             if (key === 'showBid') this.mainChart.toggleBidAsk('bid', value);
             if (key === 'showAsk') this.mainChart.toggleBidAsk('ask', value);
         }, { signal });
-
-        // ==================== INDICATORS ====================
 
         document.addEventListener('indicator-added', (e: Event) => {
             const item = (e as CustomEvent).detail as LegendItem;
@@ -665,8 +670,6 @@ export class ChartModule {
                 this.indicatorManager?.addIndicator(type, config?.settings);
             }
         }, { signal });
-
-        // ==================== STRATEGIES ====================
 
         document.addEventListener('strategy_initial', async (e: Event) => {
             await this.loadStrategyManager();

@@ -394,7 +394,6 @@ const calloutSchema: ToolSchema = {
   toolType:    'Callout',
   displayName: 'Callout',
   properties: [
-    // ── Style tab ──
     ...lineStyleProps('line'),
     {
       key:          'text.box.border.color',
@@ -429,7 +428,6 @@ const calloutSchema: ToolSchema = {
       defaultValue: 'rgba(19,73,133,1)'
     },
     visibilityProp,
-    // ── Text tab ──
     {
       key:          'text.value',
       label:        'Content',
@@ -479,7 +477,6 @@ const parallelChannelSchema: ToolSchema = {
   toolType:    'ParallelChannel',
   displayName: 'Parallel Channel',
   properties: [
-    // ── Channel Line ──
     {
       key:          'channelLine.color',
       label:        'Color',
@@ -504,7 +501,6 @@ const parallelChannelSchema: ToolSchema = {
       section:      'Channel Line',
       defaultValue: 0
     },
-    // ── Middle Line ──
     {
       key:          'showMiddleLine',
       label:        'Show Middle Line',
@@ -537,7 +533,6 @@ const parallelChannelSchema: ToolSchema = {
       section:      'Middle Line',
       defaultValue: 1
     },
-    // ── Fill ──
     {
       key:          'background.color',
       label:        'Fill',
@@ -546,14 +541,14 @@ const parallelChannelSchema: ToolSchema = {
       section:      'Fill',
       defaultValue: 'rgba(41,98,255,0.2)'
     },
-    // ── Extension ──
+    // ✅ Fix — keyPrefix empty string so extend.left/right written directly
     {
-      key:       'extend',
+      key:       'channel.extend',
       label:     'Extend',
       type:      'extend',
       tab:       'style',
       section:   'Extension',
-      keyPrefix: 'extend'
+      keyPrefix: ''
     },
     visibilityProp
   ]
@@ -587,13 +582,14 @@ const fibRetracementSchema: ToolSchema = {
       section:      'Line',
       defaultValue: 0
     },
+    // ✅ Fix — keyPrefix empty string so extend.left/right written directly
     {
-      key:       'extend',
+      key:       'fib.extend',
       label:     'Extend',
       type:      'extend',
       tab:       'style',
       section:   'Extension',
-      keyPrefix: 'extend'
+      keyPrefix: ''
     },
     visibilityProp
   ]
@@ -603,7 +599,6 @@ const priceRangeSchema: ToolSchema = {
   toolType:    'PriceRange',
   displayName: 'Price Range',
   properties: [
-    // ── Border ──
     {
       key:          'priceRange.rectangle.border.color',
       label:        'Border Color',
@@ -628,7 +623,6 @@ const priceRangeSchema: ToolSchema = {
       section:      'Border',
       defaultValue: 0
     },
-    // ── Fill ──
     {
       key:          'priceRange.rectangle.background.color',
       label:        'Fill',
@@ -637,7 +631,6 @@ const priceRangeSchema: ToolSchema = {
       section:      'Fill',
       defaultValue: 'rgba(156,39,176,0.2)'
     },
-    // ── Center Lines ──
     {
       key:          'priceRange.showCenterHorizontalLine',
       label:        'Show Center H Line',
@@ -686,7 +679,6 @@ const priceRangeSchema: ToolSchema = {
       section:      'Center Lines',
       defaultValue: '#9c27b0'
     },
-    // ── Labels ──
     {
       key:          'priceRange.showTopPrice',
       label:        'Show Top Price',
@@ -704,7 +696,6 @@ const priceRangeSchema: ToolSchema = {
       defaultValue: true
     },
     visibilityProp,
-    // ── Text tab ──
     {
       key:          'text.value',
       label:        'Label Text',
@@ -820,7 +811,6 @@ const longShortPositionSchema: ToolSchema = {
   toolType:    'LongShortPosition',
   displayName: 'Long/Short Position',
   properties: [
-    // ── Labels ──
     {
       key:          'showAutoText',
       label:        'Show R:R Label',
@@ -829,7 +819,6 @@ const longShortPositionSchema: ToolSchema = {
       section:      'Labels',
       defaultValue: true
     },
-    // ── Risk Zone ──
     {
       key:          'entryStopLossRectangle.background.color',
       label:        'Risk Fill',
@@ -862,7 +851,6 @@ const longShortPositionSchema: ToolSchema = {
       section:   'Risk Zone',
       keyPrefix: 'entryStopLossRectangle'
     },
-    // ── Reward Zone ──
     {
       key:          'entryPtRectangle.background.color',
       label:        'Reward Fill',
@@ -896,7 +884,6 @@ const longShortPositionSchema: ToolSchema = {
       keyPrefix: 'entryPtRectangle'
     },
     visibilityProp,
-    // ── Text tab ──
     {
       key:          'entryStopLossText.value',
       label:        'Risk Note',
