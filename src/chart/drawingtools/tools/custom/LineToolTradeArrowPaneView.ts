@@ -4,6 +4,7 @@ import {
     IChartApiBase,
     ISeriesApi,
     SeriesType,
+    LineStyle,
     Coordinate,
 } from 'lightweight-charts';
 
@@ -15,10 +16,6 @@ import {
     TextRenderer,
     AnchorPoint,
     PaneCursorType,
-    getToolCullingState,
-    OffScreenState,
-    deepCopy,
-    LineStyle,
     LineJoin,
     LineCap,
     LineEnd,
@@ -28,26 +25,16 @@ import {
     IPrimitivePaneRenderer,
 } from 'lightweight-charts-line-tools-core';
 
-import { IChartApiBase, ISeriesApi } from 'lightweight-charts';
 import { LineToolTradeArrow, TradeArrowFullOptions } from './LineToolTradeArrow';
-
-// ================================================================
-// 🎯 TRADE ARROW — Pane View
-// ================================================================
 
 export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<HorzScaleItem> {
 
-    // # Segment renderers — safe to cache (no text width issue)
-    // Triangle head — 3 sides
-    private _triLeft:  SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
-    private _triRight: SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
-    private _triBase:  SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
-    // Stem
-    private _stem:     SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
-    // Price dashed line
+    private _triLeft:   SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
+    private _triRight:  SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
+    private _triBase:   SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
+    private _stem:      SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
     private _priceLine: SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
 
-    // # Hover state — controls price line + axis label visibility
     private _isHovered: boolean = false;
 
     public constructor(
@@ -63,18 +50,12 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         return this._renderer;
     }
 
-    // ================================================================
-    // # Set hover state — called from outside on mouse events
-    // ================================================================
     public setHovered(hovered: boolean): void {
         if (this._isHovered === hovered) return;
         this._isHovered = hovered;
         this._invalidated = true;
     }
 
-    // ================================================================
-    // # Core rendering
-    // ================================================================
     protected override _updateImpl(height: number, width: number): void {
         this._invalidated = false;
 
@@ -82,19 +63,9 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         r.clear();
 
         const options = this._tool.options() as TradeArrowFullOptions;
-
         if (!options.visible) return;
         if (this._tool.points().length < 1) return;
 
-        // # Culling
-        const points = this._tool.points();
-        const cullingState = getToolCullingState(
-            points,
-            this._tool as BaseLineTool<HorzScaleItem>
-        );
-        if (cullingState !== OffScreenState.Visible) return;
-
-        // # Convert logical point to screen
         const hasPoints = this._updatePoints();
         if (!hasPoints || this._points.length < 1) return;
 
@@ -102,45 +73,27 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         const arrow  = options.arrow;
         const color  = arrow.color;
         const isBuy  = arrow.type === 'buy';
-        const size   = arrow.size;       // Triangle half-width
-        const stem   = arrow.stemHeight; // Stem length
+        const size   = arrow.size;
+        const stem   = arrow.stemHeight;
 
-        // ── GEOMETRY ──────────────────────────────────────────────
-        //
-        // BUY  (points up):
-        //   tip at (cx, anchorY - stem - triangleHeight)
-        //   base at (cx ± size, anchorY - stem)
-        //   stem from (cx, anchorY) to (cx, anchorY - stem)
-        //   label below (cx, anchorY + labelOffset)
-        //
-        // SELL (points down):
-        //   tip at (cx, anchorY + stem + triangleHeight)
-        //   base at (cx ± size, anchorY + stem)
-        //   stem from (cx, anchorY) to (cx, anchorY + stem)
-        //   label below (cx, anchorY + stem + triangleHeight + labelOffset)
-        //
-        const cx            = anchor.x as number;
-        const cy            = anchor.y as number;
-        const triHeight     = size * 1.4; // Slightly taller than wide for good arrow shape
-        const labelOffset   = 6;
+        const cx          = anchor.x as number;
+        const cy          = anchor.y as number;
+        const triHeight   = size * 1.4;
+        const labelOffset = 6;
 
-        // ── CALCULATE POINTS ──────────────────────────────────────
-
-        let tipY:   number;
-        let baseY:  number;
+        let tipY:        number;
+        let baseY:       number;
         let stemTopY:    number;
         let stemBottomY: number;
-        let labelY: number;
+        let labelY:      number;
 
         if (isBuy) {
-            // Arrow points UP
             baseY       = cy - stem;
             tipY        = baseY - triHeight;
             stemTopY    = baseY;
             stemBottomY = cy;
             labelY      = cy + labelOffset;
         } else {
-            // Arrow points DOWN
             baseY       = cy + stem;
             tipY        = baseY + triHeight;
             stemTopY    = cy;
@@ -151,7 +104,6 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         const baseLeft  = cx - size;
         const baseRight = cx + size;
 
-        // ── SHARED LINE OPTIONS ────────────────────────────────────
         const lineOpts = {
             color,
             width:  2 as any,
@@ -167,8 +119,7 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
             toolDefaultDragCursor:  PaneCursorType.Pointer,
         };
 
-        // ── TRIANGLE — 3 sides ─────────────────────────────────────
-        // Left side: tip → base-left
+        // ✅ 3 args — working version
         this._triLeft.setData({
             points: [
                 new AnchorPoint(cx       as Coordinate, tipY  as Coordinate, 0),
@@ -178,7 +129,6 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
             ...cursor,
         });
 
-        // Right side: tip → base-right
         this._triRight.setData({
             points: [
                 new AnchorPoint(cx        as Coordinate, tipY  as Coordinate, 0),
@@ -188,7 +138,6 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
             ...cursor,
         });
 
-        // Base: base-left → base-right
         this._triBase.setData({
             points: [
                 new AnchorPoint(baseLeft  as Coordinate, baseY as Coordinate, 0),
@@ -198,7 +147,6 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
             ...cursor,
         });
 
-        // ── STEM ───────────────────────────────────────────────────
         this._stem.setData({
             points: [
                 new AnchorPoint(cx as Coordinate, stemTopY    as Coordinate, 0),
@@ -213,20 +161,19 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         r.append(this._triBase);
         r.append(this._stem);
 
-        // ── LABEL (Buy / Sell) ─────────────────────────────────────
-        // Fresh TextRenderer every frame — never cache
+        // ✅ Fresh TextRenderer every frame
         const labelText = new TextRenderer<HorzScaleItem>();
         labelText.setData({
             points: [new AnchorPoint(cx as Coordinate, labelY as Coordinate, 0)],
             text: {
-                value:    isBuy ? 'Buy' : 'Sell',
-                padding:  0,
-                wordWrapWidth: 0,
-                forceTextAlign: false,
+                value:                      isBuy ? 'Buy' : 'Sell',
+                padding:                    0,
+                wordWrapWidth:              0,
+                forceTextAlign:             false,
                 forceCalculateMaxLineWidth: false,
-                alignment: TextAlignment.Center,
+                alignment:                  TextAlignment.Center,
                 font: {
-                    color:  color,
+                    color,
                     size:   9,
                     bold:   true,
                     italic: false,
@@ -255,14 +202,12 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         });
         r.append(labelText);
 
-        // ── PRICE LINE + AXIS LABEL ────────────────────────────────
-        // Show based on priceLine setting or hover state
         const showPriceLine =
             arrow.priceLine === 'always' ||
             (arrow.priceLine === 'hover' && this._isHovered);
 
         if (showPriceLine && arrow.priceLabel) {
-            // Dashed line full width at anchor Y
+
             this._priceLine.setData({
                 points: [
                     new AnchorPoint(0     as Coordinate, cy as Coordinate, 0),
@@ -271,7 +216,7 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
                 line: {
                     color,
                     width:  1 as any,
-                    style:  LineStyle.Dashed,
+                    style:  1 as any,
                     extend: { left: false, right: false },
                     end:    { left: LineEnd.Normal, right: LineEnd.Normal },
                     join:   LineJoin.Miter,
@@ -281,17 +226,16 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
             });
             r.append(this._priceLine);
 
-            // Axis label — pinned to right edge
             const axisLabel = new TextRenderer<HorzScaleItem>();
             axisLabel.setData({
                 points: [new AnchorPoint((width - 4) as Coordinate, cy as Coordinate, 0)],
                 text: {
-                    value:   arrow.priceLabel,
-                    padding: 4,
-                    wordWrapWidth: 0,
-                    forceTextAlign: false,
+                    value:                      arrow.priceLabel,
+                    padding:                    4,
+                    wordWrapWidth:              0,
+                    forceTextAlign:             false,
                     forceCalculateMaxLineWidth: false,
-                    alignment: TextAlignment.Center,
+                    alignment:                  TextAlignment.Center,
                     font: {
                         color:  '#ffffff',
                         size:   10,
@@ -308,7 +252,7 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
                         },
                         background: { color, inflation: { x: 4, y: 2 } },
                         border: {
-                            color:     color,
+                            color,
                             width:     1,
                             style:     LineStyle.Solid,
                             radius:    2,
@@ -324,6 +268,5 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         }
     }
 
-    // # No anchors — programmatic tool
     protected override _addAnchors(): void {}
 }

@@ -94,13 +94,27 @@ export class ModuleManager {
             this.tradingInstance?.updatePositions(positions);
         });
 
-        // ✅ Trade executed → check success before showing notification
+        // ✅ Trade executed → place arrow on chart if successful
         this.connectionManager.onTradeExecuted((data: WebSocketMessage) => {
             if (data.success) {
                 this.notifications.success(
                     `Trade ${data.direction || 'executed'} successfully`,
                     { title: 'Trade Executed' }
                 );
+
+                if (data.direction && data.price) {
+                    const type      = data.direction === 'BUY' ? 'buy' : 'sell';
+                    const latestBar = this.chart?.getDataManager()?.getLatestOHLC(); const timestamp = (latestBar?.time as number) ?? Math.floor(Date.now() / 1000);
+
+                    this.chart?.getDrawingModule()?.placeTradeArrow({
+                        id:         `trade-arrow-${type}-${timestamp}`,
+                        type,
+                        timestamp,
+                        price:      Number(data.price),
+                        priceLabel: String(data.price),
+                    });
+                }
+
             } else {
                 this.notifications.error(
                     data.message || 'Trade execution failed',
@@ -132,7 +146,31 @@ export class ModuleManager {
                 case 'strategy_deployed':
                 case 'strategy_removed':
                 case 'strategy_updated':
+                    document.dispatchEvent(new CustomEvent(data.type, {
+                        detail: data
+                    }));
+                    break;
+
+                // ✅ Strategy signal → place arrow on chart
                 case 'strategy_signal':
+                    document.dispatchEvent(new CustomEvent(data.type, {
+                        detail: data
+                    }));
+
+                    if (data.direction && data.price) {
+                        const type      = data.direction === 'BUY' ? 'buy' : 'sell';
+                        const timestamp = Number(data.timestamp) || Math.floor(Date.now() / 1000);
+
+                        this.chart?.getDrawingModule()?.placeTradeArrow({
+                            id:         `trade-arrow-${type}-${timestamp}`,
+                            type,
+                            timestamp,
+                            price:      Number(data.price),
+                            priceLabel: String(data.price),
+                        });
+                    }
+                    break;
+
                 case 'auto_trading_status':
                     document.dispatchEvent(new CustomEvent(data.type, {
                         detail: data
@@ -157,7 +195,6 @@ export class ModuleManager {
             const { symbol } = (e as CustomEvent).detail;
             if (!symbol) return;
             this.connectionManager.setSymbol(symbol);
-            // ✅ Update chart legend and UI when symbol changes from any source
             this.chart?.handleSymbolChange(symbol);
         });
 
@@ -165,7 +202,6 @@ export class ModuleManager {
             const { timeframe } = (e as CustomEvent).detail;
             if (!timeframe) return;
             this.connectionManager.setTimeframe(timeframe);
-            // ✅ Update chart legend and UI when timeframe changes from any source
             this.chart?.handleTimeframeChange(timeframe);
         });
 
@@ -187,7 +223,6 @@ export class ModuleManager {
             const { command, tp, sl } = (e as CustomEvent).detail;
             if (!command) return;
 
-            // ✅ Parse direction, symbol, volume, price from command string
             const parts = command.split('_');
             if (parts.length >= 5) {
                 const direction = parts[1] as 'BUY' | 'SELL';
@@ -216,7 +251,6 @@ export class ModuleManager {
             );
         });
 
-        // Strategy commands — lazy load strategy module on demand
         document.addEventListener('deploy-strategy', (e: Event) => {
             const { strategyType, symbol, timeframe, params } = (e as CustomEvent).detail;
             if (strategyType && symbol && timeframe) {
@@ -248,7 +282,6 @@ export class ModuleManager {
             this.loadStrategyModule();
         });
 
-        // Journal — lazy load on demand
         document.addEventListener('hotkey-modal-toggle', (e: Event) => {
             const { modal } = (e as CustomEvent).detail;
             if (modal === 'full-journal') this.loadJournalModule();
@@ -260,7 +293,6 @@ export class ModuleManager {
             if (panel) this.panels.show(panel);
         });
 
-        // Strategy tab click
         document.addEventListener('tab-switched', (e: Event) => {
             const { tabId } = (e as CustomEvent).detail;
             if (tabId === 'strategy') this.loadStrategyModule();
@@ -389,9 +421,9 @@ export class ModuleManager {
     // ==================== NOTIFICATION HELPER ====================
 
     public showNotification(
-        title: string,
+        title:   string,
         message: string,
-        type: 'success' | 'error' | 'warning' | 'info' = 'info'
+        type:    'success' | 'error' | 'warning' | 'info' = 'info'
     ): void {
         switch (type) {
             case 'success': this.notifications.success(message, { title }); break;

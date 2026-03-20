@@ -80,6 +80,10 @@ export class ChartDrawingModule {
   private showBuyArrows:  boolean = true;
   private showSellArrows: boolean = true;
 
+  // ✅ Default colors for future arrows — updated when user changes color in settings
+  private defaultBuyArrowColor:  string = '#238636';
+  private defaultSellArrowColor: string = '#da3633';
+
   private get STORAGE_KEY(): string {
     return `chart_drawings_${this.currentSymbol}_${this.currentTimeframe}`;
   }
@@ -192,8 +196,8 @@ export class ChartDrawingModule {
 
   // ==================== SETTINGS LISTENERS ====================
 
-  // ✅ Listen for buy/sell arrow toggle from ChartSettingsModal
   private setupSettingsListeners(): void {
+    // ✅ Buy/sell arrow visibility toggle
     document.addEventListener('chart-setting-toggle', (e: Event) => {
       const { key, value } = (e as CustomEvent).detail;
 
@@ -211,6 +215,61 @@ export class ChartDrawingModule {
           this.removeTradeArrows('sell');
           console.log('🚫 Sell arrows hidden and removed');
         }
+      }
+    });
+
+    // ✅ Arrow price line mode change — update all existing arrows
+    document.addEventListener('chart-arrow-priceline-change', (e: Event) => {
+      const { priceLine } = (e as CustomEvent).detail as { priceLine: 'hover' | 'always' };
+      if (!this.lineTools || !this.isInitialized) return;
+
+      try {
+        const json  = this.lineTools.exportLineTools();
+        const tools = JSON.parse(json);
+        if (!Array.isArray(tools)) return;
+
+        tools.forEach((tool: any) => {
+          if (tool.toolType !== 'TradeArrow') return;
+          this.lineTools.applyLineToolOptions({
+            id:       tool.id,
+            toolType: 'TradeArrow',
+            options:  { arrow: { priceLine } },
+          });
+        });
+
+        console.log(`✅ Arrow price line mode updated: ${priceLine}`);
+      } catch (error) {
+        console.error('❌ Failed to update arrow price line mode:', error);
+      }
+    });
+
+    // ✅ Arrow color change — update all existing arrows of that type
+    document.addEventListener('chart-arrow-color-change', (e: Event) => {
+      const { type, color } = (e as CustomEvent).detail as { type: 'buy' | 'sell'; color: string };
+      if (!this.lineTools || !this.isInitialized) return;
+
+      // ✅ Update default color for future arrows
+      if (type === 'buy')  this.defaultBuyArrowColor  = color;
+      if (type === 'sell') this.defaultSellArrowColor = color;
+
+      try {
+        const json  = this.lineTools.exportLineTools();
+        const tools = JSON.parse(json);
+        if (!Array.isArray(tools)) return;
+
+        tools.forEach((tool: any) => {
+          if (tool.toolType !== 'TradeArrow') return;
+          if (tool.options?.arrow?.type !== type) return;
+          this.lineTools.applyLineToolOptions({
+            id:       tool.id,
+            toolType: 'TradeArrow',
+            options:  { arrow: { color } },
+          });
+        });
+
+        console.log(`✅ Arrow color updated: ${type} → ${color}`);
+      } catch (error) {
+        console.error('❌ Failed to update arrow color:', error);
       }
     });
   }
@@ -427,7 +486,7 @@ export class ChartDrawingModule {
     if (this.currentTimeframe === timeframe) return;
     this.saveDrawings();
     this.currentTimeframe = timeframe;
-    // ✅ Remove all trade arrows on TF change — they get re-injected fresh
+    // ✅ Remove all trade arrows on TF change — re-injected fresh
     this.removeTradeArrows();
     console.log(`📐 TF tracking updated: ${timeframe}`);
   }
@@ -542,7 +601,12 @@ export class ChartDrawingModule {
     try {
       await this.loadAndRegisterGroup('signals');
 
-      const color = params.color ?? (params.type === 'buy' ? '#238636' : '#da3633');
+      // ✅ Use default color from settings if not explicitly passed
+      const color = params.color ?? (
+        params.type === 'buy'
+          ? this.defaultBuyArrowColor
+          : this.defaultSellArrowColor
+      );
 
       this.lineTools.createOrUpdateLineTool(
         'TradeArrow',

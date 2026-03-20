@@ -77,8 +77,7 @@
     /* ── TEXT ── */
     --text-primary:   #0a0c12;
     --text-secondary: #2e3347;
-    /* ✅ Fixed — was #6b7294 (too light on white cards) */
-    --text-muted:     #4a5270;
+    --text-muted:     #6b7294;
     /* ✅ Fixed — was #9ba3be (too light on light bg) */
     --text-dim:       #4a5068;
 

@@ -47,7 +47,7 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-card);
-  border-radius: 0;                  /* ✅ radius removed */
+  border-radius: 0;
   border: 1px solid var(--border);
 }
 
@@ -76,7 +76,7 @@
 /* ==================== TRADINGVIEW STYLING ==================== */
 .tv-lightweight-charts {
   height: 100% !important;
-  border-radius: 0 !important;       /* ✅ radius removed */
+  border-radius: 0 !important;
 }
 
 .tv-lightweight-charts > div { height: 100% !important; }
@@ -87,33 +87,13 @@
   border-color: var(--border) !important;
 }
 
-.tv-lightweight-charts .price-scale__axis {
-  color: var(--text-primary) !important;
-  font-family: var(--text-mono) !important;
-  font-size: 11px !important;
-}
-
 .tv-lightweight-charts .time-scale {
   background: var(--bg-base) !important;
   border-color: var(--border) !important;
 }
 
-.tv-lightweight-charts .time-scale__axis {
-  color: var(--text-primary) !important;
-  font-family: var(--text-sans) !important;
-  font-size: 11px !important;
-}
-
 .tv-lightweight-charts .crosshair-line {
   background-color: rgba(var(--accent-info-rgb), 0.3) !important;
-}
-
-.tv-lightweight-charts .crosshair-label {
-  background: var(--accent-info) !important;
-  color: #ffffff !important;
-  border: none !important;
-  font-family: var(--text-mono) !important;
-  font-size: 11px !important;
 }
 
 /* ==================== CURSOR OVERRIDE ==================== */
@@ -172,7 +152,6 @@
   flex-shrink: 0;
 }
 
-/* ✅ ctrl-right — journal removed, kept for future use */
 .ctrl-right {
   margin-left: auto;
   display: flex;
@@ -209,7 +188,7 @@
   font-weight: 700;
   min-width: 13px;
   height: 13px;
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -256,7 +235,7 @@
 
 /* ==================== SYMBOL TEXT ==================== */
 .symbol-text {
-  font-size: var(--text-base);
+  font-size: var(--text-md);
   font-weight: 700;
   color: var(--text-primary);
   font-family: var(--text-mono);
@@ -303,7 +282,7 @@
   min-width: 70px;
   background: var(--glass-gradient), var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--card-shadow);
   z-index: 1500;
   display: none;
@@ -333,7 +312,7 @@
   min-width: 140px;
   background: var(--glass-gradient), var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--card-shadow);
   z-index: 1500;
   display: none;
@@ -385,7 +364,7 @@
   width: 100%;
   max-height: 480px;
   background: var(--bg-card);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   box-shadow: var(--card-shadow);
   display: flex;
@@ -423,7 +402,7 @@
   height: 36px;
   background: var(--bg-base);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0 12px 0 32px;
   color: var(--text-primary);
   font-size: var(--text-lg);
@@ -442,7 +421,7 @@
   justify-content: center;
   background: var(--bg-base);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-md);
@@ -450,7 +429,6 @@
   flex-shrink: 0;
 }
 
-/* ✅ Close button — red on hover, consistent across all modals */
 .symbol-modal-close:hover {
   background: rgba(var(--accent-sell-rgb), 0.1);
   border-color: var(--accent-sell);
@@ -472,7 +450,7 @@
 .symbol-modal-group {
   background: var(--glass-gradient), var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   margin: 0 16px 8px;
   overflow: hidden;
 }
@@ -535,7 +513,7 @@
   font-size: var(--text-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   margin: 16px;
 }
 
@@ -544,8 +522,6 @@
 .symbol-modal-empty small { font-size: var(--text-sm); }
 
 /* ==================== INDICATORS MODAL ==================== */
-
-/* ✅ Centered, no backdrop, no blur */
 .indicators-modal-overlay {
   position: fixed;
   top: 0; left: 0;
@@ -566,7 +542,7 @@
   max-width: 100%;
   max-height: 80vh;
   background: var(--bg-card);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   box-shadow: var(--card-shadow);
   display: flex;
@@ -604,7 +580,7 @@
   height: 36px;
   background: var(--bg-base);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 0 12px 0 32px;
   color: var(--text-primary);
   font-size: var(--text-lg);
@@ -623,7 +599,7 @@
   justify-content: center;
   background: var(--bg-base);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-md);
@@ -631,7 +607,6 @@
   flex-shrink: 0;
 }
 
-/* ✅ Close button — red on hover, consistent across all modals */
 .indicators-modal-close:hover {
   background: rgba(var(--accent-sell-rgb), 0.1);
   border-color: var(--accent-sell);
@@ -654,7 +629,7 @@
 .indicators-favorites-section {
   background: var(--glass-gradient), var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   margin: 0 20px 8px;
   overflow: hidden;
 }
@@ -688,7 +663,7 @@
 .indicators-category {
   background: var(--glass-gradient), var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   margin: 0 20px 8px;
   overflow: hidden;
 }
@@ -778,7 +753,7 @@
   background: var(--bg-base);
   color: var(--text-muted);
   border: 1px solid var(--border-light);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 .indicator-badge.strategy {
@@ -816,7 +791,7 @@
   font-size: var(--text-base);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   margin: 8px 20px;
 }
 
@@ -849,7 +824,6 @@
   flex-shrink: 0;
 }
 
-/* ✅ Custom Strategy — left side, green accent */
 .indicators-btn-strategy,
 .indicators-btn-secondary {
   display: flex;
@@ -858,7 +832,7 @@
   padding: 8px 16px;
   background: rgba(var(--accent-buy-rgb), 0.08);
   border: 1px solid rgba(var(--accent-buy-rgb), 0.3);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--accent-buy);
   font-size: var(--text-base);
   font-weight: 600;
@@ -874,7 +848,6 @@
   transform: translateY(-1px);
 }
 
-/* ✅ Apply button — right side, blue accent */
 .indicators-btn-primary {
   display: flex;
   align-items: center;
@@ -882,7 +855,7 @@
   padding: 8px 20px;
   background: var(--accent-info);
   border: 1px solid var(--accent-info);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: #ffffff;
   font-size: var(--text-base);
   font-weight: 500;

@@ -16,7 +16,7 @@
 .elevated {
     background: var(--glass-gradient), var(--bg-elevated);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     transition: background-color 0.25s ease, border-color 0.25s ease;
 }
 
@@ -26,6 +26,7 @@
     margin-bottom: 8px;
 }
 
+/* xs — label */
 .pnl-label {
     font-size: var(--text-xs);
     color: var(--text-muted);
@@ -41,22 +42,27 @@
     margin-bottom: 6px;
 }
 
+/* display — hero P&L number */
 .pnl-value {
     font-family: var(--text-mono);
     font-size: var(--text-display);
     font-weight: 700;
     color: var(--text-primary);
+    white-space: nowrap;
+    line-height: 1;
 }
 
 .pnl-value.positive { color: var(--accent-buy) !important; }
 .pnl-value.negative { color: var(--accent-sell) !important; }
 
+/* xs — percentage badge */
 .pnl-percent {
     font-family: var(--text-mono);
     font-size: var(--text-xs);
     font-weight: 600;
     padding: 2px 8px;
     border-radius: 20px;
+    flex-shrink: 0;
 }
 
 .pnl-percent.positive {
@@ -71,6 +77,7 @@
     border: 1px solid rgba(var(--accent-sell-rgb), 0.25);
 }
 
+/* xs — today change */
 .pnl-change {
     display: flex;
     align-items: center;
@@ -96,18 +103,22 @@
 .metric-card {
     padding: 8px 10px;
     text-align: center;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
 }
 
+/* tiny — metric label */
 .metric-label {
-    font-size: var(--text-xs);
+    font-size: var(--text-sm);
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.3px;
     margin-bottom: 3px;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
+/* md — metric value */
 .metric-value {
     font-family: var(--text-mono);
     font-size: var(--text-md);
@@ -167,7 +178,7 @@
 
 .section-badge i { font-size: var(--text-xs); }
 
-/* ==================== BUY / SELL — ✅ SOLID ==================== */
+/* ==================== BUY / SELL ==================== */
 .button-group {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -176,7 +187,7 @@
 
 .trade-btn {
     padding: 14px 8px 11px;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     font-weight: 800;
     font-size: var(--text-base);
     letter-spacing: 1px;
@@ -191,6 +202,7 @@
     border: none;
 }
 
+/* xs — price under button */
 .trade-btn span {
     font-family: var(--text-mono);
     font-size: var(--text-xs);
@@ -199,7 +211,6 @@
     letter-spacing: 0.3px;
 }
 
-/* ✅ SOLID — was rgba ghost before */
 .trade-btn.buy {
     background: var(--accent-buy);
     color: #021a0e;
@@ -227,6 +238,7 @@
     margin-bottom: 8px;
 }
 
+/* xs — lot label */
 .lot-header-label {
     display: flex;
     align-items: center;
@@ -238,16 +250,14 @@
 
 .lot-header-label i { color: var(--accent-info); font-size: var(--text-xs); }
 
-/* ✅ NEW: replaces lot-display-small */
+/* 2xl — lot display number */
 .lot-display-big {
     font-family: var(--text-mono);
-    font-size: 1.1rem;
+    font-size: var(--text-2xl);
     font-weight: 700;
     color: var(--accent-info);
     line-height: 1;
 }
-
-/* ✅ REMOVED: .lot-input-row and .lot-manual — no longer needed */
 
 .lot-meta {
     display: flex;
@@ -255,12 +265,13 @@
     margin-bottom: 6px;
 }
 
+/* xs — max badge */
 .lot-max {
     font-size: var(--text-xs);
     color: var(--text-muted);
     background: var(--bg-base);
     padding: 2px 6px;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     border: 1px solid var(--border-light);
     font-family: var(--text-mono);
 }
@@ -299,6 +310,7 @@
     margin-bottom: 6px;
 }
 
+/* xs — slider min/max labels */
 .slider-labels span {
     font-size: var(--text-xs);
     color: var(--text-muted);
@@ -313,7 +325,7 @@
     padding: 5px 10px;
     background: rgba(var(--accent-sell-rgb), 0.08);
     border: 1px solid rgba(var(--accent-sell-rgb), 0.2);
-    border-radius: 6px;
+    border-radius: var(--radius-xs);
     font-size: var(--text-xs);
     color: var(--accent-sell);
     margin-bottom: 6px;
@@ -326,12 +338,13 @@
     margin-bottom: 0;
 }
 
+/* xs — preset buttons */
 .preset-btn {
     flex: 1;
     padding: 4px 0;
     background: var(--bg-base);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-xs);
     font-family: var(--text-mono);
     font-size: var(--text-xs);
     color: var(--text-secondary);
@@ -360,6 +373,7 @@
     margin-bottom: 6px;
 }
 
+/* xs — risk title */
 .risk-pct-title {
     display: flex;
     align-items: center;
@@ -373,6 +387,7 @@
 
 .risk-pct-title i { color: var(--accent-warning); font-size: var(--text-xs); }
 
+/* xs — risk badge */
 .risk-pct-badge {
     font-family: var(--text-mono);
     font-size: var(--text-xs);
@@ -390,12 +405,13 @@
     margin-bottom: 6px;
 }
 
+/* xs — risk preset buttons */
 .risk-pct-btn {
     flex: 1;
     padding: 4px 0;
     background: var(--bg-base);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-xs);
     font-family: var(--text-mono);
     font-size: var(--text-xs);
     color: var(--text-secondary);
@@ -417,17 +433,19 @@
     margin-bottom: 6px;
 }
 
+/* xs — risk label */
 .risk-pct-label {
     font-size: var(--text-xs);
     color: var(--text-muted);
     white-space: nowrap;
 }
 
+/* xs — risk input */
 .risk-pct-input {
     flex: 1;
     background: var(--bg-base);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-xs);
     padding: 4px 8px;
     color: var(--text-primary);
     font-family: var(--text-mono);
@@ -439,6 +457,7 @@
 
 .risk-pct-input:focus { border-color: var(--accent-warning); }
 
+/* xs — risk note */
 .risk-pct-note {
     font-size: var(--text-xs);
     color: var(--text-muted);
@@ -469,6 +488,7 @@
     margin-bottom: 8px;
 }
 
+/* xs — TP/SL title */
 .tpsl-block-title {
     display: flex;
     align-items: center;
@@ -484,12 +504,13 @@
 
 .tpsl-toggles { display: flex; gap: 4px; }
 
+/* xs — TP/SL toggle buttons */
 .tpsl-toggle {
     display: flex;
     align-items: center;
     gap: 3px;
     padding: 2px 7px;
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     border: 1px solid var(--border);
     background: var(--bg-base);
     font-size: var(--text-xs);
@@ -512,6 +533,7 @@
     color: var(--accent-sell);
 }
 
+/* xs — empty state */
 .tpsl-empty {
     padding: 6px 10px;
     font-size: var(--text-xs);
@@ -526,7 +548,7 @@
     gap: 6px;
     padding: 5px 8px;
     background: var(--bg-base);
-    border-radius: 6px;
+    border-radius: var(--radius-xs);
     border: 1px solid var(--border-light);
     margin-bottom: 4px;
 }
@@ -534,6 +556,7 @@
 .tpsl-row.tp { border-left: 2px solid var(--accent-buy); }
 .tpsl-row.sl { border-left: 2px solid var(--accent-sell); }
 
+/* xs — TP/SL row label */
 .tpsl-row-label {
     display: flex;
     align-items: center;
@@ -547,6 +570,7 @@
 .tpsl-row-label.tp { color: var(--accent-buy); }
 .tpsl-row-label.sl { color: var(--accent-sell); }
 
+/* xs — TP/SL input */
 .tpsl-input {
     flex: 1;
     background: transparent;
@@ -559,6 +583,7 @@
     min-width: 0;
 }
 
+/* xs — pip display */
 .tpsl-pips {
     font-family: var(--text-mono);
     font-size: var(--text-xs);
@@ -579,8 +604,10 @@
     padding: 4px 0;
 }
 
+/* xs — R/R label */
 .rr-label { font-size: var(--text-xs); color: var(--text-muted); }
 
+/* xs — R/R value */
 .rr-value {
     font-family: var(--text-mono);
     font-size: var(--text-xs);
@@ -595,12 +622,13 @@
     border-top: 1px solid var(--border);
 }
 
+/* xs — pip preset buttons */
 .pip-preset-btn {
     flex: 1;
     padding: 3px 0;
     background: var(--bg-base);
     border: 1px solid var(--border-light);
-    border-radius: 4px;
+    border-radius: var(--radius-xs);
     font-size: var(--text-xs);
     color: var(--text-muted);
     cursor: pointer;
@@ -626,17 +654,21 @@
 .stat-item {
     background: var(--bg-base);
     border: 1px solid var(--border-light);
-    border-radius: 6px;
+    border-radius: var(--radius-xs);
     padding: 5px 4px;
     text-align: center;
 }
 
+/* xs — stat label */
 .stat-label {
     font-size: var(--text-xs);
     color: var(--text-muted);
     margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
 
+/* xs — stat value */
 .stat-value {
     font-family: var(--text-mono);
     font-size: var(--text-xs);
@@ -653,13 +685,14 @@
     gap: 6px;
 }
 
+/* xs — action buttons */
 .action-btn {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 4px;
     padding: 8px 4px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     color: var(--text-secondary);
     font-size: var(--text-xs);
     font-weight: 600;
@@ -692,7 +725,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 12px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all 0.15s ease;
     font-family: var(--text-sans);
@@ -707,6 +740,7 @@
     color: var(--text-primary);
 }
 
+/* base — positions label */
 .positions-btn-left {
     display: flex;
     align-items: center;
@@ -723,6 +757,7 @@
     gap: 6px;
 }
 
+/* xs — positions count badge */
 .positions-count {
     background: var(--accent-info);
     color: #ffffff;
