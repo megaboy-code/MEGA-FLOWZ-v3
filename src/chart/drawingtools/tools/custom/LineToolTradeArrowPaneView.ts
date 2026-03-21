@@ -12,28 +12,28 @@ import {
     BaseLineTool,
     LineToolPaneView,
     CompositeRenderer,
-    SegmentRenderer,
-    TextRenderer,
+    PolygonRenderer,
+    PolygonRendererData,
     AnchorPoint,
     PaneCursorType,
     LineJoin,
     LineCap,
     LineEnd,
-    BoxVerticalAlignment,
-    BoxHorizontalAlignment,
-    TextAlignment,
     IPrimitivePaneRenderer,
 } from 'lightweight-charts-line-tools-core';
 
 import { LineToolTradeArrow, TradeArrowFullOptions } from './LineToolTradeArrow';
 
+// ================================================================
+// 🎯 TRADE ARROW — Pane View
+// ================================================================
+
 export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<HorzScaleItem> {
 
-    private _triLeft:   SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
-    private _triRight:  SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
-    private _triBase:   SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
-    private _stem:      SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
-    private _priceLine: SegmentRenderer<HorzScaleItem> = new SegmentRenderer();
+    // ✅ PolygonRenderer for filled solid arrow head
+    private _arrowRenderer: PolygonRenderer<HorzScaleItem> = new PolygonRenderer();
+    // ✅ PolygonRenderer for filled solid stem
+    private _stemRenderer: PolygonRenderer<HorzScaleItem> = new PolygonRenderer();
 
     private _isHovered: boolean = false;
 
@@ -56,6 +56,10 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         this._invalidated = true;
     }
 
+    // ================================================================
+    // Core rendering
+    // ================================================================
+
     protected override _updateImpl(height: number, width: number): void {
         this._invalidated = false;
 
@@ -73,40 +77,70 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
         const arrow  = options.arrow;
         const color  = arrow.color;
         const isBuy  = arrow.type === 'buy';
-        const size   = arrow.size;
-        const stem   = arrow.stemHeight;
 
-        const cx          = anchor.x as number;
-        const cy          = anchor.y as number;
-        const triHeight   = size * 1.4;
-        const labelOffset = 6;
+        const cx = anchor.x as number;
+        const cy = anchor.y as number; // ✅ Tip is at the exact price level
 
-        let tipY:        number;
-        let baseY:       number;
-        let stemTopY:    number;
-        let stemBottomY: number;
-        let labelY:      number;
+        // ── GEOMETRY ──────────────────────────────────────────────
+        //
+        // BUY (points UP):
+        //   tip at cy (exact price)          ← anchor point
+        //   triangle grows downward from tip
+        //   stem below triangle
+        //
+        // SELL (points DOWN):
+        //   tip at cy (exact price)          ← anchor point
+        //   triangle grows upward from tip
+        //   stem above triangle
+
+        const triHeight = 14; // Triangle height in pixels
+        const triWidth  = 10; // Triangle half-width in pixels
+        const stemW     = 3;  // Stem half-width in pixels
+        const stemH     = 12; // Stem height in pixels
+
+        let triP0: AnchorPoint; // tip
+        let triP1: AnchorPoint; // base left
+        let triP2: AnchorPoint; // base right
+
+        let stemP0: AnchorPoint; // stem top-left
+        let stemP1: AnchorPoint; // stem top-right
+        let stemP2: AnchorPoint; // stem bottom-right
+        let stemP3: AnchorPoint; // stem bottom-left
 
         if (isBuy) {
-            baseY       = cy - stem;
-            tipY        = baseY - triHeight;
-            stemTopY    = baseY;
-            stemBottomY = cy;
-            labelY      = cy + labelOffset;
+            // ✅ Tip at top (exact price), base below, stem below base
+            const baseY   = cy + triHeight;
+            const stemTopY = baseY;
+            const stemBotY = baseY + stemH;
+
+            triP0 = new AnchorPoint(cx            as Coordinate, cy      as Coordinate, 0);
+            triP1 = new AnchorPoint((cx - triWidth) as Coordinate, baseY  as Coordinate, 0);
+            triP2 = new AnchorPoint((cx + triWidth) as Coordinate, baseY  as Coordinate, 0);
+
+            stemP0 = new AnchorPoint((cx - stemW) as Coordinate, stemTopY as Coordinate, 0);
+            stemP1 = new AnchorPoint((cx + stemW) as Coordinate, stemTopY as Coordinate, 0);
+            stemP2 = new AnchorPoint((cx + stemW) as Coordinate, stemBotY as Coordinate, 0);
+            stemP3 = new AnchorPoint((cx - stemW) as Coordinate, stemBotY as Coordinate, 0);
         } else {
-            baseY       = cy + stem;
-            tipY        = baseY + triHeight;
-            stemTopY    = cy;
-            stemBottomY = baseY;
-            labelY      = tipY + labelOffset;
+            // ✅ Tip at bottom (exact price), base above, stem above base
+            const baseY    = cy - triHeight;
+            const stemBotY = baseY;
+            const stemTopY = baseY - stemH;
+
+            triP0 = new AnchorPoint(cx              as Coordinate, cy      as Coordinate, 0);
+            triP1 = new AnchorPoint((cx - triWidth)  as Coordinate, baseY  as Coordinate, 0);
+            triP2 = new AnchorPoint((cx + triWidth)  as Coordinate, baseY  as Coordinate, 0);
+
+            stemP0 = new AnchorPoint((cx - stemW) as Coordinate, stemTopY as Coordinate, 0);
+            stemP1 = new AnchorPoint((cx + stemW) as Coordinate, stemTopY as Coordinate, 0);
+            stemP2 = new AnchorPoint((cx + stemW) as Coordinate, stemBotY as Coordinate, 0);
+            stemP3 = new AnchorPoint((cx - stemW) as Coordinate, stemBotY as Coordinate, 0);
         }
 
-        const baseLeft  = cx - size;
-        const baseRight = cx + size;
-
+        // ── SHARED OPTIONS ─────────────────────────────────────────
         const lineOpts = {
             color,
-            width:  2 as any,
+            width:  1 as any,
             style:  LineStyle.Solid,
             extend: { left: false, right: false },
             end:    { left: LineEnd.Normal, right: LineEnd.Normal },
@@ -119,154 +153,33 @@ export class LineToolTradeArrowPaneView<HorzScaleItem> extends LineToolPaneView<
             toolDefaultDragCursor:  PaneCursorType.Pointer,
         };
 
-        // ✅ 3 args — working version
-        this._triLeft.setData({
-            points: [
-                new AnchorPoint(cx       as Coordinate, tipY  as Coordinate, 0),
-                new AnchorPoint(baseLeft as Coordinate, baseY as Coordinate, 0),
-            ],
-            line: lineOpts,
+        // ── FILLED TRIANGLE ────────────────────────────────────────
+        const arrowData: PolygonRendererData = {
+            points:                  [triP0, triP1, triP2],
+            line:                    lineOpts,
+            background:              { color }, // ✅ Solid fill
+            hitTestBackground:       true,
+            enclosePerimeterWithLine: true,
             ...cursor,
-        });
+        };
 
-        this._triRight.setData({
-            points: [
-                new AnchorPoint(cx        as Coordinate, tipY  as Coordinate, 0),
-                new AnchorPoint(baseRight as Coordinate, baseY as Coordinate, 0),
-            ],
-            line: lineOpts,
+        this._arrowRenderer.setData(arrowData);
+        r.append(this._arrowRenderer);
+
+        // ── FILLED STEM ────────────────────────────────────────────
+        const stemData: PolygonRendererData = {
+            points:                  [stemP0, stemP1, stemP2, stemP3],
+            line:                    lineOpts,
+            background:              { color }, // ✅ Solid fill
+            hitTestBackground:       true,
+            enclosePerimeterWithLine: true,
             ...cursor,
-        });
+        };
 
-        this._triBase.setData({
-            points: [
-                new AnchorPoint(baseLeft  as Coordinate, baseY as Coordinate, 0),
-                new AnchorPoint(baseRight as Coordinate, baseY as Coordinate, 0),
-            ],
-            line: lineOpts,
-            ...cursor,
-        });
-
-        this._stem.setData({
-            points: [
-                new AnchorPoint(cx as Coordinate, stemTopY    as Coordinate, 0),
-                new AnchorPoint(cx as Coordinate, stemBottomY as Coordinate, 0),
-            ],
-            line: lineOpts,
-            ...cursor,
-        });
-
-        r.append(this._triLeft);
-        r.append(this._triRight);
-        r.append(this._triBase);
-        r.append(this._stem);
-
-        // ✅ Fresh TextRenderer every frame
-        const labelText = new TextRenderer<HorzScaleItem>();
-        labelText.setData({
-            points: [new AnchorPoint(cx as Coordinate, labelY as Coordinate, 0)],
-            text: {
-                value:                      isBuy ? 'Buy' : 'Sell',
-                padding:                    0,
-                wordWrapWidth:              0,
-                forceTextAlign:             false,
-                forceCalculateMaxLineWidth: false,
-                alignment:                  TextAlignment.Center,
-                font: {
-                    color,
-                    size:   9,
-                    bold:   true,
-                    italic: false,
-                    family: 'sans-serif',
-                },
-                box: {
-                    scale: 1,
-                    angle: 0,
-                    alignment: {
-                        vertical:   BoxVerticalAlignment.Top,
-                        horizontal: BoxHorizontalAlignment.Center,
-                    },
-                    background: { color: 'rgba(0,0,0,0)', inflation: { x: 0, y: 0 } },
-                    border: {
-                        color:     'rgba(0,0,0,0)',
-                        width:     0,
-                        style:     LineStyle.Solid,
-                        radius:    0,
-                        highlight: false,
-                    },
-                    shadow: undefined,
-                },
-            },
-            hitTestBackground: true,
-            ...cursor,
-        });
-        r.append(labelText);
-
-        const showPriceLine =
-            arrow.priceLine === 'always' ||
-            (arrow.priceLine === 'hover' && this._isHovered);
-
-        if (showPriceLine && arrow.priceLabel) {
-
-            this._priceLine.setData({
-                points: [
-                    new AnchorPoint(0     as Coordinate, cy as Coordinate, 0),
-                    new AnchorPoint(width as Coordinate, cy as Coordinate, 0),
-                ],
-                line: {
-                    color,
-                    width:  1 as any,
-                    style:  1 as any,
-                    extend: { left: false, right: false },
-                    end:    { left: LineEnd.Normal, right: LineEnd.Normal },
-                    join:   LineJoin.Miter,
-                    cap:    LineCap.Butt,
-                },
-                ...cursor,
-            });
-            r.append(this._priceLine);
-
-            const axisLabel = new TextRenderer<HorzScaleItem>();
-            axisLabel.setData({
-                points: [new AnchorPoint((width - 4) as Coordinate, cy as Coordinate, 0)],
-                text: {
-                    value:                      arrow.priceLabel,
-                    padding:                    4,
-                    wordWrapWidth:              0,
-                    forceTextAlign:             false,
-                    forceCalculateMaxLineWidth: false,
-                    alignment:                  TextAlignment.Center,
-                    font: {
-                        color:  '#ffffff',
-                        size:   10,
-                        bold:   false,
-                        italic: false,
-                        family: 'sans-serif',
-                    },
-                    box: {
-                        scale: 1,
-                        angle: 0,
-                        alignment: {
-                            vertical:   BoxVerticalAlignment.Middle,
-                            horizontal: BoxHorizontalAlignment.Right,
-                        },
-                        background: { color, inflation: { x: 4, y: 2 } },
-                        border: {
-                            color,
-                            width:     1,
-                            style:     LineStyle.Solid,
-                            radius:    2,
-                            highlight: false,
-                        },
-                        shadow: undefined,
-                    },
-                },
-                hitTestBackground: false,
-                ...cursor,
-            });
-            r.append(axisLabel);
-        }
+        this._stemRenderer.setData(stemData);
+        r.append(this._stemRenderer);
     }
 
+    // ✅ No anchors — programmatic tool
     protected override _addAnchors(): void {}
 }

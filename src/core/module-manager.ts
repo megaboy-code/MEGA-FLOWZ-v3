@@ -13,7 +13,7 @@ import { AlertsModule } from '../alerts/alerts-module';
 import { WebSocketMessage, AccountInfo, PositionData } from '../types';
 
 declare global {
-    interface Window {}
+    interface Window { }
 }
 
 export class ModuleManager {
@@ -32,7 +32,7 @@ export class ModuleManager {
     private notifications = Notification;
     private panels = Panels;
 
-    constructor(private connectionManager: ConnectionManager) {}
+    constructor(private connectionManager: ConnectionManager) { }
 
     // ==================== INITIALIZATION ====================
 
@@ -62,6 +62,53 @@ export class ModuleManager {
         this.notifications.destroy();
     }
 
+    // ==================== HELPERS ====================
+
+    // ✅ Resolve correct bar timestamp for arrow placement
+    // Rounds backend timestamp down to nearest bar boundary
+    // M5 special case: core renders one bar ahead on M5 — subtract one interval to compensate
+    private resolveArrowTimestamp(dataTimestamp?: number): number {
+        const latestBar = this.chart?.getDataManager()?.getLatestOHLC();
+        const latestBarTime = latestBar?.time as number;
+
+        if (!dataTimestamp || dataTimestamp <= 0) {
+            return latestBarTime ?? Math.floor(Date.now() / 1000);
+        }
+
+        const tf = this.connectionManager.getCurrentTimeframe();
+        const tfSeconds: Record<string, number> = {
+            M1: 60,
+            M5: 300,
+            M15: 900,
+            H1: 3600,
+            H4: 14400,
+            D1: 86400,
+        };
+
+        const interval = tfSeconds[tf] ?? 60;
+
+        // ✅ Round down to nearest bar boundary
+        const rounded = Math.floor(dataTimestamp / interval) * interval;
+
+        // ✅ If rounded is ahead of latest bar — use latest bar
+        if (latestBarTime && rounded > latestBarTime) {
+            return latestBarTime;
+        }
+
+        // ✅ M5 special case — race condition between trade confirmation and chart data update
+        // When a new M5 bar opens (e.g. 12:55) and a trade executes in the first few seconds,
+        // the trade confirmation arrives BEFORE the frontend receives the new bar via WebSocket.
+        // So getLatestOHLC() still returns the previous bar (12:50) not the forming bar (12:55).
+        // The core then places the arrow at 12:50 but renders it visually one bar ahead in blank space.
+        // Fix: subtract one interval (5 min) so the core compensates and shows it on the correct candle.
+
+        if (tf === 'M5' && latestBarTime && rounded === latestBarTime) {
+            return rounded - interval;
+        }
+
+        return rounded;
+    }
+
     // ==================== CONNECTION CALLBACKS ====================
 
     private setupConnectionCallbacks(): void {
@@ -75,8 +122,8 @@ export class ModuleManager {
         this.connectionManager.onTickData((data: WebSocketMessage) => {
             document.dispatchEvent(new CustomEvent('price-update', {
                 detail: {
-                    bid:    data.bid,
-                    ask:    data.ask,
+                    bid: data.bid,
+                    ask: data.ask,
                     symbol: data.symbol,
                     spread: data.spread,
                     change: data.change
@@ -103,14 +150,14 @@ export class ModuleManager {
                 );
 
                 if (data.direction && data.price) {
-                    const type      = data.direction === 'BUY' ? 'buy' : 'sell';
-                    const latestBar = this.chart?.getDataManager()?.getLatestOHLC(); const timestamp = (latestBar?.time as number) ?? Math.floor(Date.now() / 1000);
+                    const type = data.direction === 'BUY' ? 'buy' : 'sell';
+                    const timestamp = this.resolveArrowTimestamp(Number(data.timestamp));
 
                     this.chart?.getDrawingModule()?.placeTradeArrow({
-                        id:         `trade-arrow-${type}-${timestamp}`,
+                        id: `trade-arrow-${type}-${timestamp}`,
                         type,
                         timestamp,
-                        price:      Number(data.price),
+                        price: Number(data.price),
                         priceLabel: String(data.price),
                     });
                 }
@@ -158,14 +205,14 @@ export class ModuleManager {
                     }));
 
                     if (data.direction && data.price) {
-                        const type      = data.direction === 'BUY' ? 'buy' : 'sell';
-                        const timestamp = Number(data.timestamp) || Math.floor(Date.now() / 1000);
+                        const type = data.direction === 'BUY' ? 'buy' : 'sell';
+                        const timestamp = this.resolveArrowTimestamp(Number(data.timestamp));
 
                         this.chart?.getDrawingModule()?.placeTradeArrow({
-                            id:         `trade-arrow-${type}-${timestamp}`,
+                            id: `trade-arrow-${type}-${timestamp}`,
                             type,
                             timestamp,
-                            price:      Number(data.price),
+                            price: Number(data.price),
                             priceLabel: String(data.price),
                         });
                     }
@@ -226,9 +273,9 @@ export class ModuleManager {
             const parts = command.split('_');
             if (parts.length >= 5) {
                 const direction = parts[1] as 'BUY' | 'SELL';
-                const symbol    = parts[2];
-                const volume    = parseFloat(parts[3]);
-                const price     = parseFloat(parts[4]);
+                const symbol = parts[2];
+                const volume = parseFloat(parts[3]);
+                const price = parseFloat(parts[4]);
                 this.connectionManager.executeTrade(direction, symbol, volume, price, tp ?? null, sl ?? null);
             } else {
                 this.connectionManager.sendCommand(command);
@@ -296,7 +343,7 @@ export class ModuleManager {
         document.addEventListener('tab-switched', (e: Event) => {
             const { tabId } = (e as CustomEvent).detail;
             if (tabId === 'strategy') this.loadStrategyModule();
-            if (tabId === 'journal')  this.loadJournalModule();
+            if (tabId === 'journal') this.loadJournalModule();
         });
 
         document.addEventListener('hotkey-panel-switch', (e: Event) => {
@@ -421,28 +468,28 @@ export class ModuleManager {
     // ==================== NOTIFICATION HELPER ====================
 
     public showNotification(
-        title:   string,
+        title: string,
         message: string,
-        type:    'success' | 'error' | 'warning' | 'info' = 'info'
+        type: 'success' | 'error' | 'warning' | 'info' = 'info'
     ): void {
         switch (type) {
             case 'success': this.notifications.success(message, { title }); break;
-            case 'error':   this.notifications.error(message, { title });   break;
+            case 'error': this.notifications.error(message, { title }); break;
             case 'warning': this.notifications.warning(message, { title }); break;
-            case 'info':    this.notifications.info(message, { title });    break;
+            case 'info': this.notifications.info(message, { title }); break;
         }
     }
 
     // ==================== GETTERS ====================
 
-    public getChart(): ChartModuleImpl | null                 { return this.chart; }
-    public getTradingModule()                                  { return this.tradingInstance; }
-    public getJournalModule()                                  { return this.journalInstance; }
-    public getStrategyModule()                                 { return this.strategyInstance; }
-    public getWatchlistModule(): WatchlistModule | null        { return this.watchlistInstance; }
-    public getCalendarModule(): EconomicCalendarModule | null  { return this.calendarInstance; }
-    public getAlertsModule(): AlertsModule | null              { return this.alertsInstance; }
-    public getConnectionManager(): ConnectionManager           { return this.connectionManager; }
-    public getPanelsModule(): typeof Panels                    { return this.panels; }
-    public getNotificationModule(): typeof Notification        { return this.notifications; }
+    public getChart(): ChartModuleImpl | null { return this.chart; }
+    public getTradingModule() { return this.tradingInstance; }
+    public getJournalModule() { return this.journalInstance; }
+    public getStrategyModule() { return this.strategyInstance; }
+    public getWatchlistModule(): WatchlistModule | null { return this.watchlistInstance; }
+    public getCalendarModule(): EconomicCalendarModule | null { return this.calendarInstance; }
+    public getAlertsModule(): AlertsModule | null { return this.alertsInstance; }
+    public getConnectionManager(): ConnectionManager { return this.connectionManager; }
+    public getPanelsModule(): typeof Panels { return this.panels; }
+    public getNotificationModule(): typeof Notification { return this.notifications; }
 }
