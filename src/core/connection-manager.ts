@@ -38,7 +38,7 @@ export class ConnectionManager {
     constructor() {
         console.log('📡 Connection Manager Initialized');
 
-        this.currentSymbol = localStorage.getItem('last_symbol') || 'EURUSD';
+        this.currentSymbol    = localStorage.getItem('last_symbol')    || 'EURUSD';
         this.currentTimeframe = localStorage.getItem('last_timeframe') || 'H1';
 
         console.log(`📡 Loaded: ${this.currentSymbol} @ ${this.currentTimeframe}`);
@@ -67,7 +67,7 @@ export class ConnectionManager {
 
     public connect(): void {
         if (this.ws) {
-            if (this.ws.readyState === WebSocket.OPEN) return;
+            if (this.ws.readyState === WebSocket.OPEN)       return;
             if (this.ws.readyState === WebSocket.CONNECTING) return;
         }
 
@@ -81,9 +81,9 @@ export class ConnectionManager {
         if (this.ws) {
             this.ws.onclose = null;
             this.ws.close();
-            this.ws = null;
-            this.wsConnected = false;
-            this.currentSubscription = null;
+            this.ws                   = null;
+            this.wsConnected          = false;
+            this.currentSubscription  = null;
             this.notifyConnectionStatus('disconnected');
         }
     }
@@ -106,8 +106,8 @@ export class ConnectionManager {
     // ==================== SYMBOL / TIMEFRAME ====================
 
     public setSymbol(symbol: string): void {
-        const oldSymbol = this.currentSymbol;
-        this.currentSymbol = symbol;
+        const oldSymbol       = this.currentSymbol;
+        this.currentSymbol    = symbol;
         localStorage.setItem('last_symbol', symbol);
 
         if (this.wsConnected) {
@@ -123,7 +123,7 @@ export class ConnectionManager {
     }
 
     public setTimeframe(timeframe: string): void {
-        const normalized = this.normalizeTimeframe(timeframe);
+        const normalized      = this.normalizeTimeframe(timeframe);
         this.currentTimeframe = normalized;
         localStorage.setItem('last_timeframe', normalized);
 
@@ -141,13 +141,13 @@ export class ConnectionManager {
 
     // ==================== GETTERS ====================
 
-    public getCurrentSymbol(): string { return this.currentSymbol; }
-    public getCurrentTimeframe(): string { return this.currentTimeframe; }
+    public getCurrentSymbol(): string       { return this.currentSymbol; }
+    public getCurrentTimeframe(): string    { return this.currentTimeframe; }
     public getLastBidPrice(): number | null { return this.lastBidPrice; }
     public getLastAskPrice(): number | null { return this.lastAskPrice; }
-    public isConnected(): boolean { return this.wsConnected; }
-    public isMT5Connected(): boolean { return this.mt5Connected; }
-    public getMT5StatusText(): string { return this.mt5StatusText; }
+    public isConnected(): boolean           { return this.wsConnected; }
+    public isMT5Connected(): boolean        { return this.mt5Connected; }
+    public getMT5StatusText(): string       { return this.mt5StatusText; }
 
     // ==================== TRADING COMMANDS ====================
 
@@ -159,21 +159,26 @@ export class ConnectionManager {
         tp: number | null = null,
         sl: number | null = null
     ): void {
-        // ✅ sl first, tp second to match trade_handler parsing
+        // ✅ sl first, tp second — matches trade_handler parsing
         const slStr = sl !== null ? String(sl) : '0';
         const tpStr = tp !== null ? String(tp) : '0';
         this.sendCommand(`TRADE_${direction}_${symbol}_${volume}_${price}_${slStr}_${tpStr}`);
     }
 
-    public closeAllPositions(): void { this.sendCommand('CLOSE_ALL'); }
-    public closePosition(ticket: string): void { this.sendCommand(`CLOSE_POSITION_${ticket}`); }
-    public getPositions(): void { this.sendCommand('GET_POSITIONS'); }
-    public getAccountInfo(): void { this.sendCommand('GET_ACCOUNT_INFO'); }
-    public clearCache(): void { this.sendCommand('CLEAR_CACHE'); }
+    public closeAllPositions(): void              { this.sendCommand('CLOSE_ALL'); }
+    public closePosition(ticket: string): void    { this.sendCommand(`CLOSE_POSITION_${ticket}`); }
+    public getPositions(): void                   { this.sendCommand('GET_POSITIONS'); }
+    public getAccountInfo(): void                 { this.sendCommand('GET_ACCOUNT_INFO'); }
+    public clearCache(): void                     { this.sendCommand('CLEAR_CACHE'); }
 
     // ==================== STRATEGY COMMANDS ====================
 
-    public deployStrategy(strategyType: string, symbol: string, timeframe: string, params: object): void {
+    public deployStrategy(
+        strategyType: string,
+        symbol: string,
+        timeframe: string,
+        params: object): void
+    {
         const tf = this.normalizeTimeframe(timeframe);
         this.sendCommand(`DEPLOY_STRATEGY_${strategyType}_${symbol}_${tf}_${JSON.stringify(params)}`);
     }
@@ -188,7 +193,13 @@ export class ConnectionManager {
 
     public getActiveStrategies(): void { this.sendCommand('GET_ACTIVE_STRATEGIES'); }
 
-    public backtestStrategy(strategyType: string, symbol: string, timeframe: string, days: number, params: object): void {
+    public backtestStrategy(
+        strategyType: string,
+        symbol: string,
+        timeframe: string,
+        days: number,
+        params: object): void
+    {
         const tf = this.normalizeTimeframe(timeframe);
         this.sendCommand(`BACKTEST_STRATEGY_${strategyType}_${symbol}_${tf}_${days}_${JSON.stringify(params)}`);
     }
@@ -259,7 +270,7 @@ export class ConnectionManager {
 
         this.ws.onclose = () => {
             console.log('🔌 WebSocket disconnected');
-            this.wsConnected = false;
+            this.wsConnected         = false;
             this.currentSubscription = null;
             this.notifyConnectionStatus('disconnected');
 
@@ -282,6 +293,7 @@ export class ConnectionManager {
         if (!data || !data.type) return;
 
         switch (data.type) {
+
             case 'connection_status':
                 this.handleConnectionStatus(data);
                 break;
@@ -299,6 +311,9 @@ export class ConnectionManager {
                 break;
 
             case 'trade_executed':
+            case 'position_modified':  // ✅ added
+            case 'position_closed':    // ✅ added
+            case 'positions_closed':   // ✅ added
                 if (this.callbacks.onTradeExecuted) this.callbacks.onTradeExecuted(data);
                 break;
 
@@ -335,8 +350,8 @@ export class ConnectionManager {
     }
 
     private handleConnectionStatus(data: WebSocketMessage): void {
-        this.mt5Connected = data.data?.mt5_connected || false;
-        this.mt5StatusText = data.data?.status_text || 'Unknown';
+        this.mt5Connected  = data.data?.mt5_connected || false;
+        this.mt5StatusText = data.data?.status_text   || 'Unknown';
 
         console.log(`📡 MT5: ${this.mt5Connected ? '✅' : '❌'} ${this.mt5StatusText}`);
 
@@ -345,7 +360,9 @@ export class ConnectionManager {
         }
     }
 
-    private notifyConnectionStatus(status: 'connected' | 'disconnected' | 'connecting' | 'error'): void {
+    private notifyConnectionStatus(
+        status: 'connected' | 'disconnected' | 'connecting' | 'error'
+    ): void {
         console.log(`🔌 Status: ${status}`);
         if (this.callbacks.onConnectionStatus) {
             this.callbacks.onConnectionStatus(status);
