@@ -1097,6 +1097,8 @@ export class TradingModule {
             if (existing) {
                 const cells = existing.querySelectorAll('td');
                 if (cells[4]) cells[4].textContent = String(pos.current_price ?? '—');
+                if (cells[5]) cells[5].textContent = String(pos.sl ?? '—');  // ✅ sl
+                if (cells[6]) cells[6].textContent = String(pos.tp ?? '—');  // ✅ tp
                 if (cells[7]) {
                     cells[7].textContent = pnlStr;
                     cells[7].className   = pnlClass;
