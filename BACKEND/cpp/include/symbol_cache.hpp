@@ -32,6 +32,17 @@ inline int64_t tfSeconds(const std::string& timeframe) {
     return static_cast<int64_t>(tfMinutes(timeframe)) * 60;
 }
 
+// ── Timeframe sort order ──
+inline int tfOrder(const std::string& tf) {
+    if (tf == "M1")  return 1;
+    if (tf == "M5")  return 2;
+    if (tf == "M15") return 3;
+    if (tf == "H1")  return 4;
+    if (tf == "H4")  return 5;
+    if (tf == "D1")  return 6;
+    return 99;
+}
+
 struct CachedSymbol {
     std::string symbol;
     std::string detected;
@@ -76,7 +87,8 @@ public:
         sym.tf_buffers[timeframe] = candles;
 
         std::cout << "Cached: " << symbol << " " << timeframe
-                  << " (" << candles.size() << " candles)" << std::endl;
+                  << " (" << candles.size() << " candles)"
+                  << std::endl;
     }
 
     // ── Get candles for TF ──
@@ -126,20 +138,11 @@ public:
 
     // ================================================================
     // M1 CANDLE UPDATE → RECOMPUTE ALL CACHED TFs
-    //
-    // Called every 800ms with latest M1 candle from MT5
-    // M1 is the anchor — all HTF candles derived from it
-    //
-    // Logic per cached TF:
-    //   M1 candle time inside TF period?
-    //     YES → update TF last candle high/low/close/volume
-    //     NO  → new TF candle started → append
     // ================================================================
     void processM1Update(
         const std::string& symbol,
         const Candle& m1)
     {
-        // Ignore empty candle
         if (m1.time == 0) return;
 
         std::lock_guard<std::mutex> lock(mtx);
@@ -149,7 +152,6 @@ public:
 
         auto& sym_data = sym_it->second;
 
-        // ── Process each cached TF ──
         for (auto& [tf, buffer] : sym_data.tf_buffers) {
             if (buffer.empty()) continue;
 
@@ -158,26 +160,22 @@ public:
             int64_t candle_end = last.time + period;
 
             if (m1.time < candle_end) {
-                // ── Same TF candle period ──
-                // Update high/low/close/volume from M1
-                if (m1.high > last.high)  last.high  = m1.high;
-                if (m1.low  < last.low)   last.low   = m1.low;
+                // ── Same TF candle ──
+                if (m1.high > last.high) last.high  = m1.high;
+                if (m1.low  < last.low)  last.low   = m1.low;
                 last.close  = m1.close;
                 last.volume += m1.volume;
 
             } else {
-                // ── New TF candle period ──
-                // Calculate aligned candle start time
+                // ── New TF candle ──
                 int64_t new_time = last.time + period;
-
-                // Handle multiple missed periods
                 while (new_time + period <= m1.time) {
                     new_time += period;
                 }
 
                 Candle new_candle;
                 new_candle.time   = new_time;
-                new_candle.open   = m1.open;   // M1 open = TF open
+                new_candle.open   = m1.open;
                 new_candle.high   = m1.high;
                 new_candle.low    = m1.low;
                 new_candle.close  = m1.close;
@@ -185,7 +183,6 @@ public:
 
                 buffer.push_back(new_candle);
 
-                // Keep buffer at 2000
                 if (buffer.size() > 2000) {
                     buffer.pop_front();
                 }
@@ -211,28 +208,53 @@ public:
     void clearSymbol(const std::string& symbol) {
         std::lock_guard<std::mutex> lock(mtx);
         cache.erase(symbol);
-        std::cout << "Cache cleared: " << symbol << std::endl;
     }
 
     // ── Clear all ──
     void clearAll() {
         std::lock_guard<std::mutex> lock(mtx);
         cache.clear();
-        std::cout << "Cache cleared: all" << std::endl;
     }
 
-    // ── Debug stats ──
-    void printStats() {
+    // ================================================================
+    // PRINT ACTIVE SYMBOLS — called after every subscribe
+    // Shows all cached symbols and their timeframes vertically
+    // ================================================================
+    void printActiveSymbols() {
         std::lock_guard<std::mutex> lock(mtx);
-        std::cout << "=== Symbol Cache ===" << std::endl;
+
+        if (cache.empty()) return;
+
+        std::cout << "----------------------------" << std::endl;
+        std::cout << "Active Symbols:" << std::endl;
+
         for (auto& [sym, data] : cache) {
-            std::cout << sym << " (" << data.detected << "):" << std::endl;
+            // ── Collect and sort TFs ──
+            std::vector<std::string> tfs;
             for (auto& [tf, buf] : data.tf_buffers) {
-                std::cout << "  " << tf << ": "
-                          << buf.size() << " candles" << std::endl;
+                tfs.push_back(tf);
             }
+
+            // ── Sort by timeframe order ──
+            std::sort(tfs.begin(), tfs.end(),
+                [](const std::string& a, const std::string& b) {
+                    return tfOrder(a) < tfOrder(b);
+                }
+            );
+
+            // ── Build TF list ──
+            std::string tf_list = "";
+            for (size_t i = 0; i < tfs.size(); i++) {
+                if (i > 0) tf_list += ", ";
+                tf_list += tfs[i];
+            }
+
+            std::cout << "  " << sym
+                      << " [" << tf_list << "]"
+                      << std::endl;
         }
-        std::cout << "===================" << std::endl;
+
+        std::cout << "----------------------------" << std::endl;
     }
 };
 

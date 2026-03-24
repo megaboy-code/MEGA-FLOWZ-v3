@@ -1,6 +1,5 @@
 // ================================================================
 // MESSAGE_HANDLER.HPP - WebSocket Message Routing
-// Replaces: message_handler.py
 // ================================================================
 
 #pragma once
@@ -94,8 +93,6 @@ public:
     // ================================================================
     void processMessage(const std::string& message) {
 
-        std::cout << "MSG: " << message << std::endl;
-
         // ── Ping ──
         if (message == "ping") {
             send("pong");
@@ -106,6 +103,7 @@ public:
         if (message.size() >= 10 &&
             message.substr(0, 10) == "SUBSCRIBE_")
         {
+            std::cout << "MSG: " << message << std::endl;
             std::string symbol, timeframe;
             if (parseSymbolTimeframe(message, "SUBSCRIBE_", symbol, timeframe)) {
                 if (subscribe_cb) subscribe_cb(symbol, timeframe);
@@ -119,6 +117,7 @@ public:
         if (message.size() >= 12 &&
             message.substr(0, 12) == "UNSUBSCRIBE_")
         {
+            std::cout << "MSG: " << message << std::endl;
             std::string symbol = message.substr(12);
             chart_manager.clearCandles(symbol);
             chart_manager.clearChartState();
@@ -138,8 +137,6 @@ public:
             auto result = trade_handler.handleTradeCommand(message);
             send(buildTradeResponse(result));
             if (result.success) {
-                // ✅ positions_cb now returns positions + account combined
-                // No need for separate account_cb call
                 if (positions_cb) positions_cb();
             }
             return;
@@ -151,7 +148,6 @@ public:
             send("{\"type\":\"positions_closed\","
                  "\"success\":" + std::string(result.success ? "true" : "false") + ","
                  "\"message\":\"" + result.message + "\"}");
-            // ✅ positions + account in one call
             if (positions_cb) positions_cb();
             return;
         }
@@ -164,7 +160,6 @@ public:
             send("{\"type\":\"position_closed\","
                  "\"success\":" + std::string(result.success ? "true" : "false") + ","
                  "\"message\":\"" + result.message + "\"}");
-            // ✅ positions + account in one call
             if (positions_cb) positions_cb();
             return;
         }
@@ -177,21 +172,18 @@ public:
             send("{\"type\":\"position_modified\","
                  "\"success\":" + std::string(result.success ? "true" : "false") + ","
                  "\"message\":\"" + result.message + "\"}");
-            // ✅ positions + account in one call
             if (positions_cb) positions_cb();
             return;
         }
 
         // ── Get positions ──
         if (message == "GET_POSITIONS") {
-            // ✅ positions + account combined
             if (positions_cb) positions_cb();
             return;
         }
 
         // ── Get account info ──
         if (message == "GET_ACCOUNT_INFO") {
-            // ✅ standalone account for initial load
             if (account_cb) account_cb();
             return;
         }
@@ -222,6 +214,21 @@ public:
             send("{\"type\":\"auto_trading_status\","
                  "\"enabled\":false,"
                  "\"message\":\"Auto trading disabled\"}");
+            return;
+        }
+
+        // ── Watchlist ──
+        if (message.size() >= 14 &&
+            message.substr(0, 14) == "WATCHLIST_ADD_")
+        {
+            std::cout << "MSG: " << message << std::endl;
+            return;
+        }
+
+        if (message.size() >= 17 &&
+            message.substr(0, 17) == "WATCHLIST_REMOVE_")
+        {
+            std::cout << "MSG: " << message << std::endl;
             return;
         }
 

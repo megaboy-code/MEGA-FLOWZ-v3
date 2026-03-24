@@ -1,7 +1,8 @@
 // ================================================================
 // WEBSOCKET_SERVER.HPP - WebSocket Server
-// Replaces: websocket_server.py
-// Subscribe runs on detached thread — no GIL blocking on uWS thread
+// Subscribe runs on detached thread — no GIL blocking
+// Watchlist defines which symbols stay cached
+// Clear cache on disconnect — fresh start on reconnect
 // ================================================================
 
 #pragma once
@@ -14,6 +15,7 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <algorithm>
 
 #include "uWebSockets/src/App.h"
 #include "config.hpp"
@@ -35,13 +37,8 @@ private:
     std::mutex              clients_mtx;
     std::mutex              queue_mtx;
     std::queue<std::string> message_queue;
-    std::atomic<bool>       running { false };
-
-    // ── Subscribe in progress flag ──
-    // Prevents broadcast thread from calling Python
-    // while subscribe is fetching initial candles
-    std::atomic<bool>       subscribing { false };
-
+    std::atomic<bool>       running    { false };
+    std::atomic<bool>       subscribing{ false };
     uWS::Loop*              loop = nullptr;
 
     // ── Send to all clients ──
@@ -82,9 +79,19 @@ private:
         return json;
     }
 
-    // ── Handle subscribe on detached thread ──
-    // Pauses broadcast manager during fetch
-    // Prevents GIL contention
+    // ── Check if symbol is in watchlist ──
+    bool isInWatchlist(const std::string& symbol) {
+        auto watchlist = broadcast_manager.getWatchlist();
+        return std::find(
+            watchlist.begin(),
+            watchlist.end(),
+            symbol
+        ) != watchlist.end();
+    }
+
+    // ================================================================
+    // HANDLE SUBSCRIBE
+    // ================================================================
     void handleSubscribe(
         const std::string& symbol,
         const std::string& timeframe)
@@ -95,7 +102,7 @@ private:
         // ── Add to active symbols ──
         broadcast_manager.addActiveSymbol(symbol);
 
-        // ── Check cache first ──
+        // ── Check cache ──
         if (symbol_cache.hasTF(symbol, timeframe)) {
             std::cout << "Cache hit: " << symbol
                       << " " << timeframe << std::endl;
@@ -114,21 +121,22 @@ private:
             std::cout << "Served " << candles.size()
                       << " candles from cache: "
                       << symbol << " " << timeframe << std::endl;
+
+            symbol_cache.printActiveSymbols();
             return;
         }
 
-        // ── Cache miss — pause broadcast manager ──
-        // Gives GIL fully to this thread for initial fetch
-        // Prevents hang from GIL contention
+        // ── Cache miss — pause broadcast ──
         std::cout << "Cache miss: " << symbol
                   << " " << timeframe
-                  << " — fetching from MT5" << std::endl;
+                  << " -- fetching from MT5" << std::endl;
 
         subscribing = true;
         broadcast_manager.setPaused(true);
 
-        // ── Small delay to let broadcast thread finish current call ──
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(100)
+        );
 
         std::string detected =
             connector_bridge.autoDetectSymbol(symbol);
@@ -149,7 +157,6 @@ private:
             Config::CANDLE_FETCH_COUNT
         );
 
-        // ── Resume broadcast manager ──
         subscribing = false;
         broadcast_manager.setPaused(false);
 
@@ -175,36 +182,61 @@ private:
         std::cout << "Fetched and sent " << candles.size()
                   << " candles: "
                   << symbol << " " << timeframe << std::endl;
+
+        symbol_cache.printActiveSymbols();
     }
 
-    // ── Handle unsubscribe ──
+    // ================================================================
+    // HANDLE UNSUBSCRIBE
+    // Symbol in watchlist → keep M1 running (no gap on switch back)
+    // Symbol NOT in watchlist → stop M1 + clear cache (memory free)
+    // ================================================================
     void handleUnsubscribe(const std::string& symbol) {
         std::cout << "Unsubscribe: " << symbol << std::endl;
         chart_manager.clearChartState();
+
+        if (!isInWatchlist(symbol)) {
+            // ── Not in watchlist → stop M1 + clear cache ──
+            broadcast_manager.removeActiveSymbol(symbol);
+            symbol_cache.clearSymbol(symbol);
+            std::cout << "  " << symbol
+                      << " not in watchlist -- M1 stopped"
+                      << std::endl;
+        } else {
+            // ── In watchlist → keep M1 running ──
+            std::cout << "  " << symbol
+                      << " in watchlist -- M1 kept running"
+                      << std::endl;
+        }
     }
 
-    // ── Handle watchlist add ──
+    // ================================================================
+    // HANDLE WATCHLIST ADD
+    // ================================================================
     void handleWatchlistAdd(const std::string& symbol) {
         broadcast_manager.addToWatchlist(symbol);
         connector_bridge.autoDetectSymbol(symbol);
-        std::cout << "Watchlist add: " << symbol << std::endl;
     }
 
-    // ── Handle watchlist remove ──
+    // ================================================================
+    // HANDLE WATCHLIST REMOVE
+    // Always stop price streaming
+    // Only stop M1 if user not currently viewing
+    // ================================================================
     void handleWatchlistRemove(const std::string& symbol) {
-        // ── Always remove from price streaming ──
         broadcast_manager.removeFromWatchlist(symbol);
 
-        // ── Only stop M1 + clear cache if not currently viewing ──
         auto state = chart_manager.getChartState();
         if (state.symbol != symbol) {
+            // ── Not viewing → stop M1 + clear cache ──
             broadcast_manager.removeActiveSymbol(symbol);
             symbol_cache.clearSymbol(symbol);
             std::cout << "Watchlist remove: " << symbol
-                      << " → M1 stopped, cache cleared" << std::endl;
+                      << " (M1 stopped)" << std::endl;
         } else {
+            // ── Still viewing → keep M1 running ──
             std::cout << "Watchlist remove: " << symbol
-                      << " → still viewing, M1 kept" << std::endl;
+                      << " (still viewing)" << std::endl;
         }
     }
 
@@ -279,7 +311,6 @@ public:
                 uWS::OpCode opcode)
             {
                 std::string message(msg);
-                std::cout << "MSG: " << message << std::endl;
 
                 // ── SUBSCRIBE ──
                 if (message.size() > 10 &&
@@ -290,7 +321,6 @@ public:
                     if (pos != std::string::npos) {
                         std::string symbol    = content.substr(0, pos);
                         std::string timeframe = content.substr(pos + 1);
-                        // ✅ Detached thread — uWS returns immediately
                         std::thread([this, symbol, timeframe]() {
                             handleSubscribe(symbol, timeframe);
                         }).detach();
@@ -334,10 +364,22 @@ public:
                 int,
                 std::string_view)
             {
-                std::lock_guard<std::mutex> lock(clients_mtx);
-                clients.erase(ws);
+                {
+                    std::lock_guard<std::mutex> lock(clients_mtx);
+                    clients.erase(ws);
+                }
+
                 std::cout << "Client disconnected. Total: "
                           << clients.size() << std::endl;
+
+                // ✅ Clear all caches when no clients connected
+                // Prevents stale data / gap on reconnect
+                if (clients.empty()) {
+                    std::cout << "No clients -- cache cleared for fresh start"
+                              << std::endl;
+                    symbol_cache.clearAll();
+                    broadcast_manager.clearActiveSymbols();
+                }
             }
         })
         .listen(Config::WS_PORT, [](auto* socket) {

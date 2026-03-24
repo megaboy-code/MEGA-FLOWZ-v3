@@ -44,6 +44,12 @@ BOOL WINAPI consoleHandler(DWORD type) {
 #endif
 
 int main() {
+
+#ifdef _WIN32
+    // ✅ Fix Windows console encoding — show UTF-8 symbols correctly
+    SetConsoleOutputCP(65001);
+#endif
+
     std::cout << "MEGA FLOWZ Engine starting..." << std::endl;
 
     std::signal(SIGINT,  signalHandler);
@@ -139,18 +145,13 @@ int main() {
 
         std::cout << "Reconnect: clearing all caches..." << std::endl;
 
-        // ── Clear ALL symbol caches ──
         symbol_cache.clearAll();
-
-        // ── Clear active symbols ──
         broadcast_manager.clearActiveSymbols();
 
-        // ── Detect active symbol ──
         std::string detected =
             connector_bridge.autoDetectSymbol(state->symbol);
         if (detected.empty()) return;
 
-        // ── Fetch fresh initial data ──
         chart_manager.setChartState(
             state->symbol, state->timeframe, detected
         );
@@ -201,7 +202,7 @@ int main() {
              + std::to_string(candles.size()) + "}";
 
         ws_server.broadcastToAll(json);
-        std::cout << "Reconnect: Sent "
+        std::cout << "Reconnect: sent "
                   << candles.size()
                   << " fresh candles for "
                   << state->symbol << std::endl;
@@ -209,13 +210,11 @@ int main() {
 
     // ── Wire message handler callbacks ──
     message_handler.setPositionsCallback([]() {
-        // ✅ Positions + account combined
         std::string pos = connector_bridge.getPositionsAndAccount();
         ws_server.broadcastToAll(pos);
     });
 
     message_handler.setAccountCallback([]() {
-        // ✅ Standalone account — for GET_ACCOUNT_INFO only
         std::string acc = connector_bridge.getAccountInfo();
         if (!acc.empty()) ws_server.broadcastToAll(acc);
     });

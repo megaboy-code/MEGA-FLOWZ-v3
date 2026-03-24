@@ -8,11 +8,11 @@
 namespace Config {
 
     // ── WEBSOCKET ──
-    constexpr const char* WS_HOST = "localhost";
+    constexpr const char* WS_HOST = "127.0.0.1";
     constexpr int         WS_PORT = 8765;
 
     // ── CANDLE DATA ──
-    constexpr int CANDLE_FETCH_COUNT = 2000;
+    constexpr int CANDLE_FETCH_COUNT = 1000;
 
     // ── FETCH INTERVALS (seconds) ──
     constexpr double POSITION_FETCH_INTERVAL   = 0.5;   // positions + account
@@ -28,4 +28,4 @@ namespace Config {
 
     // ── PRICE PRECISION ──
     constexpr int DEFAULT_PRECISION = 5;
-}
+} 

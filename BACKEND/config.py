@@ -4,7 +4,7 @@
 
 # ==================== CANDLE DATA ====================
 
-CANDLE_FETCH_COUNT = 2000
+CANDLE_FETCH_COUNT = 1000
 
 # ==================== FETCH INTERVALS ====================
 
@@ -22,7 +22,7 @@ CLOSE_TRADE_COMMENT  = "MEGA FLOWZ - Close"
 
 # ==================== WEBSOCKET ====================
 
-WS_HOST = "localhost"
+WS_HOST = "127.0.0.1"
 WS_PORT = 8765
 
 # ==================== PRICE PRECISION ====================

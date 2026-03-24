@@ -154,7 +154,7 @@ public:
     {
         std::lock_guard<std::mutex> lock(mtx);
         if (!symbol.empty() && !timeframe.empty()) {
-            buffers.erase(storageKey(symbol, timeframe));
+            buffers.erase(storageKey(symbol, timeframe)); 
         } else {
             buffers.clear();
         }
