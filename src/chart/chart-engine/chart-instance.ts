@@ -153,7 +153,8 @@ export class ChartInstance {
         if (this.chart) {
             this.chart.applyOptions({
                 localization: { priceFormatter: createDynamicPriceFormatter(() => this.currentSymbol) },
-                watermark: { text: this.currentSymbol }
+                // TODO: watermark removed in LW v4 — needs plugin implementation
+                // watermark: { text: this.currentSymbol }
             });
         }
     }
@@ -298,18 +299,8 @@ export class ChartInstance {
     // ==================== WATERMARK ====================
 
     public applyWatermark(visible: boolean, color?: string): void {
-        if (!this.chart) return;
-        this.chart.applyOptions({
-            watermark: {
-                visible,
-                text:      this.currentSymbol,
-                color:     color || 'rgba(255,255,255,0.05)',
-                fontSize:  48,
-                horzAlign: 'center',
-                vertAlign: 'center'
-            }
-        });
-        console.log(`📊 Watermark: ${visible}`);
+        // TODO: watermark removed in LW v4 — needs plugin implementation
+        // this.chart.applyOptions({ watermark: { visible, text, color, fontSize, horzAlign, vertAlign } });
     }
 
     // ==================== TOGGLES ====================

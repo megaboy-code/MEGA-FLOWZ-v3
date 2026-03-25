@@ -12,7 +12,7 @@ interface CalendarEvent {
     actual:   string | null;
     forecast: string | null;
     previous: string | null;
-    history:  { date: string; actual: string; forecast: string; prev: string }[];
+    history:  { date: string; actual: string | null; forecast: string; prev: string }[];
     description: string;
 }
 

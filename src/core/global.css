@@ -56,8 +56,11 @@
     --raise:    0 2px 8px oklch(0% 0 0 / 0.4);
     --raise-sm: 0 1px 4px oklch(0% 0 0 / 0.3);
     --press:    inset 0 2px 6px oklch(0% 0 0 / 0.35);
+}
 
-    /* ── TOAST GLASS — dark ── */
+/* ==================== TOAST GLASS — dark ==================== */
+[data-theme="dark"],
+[data-theme="system"] {
     --toast-bg:     rgba(15, 20, 35, 0.45);
     --toast-border: rgba(255, 255, 255, 0.14);
 }
