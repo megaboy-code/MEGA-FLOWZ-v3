@@ -14,10 +14,7 @@
   margin-left: var(--sidebar-left-width);
   margin-right: var(--sidebar-right-width);
   width: calc(100% - var(--sidebar-left-width) - var(--sidebar-right-width));
-  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: margin-left, margin-right, width;
+  /* ✅ Removed transition - was causing layout recalc on every panel open/close */
 }
 
 .main-chart-area.panel-expanded {
@@ -169,7 +166,6 @@
   color: var(--text-dim);
   font-size: var(--text-md);
   cursor: pointer;
-  transition: all 0.15s ease;
   position: relative;
 }
 
@@ -265,7 +261,6 @@
   font-weight: 600;
   font-family: var(--text-sans);
   cursor: pointer;
-  transition: all 0.15s ease;
   white-space: nowrap;
   user-select: none;
 }
@@ -300,7 +295,6 @@
   color: var(--text-secondary);
   font-family: var(--text-sans);
   cursor: pointer;
-  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
@@ -332,7 +326,6 @@
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .chart-type-item:hover  { background: var(--bg-hover); color: var(--text-primary); }
@@ -427,7 +420,6 @@
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-md);
-  transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
@@ -475,7 +467,6 @@
   gap: 10px;
   padding: 8px 12px;
   cursor: pointer;
-  transition: background 0.15s ease;
 }
 
 .symbol-modal-item:hover  { background: var(--bg-hover); }
@@ -606,7 +597,6 @@
   color: var(--text-muted);
   cursor: pointer;
   font-size: var(--text-md);
-  transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
@@ -687,7 +677,6 @@
   user-select: none;
   background: var(--bg-base);
   border-bottom: 1px solid var(--border-light);
-  transition: color 0.15s ease;
 }
 
 .indicators-category-header:hover { color: var(--text-primary); }
@@ -727,7 +716,6 @@
   font-weight: 500;
   color: var(--text-primary);
   cursor: pointer;
-  transition: background 0.15s ease;
 }
 
 .indicator-item:hover { background: var(--bg-hover); }
@@ -845,7 +833,6 @@
   font-weight: 600;
   font-family: var(--text-sans);
   cursor: pointer;
-  transition: all 0.15s ease;
 }
 
 .indicators-btn-strategy:hover,
@@ -868,7 +855,6 @@
   font-weight: 500;
   font-family: var(--text-sans);
   cursor: pointer;
-  transition: all 0.15s ease;
   box-shadow: 0 0 18px rgba(var(--accent-info-rgb), 0.35);
 }
 

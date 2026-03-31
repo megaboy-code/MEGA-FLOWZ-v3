@@ -11,10 +11,9 @@
     z-index: 1000;
     background: var(--bg-card);
     border-left: 1px solid var(--border);
-    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-                background-color 0.25s ease,
+    /* ✅ FIX #7: Removed width transition to prevent layout recalc on panel expansion */
+    transition: background-color 0.25s ease,
                 border-color 0.25s ease;
-    will-change: width;
     overflow: hidden;
     box-shadow: var(--shadow-sm);
     width: var(--sidebar-right-width);
@@ -103,9 +102,9 @@
     cursor: pointer;
     color: var(--text-muted);
     font-size: 15px;
-    transition: all 0.15s ease;
     position: relative;
     border: 1px solid transparent;
+    /* ✅ FIX: Removed transition: all */
 }
 
 .tool-icon:hover {
@@ -303,7 +302,7 @@
     color: var(--text-muted);
     cursor: pointer;
     font-size: var(--text-base);
-    transition: all 0.15s ease;
+    /* ✅ FIX: Removed transition: all */
 }
 
 .panel-menu-btn:hover,
@@ -461,7 +460,7 @@
 
 /* ==================== REDUCED MOTION ==================== */
 @media (prefers-reduced-motion: reduce) {
-    .tools-panel { transition: width 0.25s ease; }
+    .tools-panel { transition: none; }
     .panel-content.active { animation: none; }
     .tool-icon:hover { transform: none; }
     .tool-icon.settings:hover i { animation: none; }

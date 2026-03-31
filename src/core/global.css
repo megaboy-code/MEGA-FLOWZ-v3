@@ -159,8 +159,26 @@
 }
 
 /* ==================== THEME TRANSITION ==================== */
-*, *::before, *::after {
-    transition: background-color 0.25s ease, border-color 0.25s ease, color 0.15s ease, box-shadow 0.25s ease;
+/* ✅ FIX #1: Removed universal transition rule. Added targeted transitions only where needed. */
+.user-menu-btn,
+.user-menu-item,
+.user-theme-option,
+.tab,
+.tab-close-btn,
+.tab-control-btn,
+.window-control-btn,
+.notification-bell-tab {
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* Theme-specific transitions */
+.tab-live-price {
+    transition: color 0.3s ease;
+}
+
+/* Submenu chevron transition */
+.user-menu-chevron {
+    transition: transform 0.2s ease !important;
 }
 
 /* ==================== RESET & BASE ==================== */
@@ -238,7 +256,7 @@ body {
     cursor: pointer;
     flex-shrink: 0;
     -webkit-app-region: no-drag;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .user-menu-btn:hover {
@@ -315,7 +333,7 @@ body {
     font-size: var(--text-base);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease;
     -webkit-app-region: no-drag;
 }
 
@@ -394,7 +412,7 @@ body {
     cursor: pointer;
     font-size: var(--text-base);
     color: var(--text-secondary);
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .user-theme-option:hover {
@@ -450,6 +468,7 @@ body {
     position: relative;
     -webkit-app-region: no-drag;
     user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .tab:hover {
@@ -516,6 +535,7 @@ body {
     padding: 0;
     margin-left: 4px;
     flex-shrink: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .tab-close-btn:hover {
@@ -593,6 +613,7 @@ body {
     font-size: var(--text-md);
     position: relative;
     -webkit-app-region: no-drag;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .notification-bell-tab:hover { color: var(--text-primary); }
@@ -629,6 +650,7 @@ body {
     color: var(--text-secondary);
     cursor: pointer;
     font-size: var(--text-md);
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .tab-control-btn:hover {
@@ -663,6 +685,7 @@ body {
     cursor: pointer;
     font-size: 0.85rem;
     padding: 0;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .window-control-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
