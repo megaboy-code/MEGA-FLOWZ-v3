@@ -5,6 +5,9 @@
 // Daily change % from cached D1 open
 // ================================================================
 
+import { ConnectionManager } from '../core/connection-manager';
+import { WebSocketMessage } from '../types';
+
 interface WatchlistSymbol {
     id:     string;
     name:   string;
@@ -13,6 +16,11 @@ interface WatchlistSymbol {
     base?:  string;
     quote?: string;
     img?:   string;
+}
+
+interface ElementRefs {
+    price: HTMLElement;
+    change: HTMLElement;
 }
 
 const DEFAULT_SYMBOLS = ['BTCUSD', 'EURUSD', 'XAUUSD', 'ETHUSD', 'USDJPY'];
@@ -29,8 +37,8 @@ export class WatchlistModule {
     private added: Set<string> = new Set();
     private currentSort: 'az' | 'chg' = 'az';
 
-    private priceUpdateHandler:     ((e: Event) => void) | null = null;
-    private watchlistUpdateHandler: ((e: Event) => void) | null = null;
+    // ✅ Fix #12 — element reference map for direct DOM access
+    private elementRefs: Map<string, ElementRefs> = new Map();
 
     // ✅ Cache last known price + change per symbol to skip redundant DOM writes
     private priceCache: Map<string, { price: number; change?: number }> = new Map();
@@ -59,6 +67,9 @@ export class WatchlistModule {
         { id: 'UK100',   name: 'UK100',    cat: 'Index · FTSE',   type: 'index',  img: 'https://flagcdn.com/w320/gb.png'                     },
     ];
 
+    // ✅ Fix #15 — connectionManager injected directly
+    constructor(private connectionManager: ConnectionManager) {}
+
     // ================================================================
     // INITIALIZE
     // ================================================================
@@ -75,18 +86,25 @@ export class WatchlistModule {
             return;
         }
 
-        // ── Load saved or defaults ──
         this.loadFromStorage();
-
         this.renderSymbols();
         this.bindEvents();
 
-        // ── Tell C++ about all watchlist symbols ──
-        this.added.forEach(symbol => {
-            this.notifyBackendAdd(symbol);
+        // ✅ Fix #39 — wire direct callback for watchlist prices
+        this.connectionManager.onWatchlistUpdate((data: WebSocketMessage) => {
+            const prices = data.prices;
+            if (!prices) return;
+            Object.entries(prices).forEach(([symbol, d]: [string, any]) => {
+                if (d.bid !== undefined) {
+                    this.updatePrice(symbol, d.bid, d.change);
+                }
+            });
         });
 
-        console.log('✅ Watchlist Module initialized');
+        // ── Tell C++ about all watchlist symbols ──
+        this.added.forEach(symbol => {
+            this.connectionManager.sendCommand(`WATCHLIST_ADD_${symbol}`);
+        });
     }
 
     // ================================================================
@@ -105,7 +123,6 @@ export class WatchlistModule {
             }
         } catch {}
 
-        // ── Defaults ──
         this.added = new Set(DEFAULT_SYMBOLS);
         this.saveToStorage();
     }
@@ -119,19 +136,6 @@ export class WatchlistModule {
         } catch {}
     }
 
-    // ── Notify C++ backend ──
-    private notifyBackendAdd(symbol: string): void {
-        document.dispatchEvent(new CustomEvent('watchlist-add', {
-            detail: { symbol }
-        }));
-    }
-
-    private notifyBackendRemove(symbol: string): void {
-        document.dispatchEvent(new CustomEvent('watchlist-remove', {
-            detail: { symbol }
-        }));
-    }
-
     // ================================================================
     // RENDER
     // ================================================================
@@ -139,6 +143,7 @@ export class WatchlistModule {
     private renderSymbols(): void {
         if (!this.itemsEl) return;
         this.itemsEl.innerHTML = '';
+        this.elementRefs.clear();
 
         const symbols = this.SYMBOLS.filter(s => this.added.has(s.id));
         symbols.forEach((sym, idx) => {
@@ -148,55 +153,100 @@ export class WatchlistModule {
         });
     }
 
+    // ✅ Fix #13 — createElement instead of innerHTML for interactive elements
     private buildWatchItem(sym: WatchlistSymbol): HTMLElement {
         const item = document.createElement('div');
         item.className = 'watch-item';
         item.setAttribute('data-symbol', sym.id);
-        item.innerHTML = `
-            ${this.buildIconHTML(sym)}
-            <div class="watch-symbol-wrap">
-                <div class="watch-symbol">${sym.name}</div>
-                <div class="watch-category">${sym.cat}</div>
-            </div>
-            <div class="watch-price" data-price-id="${sym.id}">--</div>
-            <div class="watch-change" data-chg-id="${sym.id}">--</div>
-            <button class="watch-delete"><i class="fas fa-times"></i></button>
-        `;
 
-        item.addEventListener('click', (e) => {
-            if ((e.target as HTMLElement).closest('.watch-delete')) return;
-            this.setActive(sym.id);
-            this.switchChartSymbol(sym.id);
-        });
+        // Icon
+        item.appendChild(this.buildIconElement(sym));
 
-        item.querySelector('.watch-delete')!.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.removeSymbol(sym.id, item);
-        });
+        // Symbol wrap
+        const wrap = document.createElement('div');
+        wrap.className = 'watch-symbol-wrap';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'watch-symbol';
+        nameEl.textContent = sym.name;
+
+        const catEl = document.createElement('div');
+        catEl.className = 'watch-category';
+        catEl.textContent = sym.cat;
+
+        wrap.appendChild(nameEl);
+        wrap.appendChild(catEl);
+        item.appendChild(wrap);
+
+        // Price
+        const priceEl = document.createElement('div');
+        priceEl.className = 'watch-price';
+        priceEl.textContent = '--';
+
+        // Change
+        const chgEl = document.createElement('div');
+        chgEl.className = 'watch-change';
+        chgEl.textContent = '--';
+
+        // Delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'watch-delete';
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-times';
+        deleteBtn.appendChild(icon);
+
+        item.appendChild(priceEl);
+        item.appendChild(chgEl);
+        item.appendChild(deleteBtn);
+
+        // ✅ Fix #12 — store refs immediately after building
+        this.elementRefs.set(sym.id, { price: priceEl, change: chgEl });
 
         return item;
     }
 
-    private buildIconHTML(sym: WatchlistSymbol): string {
+    // ✅ Fix #13 — createElement for icon
+    private buildIconElement(sym: WatchlistSymbol): HTMLElement {
         if (sym.type === 'forex') {
-            return `
-                <div class="wl-flag-container">
-                    <div class="wl-flag-circle wl-flag-base"
-                         style="background-image:url('https://flagcdn.com/w320/${sym.base}.png');"></div>
-                    <div class="wl-flag-circle wl-flag-quote"
-                         style="background-image:url('https://flagcdn.com/w320/${sym.quote}.png');"></div>
-                </div>`;
+            const container = document.createElement('div');
+            container.className = 'wl-flag-container';
+
+            const base = document.createElement('div');
+            base.className = 'wl-flag-circle wl-flag-base';
+            base.style.backgroundImage = `url('https://flagcdn.com/w320/${sym.base}.png')`;
+
+            const quote = document.createElement('div');
+            quote.className = 'wl-flag-circle wl-flag-quote';
+            quote.style.backgroundImage = `url('https://flagcdn.com/w320/${sym.quote}.png')`;
+
+            container.appendChild(base);
+            container.appendChild(quote);
+            return container;
         }
 
-        return `
-            <div class="wl-symbol-icon-wrap">
-                <div class="wl-symbol-icon ${sym.type}">
-                    <img src="${sym.img}"
-                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
-                         alt="${sym.name}">
-                    <i class="fas fa-circle-dot" style="display:none;"></i>
-                </div>
-            </div>`;
+        const wrap = document.createElement('div');
+        wrap.className = 'wl-symbol-icon-wrap';
+
+        const iconWrap = document.createElement('div');
+        iconWrap.className = `wl-symbol-icon ${sym.type}`;
+
+        const img = document.createElement('img');
+        img.src = sym.img || '';
+        img.alt = sym.name;
+
+        const fallback = document.createElement('i');
+        fallback.className = 'fas fa-circle-dot';
+        fallback.style.display = 'none';
+
+        img.addEventListener('error', () => {
+            img.style.display = 'none';
+            fallback.style.display = 'flex';
+        });
+
+        iconWrap.appendChild(img);
+        iconWrap.appendChild(fallback);
+        wrap.appendChild(iconWrap);
+        return wrap;
     }
 
     // ================================================================
@@ -230,32 +280,24 @@ export class WatchlistModule {
             }
         });
 
-        // ── Active chart price update ──
-        // Updates active chart symbol price in watchlist
-        this.priceUpdateHandler = (e: Event) => {
-            const { symbol, bid } = (e as CustomEvent).detail;
-            if (symbol && bid !== undefined) {
-                this.updatePrice(symbol, bid);
-            }
-        };
-        document.addEventListener('price-update', this.priceUpdateHandler);
+        // ✅ Fix #14 — event delegation on itemsEl
+        this.itemsEl?.addEventListener('click', (e) => {
+            const target  = e.target as HTMLElement;
+            const delBtn  = target.closest('.watch-delete');
+            const item    = target.closest('.watch-item') as HTMLElement | null;
+            if (!item) return;
 
-        // ── Watchlist prices from C++ backend ──
-        // Updates all watchlist symbols with bid + change %
-        this.watchlistUpdateHandler = (e: Event) => {
-            const { prices } = (e as CustomEvent).detail;
-            if (!prices) return;
-            Object.entries(prices).forEach(([symbol, data]: [string, any]) => {
-                if (data.bid !== undefined) {
-                    this.updatePrice(
-                        symbol,
-                        data.bid,
-                        data.change  // ✅ daily change %
-                    );
-                }
-            });
-        };
-        document.addEventListener('watchlist-prices-update', this.watchlistUpdateHandler);
+            const symbol = item.getAttribute('data-symbol');
+            if (!symbol) return;
+
+            if (delBtn) {
+                e.stopPropagation();
+                this.removeSymbol(symbol, item);
+            } else {
+                this.setActive(symbol);
+                this.switchChartSymbol(symbol);
+            }
+        });
     }
 
     // ================================================================
@@ -278,6 +320,7 @@ export class WatchlistModule {
         if (this.searchResults) this.searchResults.innerHTML = '';
     }
 
+    // ✅ Fix #13 — createElement in search results
     private handleSearch(): void {
         const q = this.searchInput?.value.trim().toLowerCase() || '';
         if (!this.searchResults) return;
@@ -290,21 +333,30 @@ export class WatchlistModule {
         ).slice(0, 5);
 
         if (!matches.length) {
-            this.searchResults.innerHTML = `
-                <div style="font-size:0.65rem;color:var(--text-muted);padding:4px 8px;">
-                    No results found
-                </div>`;
+            const empty = document.createElement('div');
+            empty.style.cssText = 'font-size:0.65rem;color:var(--text-muted);padding:4px 8px;';
+            empty.textContent = 'No results found';
+            this.searchResults.appendChild(empty);
             return;
         }
 
         matches.forEach(sym => {
             const item = document.createElement('div');
             item.className = 'search-result-item';
-            item.innerHTML = `
-                ${this.buildIconHTML(sym)}
-                <span class="search-result-name">${sym.name}</span>
-                <span class="search-result-cat">${sym.cat}</span>
-            `;
+
+            item.appendChild(this.buildIconElement(sym));
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'search-result-name';
+            nameSpan.textContent = sym.name;
+
+            const catSpan = document.createElement('span');
+            catSpan.className = 'search-result-cat';
+            catSpan.textContent = sym.cat;
+
+            item.appendChild(nameSpan);
+            item.appendChild(catSpan);
+
             item.addEventListener('click', () => this.addSymbol(sym));
             this.searchResults!.appendChild(item);
         });
@@ -322,10 +374,8 @@ export class WatchlistModule {
         this.itemsEl?.appendChild(item);
         this.closeSearch();
 
-        // ── Tell C++ to add ──
-        this.notifyBackendAdd(sym.id);
-
-        console.log(`➕ Watchlist add: ${sym.id}`);
+        // ✅ Fix #15 — direct command, no DOM event
+        this.connectionManager.sendCommand(`WATCHLIST_ADD_${sym.id}`);
     }
 
     private removeSymbol(id: string, el: HTMLElement): void {
@@ -333,19 +383,17 @@ export class WatchlistModule {
         this.saveToStorage();
         el.remove();
 
-        // ✅ Clear cache entry on remove
+        // ✅ Fix #12 — clean up refs on remove
+        this.elementRefs.delete(id);
         this.priceCache.delete(id);
 
-        // ── Tell C++ to remove ──
-        this.notifyBackendRemove(id);
+        // ✅ Fix #15 — direct command, no DOM event
+        this.connectionManager.sendCommand(`WATCHLIST_REMOVE_${id}`);
 
-        // ── If removed was active → set first as active ──
         const first = this.itemsEl?.querySelector('.watch-item');
         if (first && !this.itemsEl?.querySelector('.watch-item.active')) {
             first.classList.add('active');
         }
-
-        console.log(`➖ Watchlist remove: ${id}`);
     }
 
     // ================================================================
@@ -369,12 +417,12 @@ export class WatchlistModule {
         document.dispatchEvent(new CustomEvent('symbol-changed', {
             detail: { symbol }
         }));
-        console.log(`📊 Watchlist → chart: ${symbol}`);
     }
 
     // ================================================================
     // PRICE UPDATE
-    // Called from both price-update and watchlist-prices-update
+    // ✅ Fix #9/#12 — direct refs, no querySelector on every tick
+    // Called directly from ModuleManager.onTick + onWatchlistUpdate
     // ================================================================
 
     public updatePrice(
@@ -382,39 +430,28 @@ export class WatchlistModule {
         price:    number,
         change?:  number
     ): void {
-        const priceEl = this.itemsEl?.querySelector(
-            `[data-price-id="${symbolId}"]`
-        );
-        const chgEl = this.itemsEl?.querySelector(
-            `[data-chg-id="${symbolId}"]`
-        );
-
-        if (!priceEl) return;
+        const refs = this.elementRefs.get(symbolId);
+        if (!refs) return;
 
         const cached = this.priceCache.get(symbolId);
 
-        // ✅ Skip all DOM work if price unchanged
         if (cached && cached.price === price && cached.change === change) return;
 
-        // ✅ Only flash if price actually changed
         if (!cached || cached.price !== price) {
             const goUp = !cached || price >= cached.price;
-
-            priceEl.textContent = price.toString();
-            priceEl.classList.remove('flash-up', 'flash-down');
-            priceEl.classList.add(goUp ? 'flash-up' : 'flash-down');
-            setTimeout(() => priceEl.classList.remove('flash-up', 'flash-down'), 400);
+            refs.price.textContent = price.toString();
+            refs.price.classList.remove('flash-up', 'flash-down');
+            refs.price.classList.add(goUp ? 'flash-up' : 'flash-down');
+            setTimeout(() => refs.price.classList.remove('flash-up', 'flash-down'), 400);
         }
 
-        // ✅ Only update change % if value changed
-        if (chgEl && change !== undefined && (!cached || cached.change !== change)) {
+        if (change !== undefined && (!cached || cached.change !== change)) {
             const chgClass = change >= 0 ? 'up' : 'down';
             const sign     = change >= 0 ? '+' : '';
-            chgEl.textContent = `${sign}${change.toFixed(2)}%`;
-            chgEl.className   = `watch-change ${chgClass}`;
+            refs.change.textContent = `${sign}${change.toFixed(2)}%`;
+            refs.change.className   = `watch-change ${chgClass}`;
         }
 
-        // ✅ Update cache
         this.priceCache.set(symbolId, { price, change });
     }
 
@@ -426,9 +463,7 @@ export class WatchlistModule {
         this.currentSort = sort;
         if (!this.itemsEl) return;
 
-        const items = Array.from(
-            this.itemsEl.querySelectorAll('.watch-item')
-        );
+        const items = Array.from(this.itemsEl.querySelectorAll('.watch-item'));
 
         items.sort((a, b) => {
             if (sort === 'az') {
@@ -436,12 +471,8 @@ export class WatchlistModule {
                 const nameB = b.querySelector('.watch-symbol')?.textContent || '';
                 return nameA.localeCompare(nameB);
             } else {
-                const chgA = parseFloat(
-                    a.querySelector('.watch-change')?.textContent || '0'
-                );
-                const chgB = parseFloat(
-                    b.querySelector('.watch-change')?.textContent || '0'
-                );
+                const chgA = parseFloat(a.querySelector('.watch-change')?.textContent || '0');
+                const chgB = parseFloat(b.querySelector('.watch-change')?.textContent || '0');
                 return chgB - chgA;
             }
         });
@@ -454,13 +485,7 @@ export class WatchlistModule {
     // ================================================================
 
     public destroy(): void {
-        if (this.priceUpdateHandler) {
-            document.removeEventListener('price-update', this.priceUpdateHandler);
-        }
-        if (this.watchlistUpdateHandler) {
-            document.removeEventListener('watchlist-prices-update', this.watchlistUpdateHandler);
-        }
+        this.elementRefs.clear();
         this.priceCache.clear();
-        console.log('🗑️ Watchlist Module destroyed');
     }
 }

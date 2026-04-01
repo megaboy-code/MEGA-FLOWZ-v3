@@ -42,8 +42,6 @@ export class ChartModule {
     private visibilityMap: Map<string, boolean> = new Map();
 
     constructor() {
-        console.log('📈 Chart Module Initialized');
-
         this._currentSymbol    = localStorage.getItem('last_symbol')    || 'EURUSD';
         this._currentTimeframe = localStorage.getItem('last_timeframe') || 'H1';
 
@@ -180,7 +178,7 @@ export class ChartModule {
         document.dispatchEvent(new CustomEvent('chart-initial-data-loaded', { detail }));
     }
 
-    // ==================== EAGER MODULE INITIALIZATION ====================
+    // ==================== MODULE INITIALIZATION ====================
 
     private initializeLegend(): void {
         if (!this.chartContainer) return;
@@ -194,7 +192,6 @@ export class ChartModule {
         });
     }
 
-    // ✅ async — awaits initialize() so drawings fully load
     private async initializeDrawingModule(): Promise<void> {
         const chart  = this.mainChart.getChart();
         const series = this.mainChart.getSeries();
@@ -216,7 +213,6 @@ export class ChartModule {
         );
 
         await this.drawingModule.initialize();
-        console.log('✅ Drawing Module initialized');
     }
 
     private initializePriceAlerts(): void {
@@ -245,12 +241,10 @@ export class ChartModule {
             this.mainChart.currentChartType
         );
         this.chartUI.initialize();
-        console.log('✅ Chart UI initialized');
     }
 
     private initializeContextMenu(): void {
         this.contextMenu = new ChartContextMenu();
-        console.log('✅ Context menu initialized');
     }
 
     // ==================== LAZY LOADERS ====================
@@ -276,8 +270,6 @@ export class ChartModule {
                     await this.chartLegend.createPaneLegend(pane);
                 }
             };
-
-            console.log('✅ Indicator Manager lazy loaded');
         } catch (error) {
             console.error('❌ Failed to lazy load indicator manager:', error);
         } finally {
@@ -299,7 +291,6 @@ export class ChartModule {
             this.strategyManager.setChart(chart);
             this.strategyManager.setSymbol(this._currentSymbol);
             this.strategyManager.initialize();
-            console.log('✅ Strategy Manager lazy loaded');
         } catch (error) {
             console.error('❌ Failed to lazy load strategy manager:', error);
         } finally {
@@ -338,6 +329,16 @@ export class ChartModule {
                 this.drawingModule.onCrosshairMove(param);
             }
         });
+    }
+
+    // ==================== TICK UPDATE — direct call from ModuleManager ====================
+
+    // ✅ Fix #9 — replaces price-update DOM event
+    public onTick(data: any): void {
+        if (data.symbol !== this._currentSymbol) return;
+        this.mainChart.updateBidAsk(data.bid, data.ask);
+        const latestOHLC = this.chartDataManager.getLatestOHLC();
+        if (latestOHLC) this.indicatorManager?.updateLatestValues(latestOHLC);
     }
 
     // ==================== CALLED BY MODULE MANAGER ====================
@@ -381,8 +382,6 @@ export class ChartModule {
         if (this.chartUI) this.chartUI.updateSymbol(symbol);
 
         this.drawingModule?.onSymbolChange(symbol);
-
-        // ✅ Update price formatter when symbol changes
         this.drawingModule?.updateConfig({
             precision:      getDecimalPrecision(symbol),
             priceFormatter: getPriceFormatter(symbol)
@@ -404,17 +403,12 @@ export class ChartModule {
         this.drawingModule?.onTimeframeChange(timeframe);
     }
 
-    // ✅ No longer destroys/reinitializes drawing module
-    // Just saves drawings, updates series reference — drawings persist
     public handleChartTypeChange(newChartType: string): void {
         if (this.mainChart.currentChartType === newChartType) return;
 
-        // ✅ Save drawings BEFORE series changes
         this.drawingModule?.saveDrawings();
-
         this.mainChart.setChartType(newChartType);
 
-        // ✅ Get new series and reattach drawing module to it
         const newSeries = this.mainChart.getSeries();
         if (this.drawingModule && newSeries) {
             this.drawingModule.updateSeries(newSeries);
@@ -569,13 +563,6 @@ export class ChartModule {
         document.addEventListener('chart-watermark', (e: Event) => {
             const { visible, color } = (e as CustomEvent).detail;
             if (visible !== undefined) this.mainChart.applyWatermark(visible, color);
-        }, { signal });
-
-        document.addEventListener('price-update', (e: Event) => {
-            const { bid, ask } = (e as CustomEvent).detail;
-            if (bid !== undefined && ask !== undefined) {
-                this.mainChart.updateBidAsk(bid, ask);
-            }
         }, { signal });
 
         document.addEventListener('chart-setting-toggle', (e: Event) => {

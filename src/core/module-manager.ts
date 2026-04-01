@@ -16,14 +16,6 @@ declare global {
     interface Window {}
 }
 
-interface TradeArrowEntry {
-    id:         string;
-    type:       'buy' | 'sell';
-    timestamp:  number;
-    price:      number;
-    priceLabel: string;
-}
-
 export class ModuleManager {
     private chart: ChartModuleImpl | null = null;
     private tradingInstance: InstanceType<typeof TradingModuleClass> | null = null;
@@ -40,9 +32,6 @@ export class ModuleManager {
     private notifications = Notification;
     private panels = Panels;
 
-    // ✅ In-memory trade arrow store
-    private tradeArrowStore: TradeArrowEntry[] = [];
-
     constructor(private connectionManager: ConnectionManager) {}
 
     // ==================== INITIALIZATION ====================
@@ -58,8 +47,6 @@ export class ModuleManager {
         this.initializeAlertsModule();
 
         this.setupDOMEventBridge();
-
-        console.log('✅ Module Manager initialized');
     }
 
     public destroy(): void {
@@ -73,96 +60,7 @@ export class ModuleManager {
         this.notifications.destroy();
     }
 
-    // ==================== TRADE ARROW STORE ====================
-
-    // ✅ Round data.timestamp (MT5 server time) to nearest bar boundary
-    // for the current timeframe
-    private resolveArrowTimestamp(dataTimestamp: number): number {
-        const tf = this.connectionManager.getCurrentTimeframe();
-        const tfSeconds: Record<string, number> = {
-            M1:  60,
-            M5:  300,
-            M15: 900,
-            H1:  3600,
-            H4:  14400,
-            D1:  86400,
-        };
-
-        const interval      = tfSeconds[tf] ?? 60;
-        const rounded       = Math.floor(dataTimestamp / interval) * interval;
-        const latestBar     = this.chart?.getDataManager()?.getLatestOHLC();
-        const latestBarTime = latestBar?.time as number;
-
-        // ✅ If rounded is ahead of latest bar — use latest bar
-        if (latestBarTime && rounded > latestBarTime) {
-            return latestBarTime;
-        }
-
-        return rounded;
-    }
-
-    // ✅ Convert stored raw timestamp to correct bar for new TF
-    // Used when re-injecting arrows after TF switch
-    private convertTimestampToCurrentTF(rawTimestamp: number): number {
-        const tf = this.connectionManager.getCurrentTimeframe();
-        const tfSeconds: Record<string, number> = {
-            M1:  60,
-            M5:  300,
-            M15: 900,
-            H1:  3600,
-            H4:  14400,
-            D1:  86400,
-        };
-
-        const interval      = tfSeconds[tf] ?? 60;
-        const rounded       = Math.floor(rawTimestamp / interval) * interval;
-        const latestBar     = this.chart?.getDataManager()?.getLatestOHLC();
-        const latestBarTime = latestBar?.time as number;
-
-        if (latestBarTime && rounded > latestBarTime) {
-            return latestBarTime;
-        }
-
-        return rounded;
-    }
-
-    // ✅ Add arrow to store and place on chart
-    private addTradeArrow(entry: TradeArrowEntry): void {
-        if (!this.tradeArrowStore.find(a => a.id === entry.id)) {
-            this.tradeArrowStore.push(entry);
-        }
-
-        const timestamp = this.resolveArrowTimestamp(entry.timestamp);
-        this.chart?.getDrawingModule()?.placeTradeArrow({
-            ...entry,
-            timestamp,
-        });
-    }
-
-    // ✅ Re-inject all arrows from store with new TF timestamps
-    // Called after chart-drawings-ready — chart data is guaranteed ready
-    private reInjectTradeArrows(): void {
-        if (this.tradeArrowStore.length === 0) return;
-
-        this.tradeArrowStore.forEach(entry => {
-            const timestamp = this.convertTimestampToCurrentTF(entry.timestamp);
-            this.chart?.getDrawingModule()?.placeTradeArrow({
-                ...entry,
-                timestamp,
-            });
-        });
-
-        console.log(`🎯 Re-injected ${this.tradeArrowStore.length} trade arrows`);
-    }
-
-    // ✅ Clear store and remove all arrows from chart
-    private clearAllTradeArrows(): void {
-        this.tradeArrowStore = [];
-        this.chart?.getDrawingModule()?.removeTradeArrows();
-        console.log('🗑️ Trade arrow store cleared');
-    }
-
-    // ==================== CONNECTION CALLBACKS ====================
+    // ==================== CONNECTION CALLBACKS ====================    
 
     private setupConnectionCallbacks(): void {
 
@@ -171,15 +69,11 @@ export class ModuleManager {
         });
 
         this.connectionManager.onTickData((data: WebSocketMessage) => {
-            document.dispatchEvent(new CustomEvent('price-update', {
-                detail: {
-                    bid:    data.bid,
-                    ask:    data.ask,
-                    symbol: data.symbol,
-                    spread: data.spread,
-                    change: data.change
-                }
-            }));
+            this.chart?.onTick(data);
+            this.tradingInstance?.onTick(data);
+            if (data.symbol && data.bid !== undefined) {
+                this.watchlistInstance?.updatePrice(data.symbol, data.bid, data.change);
+            }
         });
 
         this.connectionManager.onAccountUpdate((account: AccountInfo) => {
@@ -190,29 +84,12 @@ export class ModuleManager {
             this.tradingInstance?.updatePositions(positions);
         });
 
-        // ✅ Trade executed → store raw MT5 timestamp + place arrow
         this.connectionManager.onTradeExecuted((data: WebSocketMessage) => {
             if (data.success) {
                 this.notifications.success(
                     `Trade ${data.direction || 'executed'} successfully`,
                     { title: 'Trade Executed' }
                 );
-
-                if (data.direction && data.price) {
-                    const type  = data.direction === 'BUY' ? 'buy' : 'sell';
-                    // ✅ Store raw MT5 timestamp for re-injection on TF switch
-                    const rawTs = Number(data.timestamp) || Math.floor(Date.now() / 1000);
-                    const id    = `trade-arrow-${type}-${rawTs}`;
-
-                    this.addTradeArrow({
-                        id,
-                        type,
-                        timestamp:  rawTs,
-                        price:      Number(data.price),
-                        priceLabel: String(data.price),
-                    });
-                }
-
             } else {
                 this.notifications.error(
                     data.message || 'Trade execution failed',
@@ -241,28 +118,7 @@ export class ModuleManager {
                 case 'strategy_deployed':
                 case 'strategy_removed':
                 case 'strategy_updated':
-                    document.dispatchEvent(new CustomEvent(data.type, { detail: data }));
-                    break;
-
-                // ✅ Strategy signal → store raw timestamp + place arrow
                 case 'strategy_signal':
-                    document.dispatchEvent(new CustomEvent(data.type, { detail: data }));
-
-                    if (data.direction && data.price) {
-                        const type  = data.direction === 'BUY' ? 'buy' : 'sell';
-                        const rawTs = Number(data.timestamp) || Math.floor(Date.now() / 1000);
-                        const id    = `trade-arrow-${type}-${rawTs}`;
-
-                        this.addTradeArrow({
-                            id,
-                            type,
-                            timestamp:  rawTs,
-                            price:      Number(data.price),
-                            priceLabel: String(data.price),
-                        });
-                    }
-                    break;
-
                 case 'auto_trading_status':
                     document.dispatchEvent(new CustomEvent(data.type, { detail: data }));
                     break;
@@ -270,9 +126,6 @@ export class ModuleManager {
                 case 'backtest_results':
                     this.strategyInstance?.handleBacktestResults(data);
                     break;
-
-                default:
-                    console.log(`📨 Unhandled strategy message: ${data.type}`);
             }
         });
     }
@@ -296,8 +149,6 @@ export class ModuleManager {
             if (!symbol) return;
             this.connectionManager.setSymbol(symbol);
             this.chart?.handleSymbolChange(symbol);
-            // ✅ Symbol change — clear store and arrows
-            this.clearAllTradeArrows();
         });
 
         document.addEventListener('timeframe-changed', (e: Event) => {
@@ -305,28 +156,6 @@ export class ModuleManager {
             if (!timeframe) return;
             this.connectionManager.setTimeframe(timeframe);
             this.chart?.handleTimeframeChange(timeframe);
-            // ✅ No re-inject here — wait for chart-drawings-ready
-        });
-
-        // ✅ Chart drawings restored — re-inject trade arrows
-        // Fires from chart-drawing-module.ts onDataReady() after loadDrawings()
-        document.addEventListener('chart-drawings-ready', () => {
-            this.reInjectTradeArrows();
-        });
-
-        // ✅ Arrow toggle ON — re-inject matching type from store
-        document.addEventListener('chart-arrows-toggle-on', (e: Event) => {
-            const { type } = (e as CustomEvent).detail as { type: 'buy' | 'sell' };
-            this.tradeArrowStore
-                .filter(a => a.type === type)
-                .forEach(entry => {
-                    const timestamp = this.convertTimestampToCurrentTF(entry.timestamp);
-                    this.chart?.getDrawingModule()?.placeTradeArrow({
-                        ...entry,
-                        timestamp,
-                    });
-                });
-            console.log(`✅ Re-injected ${type} arrows from store`);
         });
 
         document.addEventListener('chart-initial-data-loaded', () => {
@@ -453,7 +282,6 @@ export class ModuleManager {
             const { JournalModule } = await import('../journal/journal');
             this.journalInstance = new JournalModule();
             this.journalInstance.initialize();
-            console.log('✅ Journal Module lazy loaded');
         } catch (error) {
             console.error('❌ Failed to lazy load journal:', error);
             this.notifications.error('Failed to load journal module', { title: 'Module Error' });
@@ -472,7 +300,6 @@ export class ModuleManager {
                 () => this.connectionManager.getCurrentSymbol(),
                 () => this.connectionManager.getCurrentTimeframe()
             );
-            console.log('✅ Strategy Module lazy loaded');
         } catch (error) {
             console.error('❌ Failed to lazy load strategy:', error);
             this.notifications.error('Failed to load strategy module', { title: 'Module Error' });
@@ -486,7 +313,6 @@ export class ModuleManager {
     private initializeChartModule(): void {
         try {
             this.chart = new ChartModuleImpl();
-            console.log('✅ Chart Module initialized');
         } catch (error) {
             console.error('❌ Failed to initialize chart:', error);
             this.notifications.error('Failed to initialize chart module', { title: 'Module Error' });
@@ -496,7 +322,6 @@ export class ModuleManager {
     private initializeTradingModule(): void {
         try {
             this.tradingInstance = new TradingModuleClass();
-            console.log('✅ Trading Module initialized');
         } catch (error) {
             console.error('❌ Failed to initialize trading:', error);
             this.notifications.error('Failed to initialize trading module', { title: 'Module Error' });
@@ -506,7 +331,6 @@ export class ModuleManager {
     private initializeNotificationModule(): void {
         try {
             Notification.initialize();
-            console.log('✅ Notification Module initialized');
         } catch (error) {
             console.error('❌ Failed to initialize notifications:', error);
         }
@@ -514,9 +338,9 @@ export class ModuleManager {
 
     private initializeWatchlistModule(): void {
         try {
-            this.watchlistInstance = new WatchlistModule();
+            // ✅ Fix #15 — connectionManager passed directly
+            this.watchlistInstance = new WatchlistModule(this.connectionManager);
             this.watchlistInstance.initialize();
-            console.log('✅ Watchlist Module initialized');
         } catch (error) {
             console.error('❌ Failed to initialize watchlist:', error);
         }
@@ -526,7 +350,6 @@ export class ModuleManager {
         try {
             this.calendarInstance = new EconomicCalendarModule();
             this.calendarInstance.initialize();
-            console.log('✅ Economic Calendar Module initialized');
         } catch (error) {
             console.error('❌ Failed to initialize calendar:', error);
         }
@@ -536,7 +359,6 @@ export class ModuleManager {
         try {
             this.alertsInstance = new AlertsModule();
             this.alertsInstance.initialize();
-            console.log('✅ Alerts Module initialized');
         } catch (error) {
             console.error('❌ Failed to initialize alerts:', error);
         }

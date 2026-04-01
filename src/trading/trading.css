@@ -167,7 +167,7 @@
     color: var(--accent-buy);
     font-family: var(--text-mono);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .section-badge.off {
@@ -192,7 +192,6 @@
     font-size: var(--text-base);
     letter-spacing: 1px;
     cursor: pointer;
-    transition: all 0.15s ease;
     text-transform: uppercase;
     display: flex;
     flex-direction: column;
@@ -200,6 +199,7 @@
     gap: 4px;
     font-family: var(--text-sans);
     border: none;
+    /* ✅ Removed transition: all - only transform on hover */
 }
 
 /* sm — price under button */
@@ -349,7 +349,7 @@
     font-size: var(--text-base);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .preset-btn:hover,
@@ -416,7 +416,7 @@
     font-size: var(--text-base);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .risk-pct-btn:hover,
@@ -518,7 +518,7 @@
     cursor: pointer;
     color: var(--text-muted);
     font-family: var(--text-sans);
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .tpsl-toggle.tp.active {
@@ -632,7 +632,7 @@
     font-size: var(--text-base);
     color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     font-family: var(--text-sans);
 }
 
@@ -697,11 +697,11 @@
     font-size: var(--text-sm);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
     font-family: var(--text-sans);
     white-space: nowrap;
     background: var(--glass-gradient), var(--bg-elevated);
     border: 1px solid var(--border);
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .action-btn i { font-size: var(--text-sm); }
@@ -727,11 +727,11 @@
     padding: 10px 12px;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    transition: all 0.15s ease;
     font-family: var(--text-sans);
     color: var(--text-secondary);
     background: var(--glass-gradient), var(--bg-elevated);
     border: 1px solid var(--border);
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .positions-btn:hover {

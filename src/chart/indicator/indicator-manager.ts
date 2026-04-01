@@ -33,13 +33,14 @@ export class IndicatorManager {
     private calculatorReady:  boolean = false;
     private currentSymbol:    string = '';
 
+    // ✅ Recycle pool — keyed by stable type key, array to support multiples
+    private seriesPool: Map<string, ActiveIndicator[]> = new Map();
+
     private abortController: AbortController | null = null;
 
     public onPaneCreated: ((pane: any) => Promise<void>) | null = null;
 
-    constructor() {
-        console.log('✅ Indicator Manager created');
-    }
+    constructor() {}
 
     // ==================== INITIALIZATION ====================
 
@@ -58,7 +59,28 @@ export class IndicatorManager {
     public initialize(chartDataManager: ChartDataManager): void {
         this.chartDataManager = chartDataManager;
         this.setupEventListeners();
-        console.log('✅ Indicator Manager initialized');
+    }
+
+    // ==================== STABLE ID ====================
+
+    private getStableKey(type: string, settings: IndicatorSettings): string {
+        return `${type}_${settings.period}_${settings.source}`;
+    }
+
+    // ==================== RECYCLE POOL ====================
+
+    private getFromPool(stableKey: string): ActiveIndicator | null {
+        const pool = this.seriesPool.get(stableKey);
+        if (!pool || pool.length === 0) return null;
+        const entry = pool.shift()!;
+        if (pool.length === 0) this.seriesPool.delete(stableKey);
+        return entry;
+    }
+
+    private returnToPool(indicator: ActiveIndicator): void {
+        const stableKey = this.getStableKey(indicator.type, indicator.settings);
+        if (!this.seriesPool.has(stableKey)) this.seriesPool.set(stableKey, []);
+        this.seriesPool.get(stableKey)!.push(indicator);
     }
 
     // ==================== EVENT LISTENERS ====================
@@ -78,7 +100,6 @@ export class IndicatorManager {
 
     // ==================== SERIES VISUAL OPTIONS ====================
 
-    // ✅ Build visual applyOptions from settings — shared by create and update
     private buildSeriesOptions(settings: IndicatorSettings, type: string): Record<string, any> {
         return {
             color:                  settings.color                  || INDICATOR_COLORS[type],
@@ -101,7 +122,7 @@ export class IndicatorManager {
             period:                 settings?.period                 || 14,
             source:                 settings?.source                 || 'close',
             color:                  settings?.color                  || INDICATOR_COLORS[indicatorType],
-            ...(settings as any)?.lineWidth      !== undefined && { lineWidth:              (settings as any).lineWidth      },
+            ...(settings as any)?.lineWidth              !== undefined && { lineWidth:              (settings as any).lineWidth              },
             ...(settings as any)?.priceLineVisible       !== undefined && { priceLineVisible:       (settings as any).priceLineVisible       },
             ...(settings as any)?.lastValueVisible       !== undefined && { lastValueVisible:       (settings as any).lastValueVisible       },
             ...(settings as any)?.crosshairMarkerVisible !== undefined && { crosshairMarkerVisible: (settings as any).crosshairMarkerVisible },
@@ -132,7 +153,6 @@ export class IndicatorManager {
                 return;
             }
 
-            // ✅ Use buildSeriesOptions for consistent options
             const seriesOptions = {
                 ...this.buildSeriesOptions(finalSettings, indicatorType),
                 priceFormat: { type: 'price', precision: 2, minMove: 0.01 }
@@ -183,8 +203,6 @@ export class IndicatorManager {
                 }
             }));
 
-            console.log(`✅ ${indicatorType} added: ${indicatorId}`);
-
         } catch (error) {
             console.error(`❌ Failed to add ${indicatorType}:`, error);
         }
@@ -211,24 +229,50 @@ export class IndicatorManager {
         const ohlcData = this.chartDataManager.getOHLCData();
         if (!ohlcData || ohlcData.length === 0) return;
 
-        const indicatorId = `${indicatorType}_${finalSettings.period}_${finalSettings.source}_${Date.now()}`;
+        const stableKey   = this.getStableKey(indicatorType, finalSettings);
+        const indicatorId = `${stableKey}_${Date.now()}`;
 
         this.calculator.setOHLCData(ohlcData);
         const values      = this.calculator.calculateIndicator(indicatorType, finalSettings);
         const validValues = values.filter(p => !isNaN(p.value));
         if (validValues.length === 0) return;
 
-        const series = this.drawSeries(indicatorId, indicatorType, finalSettings, validValues);
-        if (!series) return;
+        // ✅ Try recycle pool first
+        const pooled = this.getFromPool(stableKey);
+        let series: ISeriesApi<SeriesType>;
 
-        this.activeIndicators.set(indicatorId, {
-            id:       indicatorId,
-            type:     indicatorType,
-            series,
-            color:    finalSettings.color || INDICATOR_COLORS[indicatorType],
-            visible:  true,
-            settings: finalSettings
-        });
+        if (pooled) {
+            // ✅ Wake pooled series
+            series = pooled.series;
+            series.applyOptions({
+                ...this.buildSeriesOptions(finalSettings, indicatorType),
+                visible: true
+            });
+            series.setData(validValues as any);
+
+            const wokenIndicator: ActiveIndicator = {
+                ...pooled,
+                id:       indicatorId,
+                settings: finalSettings,
+                visible:  true
+            };
+            this.activeIndicators.set(indicatorId, wokenIndicator);
+
+        } else {
+            // ✅ Create new series
+            const newSeries = this.drawSeries(indicatorId, indicatorType, finalSettings, validValues);
+            if (!newSeries) return;
+            series = newSeries;
+
+            this.activeIndicators.set(indicatorId, {
+                id:       indicatorId,
+                type:     indicatorType,
+                series,
+                color:    finalSettings.color || INDICATOR_COLORS[indicatorType],
+                visible:  true,
+                settings: finalSettings
+            });
+        }
 
         this.calculatorReady = true;
 
@@ -245,8 +289,6 @@ export class IndicatorManager {
                 settings: { ...finalSettings }
             }
         }));
-
-        console.log(`✅ Indicator added: ${indicatorId}`);
     }
 
     // ==================== DRAWING ====================
@@ -263,7 +305,6 @@ export class IndicatorManager {
         const minMove   = 1 / Math.pow(10, precision);
 
         try {
-            // ✅ Use buildSeriesOptions for consistent options
             const series = this.chart.addSeries(LineSeries, {
                 ...this.buildSeriesOptions(settings, indicatorType),
                 priceFormat: { type: 'price', precision, minMove }
@@ -313,8 +354,6 @@ export class IndicatorManager {
                 console.error(`❌ Failed to recalculate ${indicator.type}:`, error);
             }
         });
-
-        console.log('✅ Indicators recalculated');
     }
 
     // ==================== LIVE UPDATE ====================
@@ -347,25 +386,28 @@ export class IndicatorManager {
 
     // ==================== REMOVE ====================
 
+    // ✅ Fix #16/#17 — setData([]) + visible: false, return to pool. removeSeries only for RSI pane.
     public async removeIndicator(indicatorId: string): Promise<void> {
         const indicator = this.activeIndicators.get(indicatorId);
+        if (!indicator) return;
 
-        if (indicator && this.chart) {
-            try {
-                this.chart.removeSeries(indicator.series);
-                if (indicator.pane && this.mainChart) {
-                    try { await this.mainChart.removePane(indicator.pane); } catch (e) {}
-                }
-            } catch (error) {}
-        }
+        try {
+            if (indicator.pane && this.mainChart) {
+                // RSI — pane must be removed, series goes with it, no pool
+                try { await this.mainChart.removePane(indicator.pane); } catch (e) {}
+            } else {
+                // Overlay — neuter and pool
+                indicator.series.setData([]);
+                indicator.series.applyOptions({ visible: false });
+                this.returnToPool(indicator);
+            }
+        } catch (error) {}
 
         this.activeIndicators.delete(indicatorId);
 
         if (this.activeIndicators.size === 0) {
             this.calculatorReady = false;
         }
-
-        console.log(`🗑️ Indicator removed: ${indicatorId}`);
     }
 
     // ==================== VISIBILITY ====================
@@ -403,7 +445,6 @@ export class IndicatorManager {
 
         indicator.settings = { ...indicator.settings, ...newSettings };
 
-        // ✅ Apply all visual options — lineWidth, priceLineVisible, lastValueVisible etc
         try {
             indicator.series.applyOptions(
                 this.buildSeriesOptions(indicator.settings, indicator.type)
@@ -453,17 +494,25 @@ export class IndicatorManager {
                     }
                 } catch (error) {}
             }
-        }
 
+            // ✅Fix #3 Also destroy pooled series
+            for (const pool of this.seriesPool.values()) {
+                for (const indicator of pool) {
+                    try {
+                        this.chart.removeSeries(indicator.series);
+                    } catch (error) {}
+                }
+            }
+        }
+ 
         this.activeIndicators.clear();
+        this.seriesPool.clear();
         this.calculator.clear();
         this.calculatorReady = false;
 
         this.chart            = null;
         this.chartDataManager = null;
         this.mainChart        = null;
-
-        console.log('🗑️ Indicator Manager destroyed');
     }
 
     // ==================== GETTERS ====================

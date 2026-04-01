@@ -50,8 +50,6 @@ export class MainChart {
     public onStateChange:         ((state: string) => void) | null = null;
     public onVolumeUpdate:        ((volume: number, isBullish: boolean) => void) | null = null;
     public onVolumeToggle:        ((visible: boolean) => void) | null = null;
-
-    // ✅ NEW — drawing sync callbacks
     public onSeriesDataReady:     (() => void) | null = null;
     public onBeforeSeriesRemoved: (() => void) | null = null;
 
@@ -63,8 +61,6 @@ export class MainChart {
         timeframe:         string,
         sharedDataManager: ChartDataManager
     ) {
-        console.log('🔧 MainChart constructor', { symbol, timeframe });
-
         this._currentSymbol    = symbol;
         this._currentTimeframe = timeframe;
         this.dataManager       = sharedDataManager;
@@ -86,21 +82,19 @@ export class MainChart {
             symbol
         );
 
-        // ✅ Wire SeriesManager callbacks up to MainChart callbacks
         this.seriesManager.onDataReady = () => {
-            this.onSeriesDataReady?.()
-        }
+            this.onSeriesDataReady?.();
+        };
 
         this.seriesManager.onBeforeSeriesRemoved = () => {
-            this.onBeforeSeriesRemoved?.()
-        }
+            this.onBeforeSeriesRemoved?.();
+        };
 
         this.stateManager.onStateChange((state) => {
             if (this.onStateChange) this.onStateChange(state);
         });
 
         this.loadVolumeState();
-        console.log('✅ MainChart constructor complete');
     }
 
     // ==================== LAZY LOADERS ====================
@@ -128,7 +122,6 @@ export class MainChart {
 
             this.volumeManager.setTimeframe(this._currentTimeframe);
 
-            console.log('✅ Volume Manager lazy loaded');
         } catch (error) {
             console.error('❌ Failed to load Volume Manager:', error);
         } finally {
@@ -150,7 +143,6 @@ export class MainChart {
             const chart = this.chartInstance.getChart();
             if (chart) this.paneManager.setChart(chart);
 
-            console.log('✅ Pane Manager lazy loaded');
         } catch (error) {
             console.error('❌ Failed to load Pane Manager:', error);
         } finally {
@@ -180,8 +172,6 @@ export class MainChart {
     // ==================== LOAD CHART ====================
 
     public async loadChart(container: HTMLElement): Promise<void> {
-        console.log('📊 loadChart started', { container });
-
         this.stateManager.setContainer(container);
         this.stateManager.setState('LOADING');
 
@@ -192,7 +182,6 @@ export class MainChart {
             this.seriesManager.setChart(chart);
             const series = this.seriesManager.createSeries(this.currentChartType);
 
-            // ✅ Only load VolumeManager if volume was on last session
             if (this.volumeVisible && series) {
                 await this.loadVolumeManager();
                 if (!this._destroyed) {
@@ -203,7 +192,6 @@ export class MainChart {
             if (this._destroyed) return;
 
             this.stateManager.setState('READY');
-            console.log('📊 Chart ready');
 
             if (this.onChartReady) this.onChartReady();
 
@@ -220,8 +208,11 @@ export class MainChart {
 
         this.currentChartType = chartType;
         this.dataManager.setChartType(chartType as any);
+
+        // ✅ Fix #3 — createSeries hides current, shows or creates target
         this.seriesManager.createSeries(chartType);
 
+        // ✅ Always refresh data on series switch — cached series may be stale
         if (this.dataManager.hasData()) {
             const convertedData = this.dataManager.getDataForCurrentType();
             if (convertedData && convertedData.length > 0) {
@@ -246,8 +237,6 @@ export class MainChart {
             this._currentTimeframe = dataTimeframe;
         }
 
-        console.log(`📊 Initial data: ${params.data.length} candles for ${this._currentSymbol} ${this._currentTimeframe}`);
-
         const ohlcData      = params.data;
         this.dataManager.addOHLCData(ohlcData);
 
@@ -258,7 +247,6 @@ export class MainChart {
         }
 
         if (convertedData && convertedData.length > 0) {
-            // ✅ setData fires onDataReady → onSeriesDataReady → drawingModule.onDataReady
             this.seriesManager.setData(convertedData);
 
             if (this.onInitialDataLoaded) {
@@ -305,7 +293,6 @@ export class MainChart {
     }
 
     public resetChartDataState(): void {
-        console.log('🔄 Resetting chart data state');
         this.stateManager.setState('LOADING');
     }
 
@@ -469,11 +456,11 @@ export class MainChart {
 
     // ==================== GETTERS ====================
 
-    public getChart(): IChartApi | null              { return this.chartInstance.getChart(); }
-    public getSeries(): ISeriesApi<SeriesType> | null { return this.seriesManager.getSeries(); }
-    public getVolumeSeries()                          { return this.volumeManager?.getSeries() ?? null; }
-    public isReady(): boolean                         { return this.stateManager.isReady(); }
-    public getState()                                 { return this.stateManager.getState(); }
+    public getChart(): IChartApi | null               { return this.chartInstance.getChart(); }
+    public getSeries(): ISeriesApi<SeriesType> | null  { return this.seriesManager.getSeries(); }
+    public getVolumeSeries()                           { return this.volumeManager?.getSeries() ?? null; }
+    public isReady(): boolean                          { return this.stateManager.isReady(); }
+    public getState()                                  { return this.stateManager.getState(); }
 
     public toggleGrid():      void { this.chartInstance.toggleGrid(); }
     public toggleCrosshair(): void { this.chartInstance.toggleCrosshair(); }
@@ -506,7 +493,7 @@ export class MainChart {
         this.onStateChange         = null;
         this.onVolumeUpdate        = null;
         this.onVolumeToggle        = null;
-        this.onSeriesDataReady     = null;  // ✅
-        this.onBeforeSeriesRemoved = null;  // ✅
+        this.onSeriesDataReady     = null;
+        this.onBeforeSeriesRemoved = null;
     }
 }

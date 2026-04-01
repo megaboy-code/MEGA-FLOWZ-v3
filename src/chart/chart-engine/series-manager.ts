@@ -35,9 +35,12 @@ export type SeriesData = {
 export class SeriesManager {
     private chart:            IChartApi | null = null;
     private currentSeries:    ISeriesApi<SeriesType> | null = null;
+    private currentChartType: string = 'candlestick';
     private colors:           SeriesColors;
     private currentSymbol:    string;
-    private currentChartType: string = 'candlestick';
+
+    // ✅ Fix #3 — series cache, lazy create, hide/show instead of remove/add
+    private seriesMap: Map<string, ISeriesApi<SeriesType>> = new Map();
 
     private bidLine: any = null;
     private askLine: any = null;
@@ -59,43 +62,49 @@ export class SeriesManager {
         this.currentSymbol = symbol;
     }
 
+    // ✅ Fix #3 — lazy create + hide/show cache
     public createSeries(chartType: string): ISeriesApi<SeriesType> | null {
         if (!this.chart) {
             console.error('❌ Chart not initialized for series creation');
             return null;
         }
 
-        this.removeBidAskLines();
+        // ✅ Apply price formatter on every type switch
+        this.chart.applyOptions({
+            localization: {
+                priceFormatter: getPriceFormatter(this.currentSymbol)
+            }
+        });
 
-        if (this.currentSeries) {
-            this.onBeforeSeriesRemoved?.();
-            this.chart.removeSeries(this.currentSeries);
-            this.currentSeries = null;
+        const precision = getDecimalPrecision(this.currentSymbol);
+        const minMove   = getMinMove(this.currentSymbol);
+        const priceFormat = {
+            type:      'price' as const,
+            precision,
+            minMove
+        };
+
+        // ✅ Hide current series and remove bid/ask lines before switch
+        if (this.currentSeries && this.currentChartType !== chartType) {
+            this.removeBidAskLines();
+            this.currentSeries.applyOptions({ visible: false });
         }
 
+        // ✅ Series already exists — show it, refresh data will be handled by caller
+        if (this.seriesMap.has(chartType)) {
+            this.currentSeries    = this.seriesMap.get(chartType)!;
+            this.currentChartType = chartType;
+            this.currentSeries.applyOptions({ visible: true });
+            return this.currentSeries;
+        }
+
+        // ✅ First time this type is used — create it
         try {
-            const precision = getDecimalPrecision(this.currentSymbol);
-            const minMove   = getMinMove(this.currentSymbol);
-
-            // ✅ Use type: 'price' for correct coordinate mapping
-            // type: 'custom' breaks priceToCoordinate() used by line tools core
-            // localization.priceFormatter handles visual display separately
-            const priceFormat = {
-                type:      'price' as const,
-                precision,
-                minMove
-            };
-
-            // ✅ Apply chart localization formatter for visual display
-            this.chart.applyOptions({
-                localization: {
-                    priceFormatter: getPriceFormatter(this.currentSymbol)
-                }
-            });
+            let newSeries: ISeriesApi<SeriesType> | null = null;
 
             switch (chartType) {
                 case 'candlestick':
-                    this.currentSeries = this.chart.addSeries(CandlestickSeries, {
+                    newSeries = this.chart.addSeries(CandlestickSeries, {
                         upColor:         this.colors.bull,
                         downColor:       this.colors.bear,
                         wickUpColor:     this.colors.wickBull   || this.colors.bull,
@@ -107,7 +116,7 @@ export class SeriesManager {
                     break;
 
                 case 'line':
-                    this.currentSeries = this.chart.addSeries(LineSeries, {
+                    newSeries = this.chart.addSeries(LineSeries, {
                         color:     this.colors.line,
                         lineWidth: 2,
                         priceFormat
@@ -115,7 +124,7 @@ export class SeriesManager {
                     break;
 
                 case 'area':
-                    this.currentSeries = this.chart.addSeries(AreaSeries, {
+                    newSeries = this.chart.addSeries(AreaSeries, {
                         lineColor:   this.colors.line,
                         topColor:    hexToRgba(this.colors.line, 0.4),
                         bottomColor: hexToRgba(this.colors.line, 0.1),
@@ -125,7 +134,7 @@ export class SeriesManager {
                     break;
 
                 case 'baseline':
-                    this.currentSeries = this.chart.addSeries(BaselineSeries, {
+                    newSeries = this.chart.addSeries(BaselineSeries, {
                         baseValue:        { type: 'price', price: 0 },
                         topLineColor:     'rgba(38, 166, 154, 1)',
                         topFillColor1:    'rgba(38, 166, 154, 0.28)',
@@ -142,6 +151,10 @@ export class SeriesManager {
                     return null;
             }
 
+            if (!newSeries) return null;
+
+            this.seriesMap.set(chartType, newSeries);
+            this.currentSeries    = newSeries;
             this.currentChartType = chartType;
             return this.currentSeries;
 
@@ -174,9 +187,7 @@ export class SeriesManager {
         if (!this.currentSeries) return;
         try {
             this.currentSeries.setData([]);
-        } catch (error) {
-            console.error('❌ Failed to clear series data:', error);
-        }
+        } catch (error) {}
     }
 
     public getSeries(): ISeriesApi<SeriesType> | null {
@@ -212,9 +223,7 @@ export class SeriesManager {
                     break;
 
                 case 'line':
-                    this.currentSeries.applyOptions({
-                        color: updated.line
-                    });
+                    this.currentSeries.applyOptions({ color: updated.line });
                     break;
 
                 case 'area':
@@ -236,7 +245,6 @@ export class SeriesManager {
                     });
                     break;
             }
-            console.log('🎨 Series colors updated');
         } catch (error) {
             console.error('❌ Failed to update series colors:', error);
         }
@@ -320,11 +328,18 @@ export class SeriesManager {
 
     public destroy(): void {
         this.onBeforeSeriesRemoved?.();
-        if (this.chart && this.currentSeries) {
-            try {
-                this.chart.removeSeries(this.currentSeries);
-            } catch (error) {}
+        this.removeBidAskLines();
+
+        // ✅ Fix #3 — remove all cached series on destroy only
+        if (this.chart) {
+            this.seriesMap.forEach((series) => {
+                try {
+                    this.chart!.removeSeries(series);
+                } catch (error) {}
+            });
         }
+
+        this.seriesMap.clear();
         this.currentSeries         = null;
         this.chart                 = null;
         this.onDataReady           = null;

@@ -100,7 +100,6 @@ export class ChartDataManager {
         }
 
         this.runningSum = this.ohlcData.reduce((acc, candle) => acc + candle.close, 0);
-        console.log('✅ Baseline initialized with running sum:', this.runningSum);
     }
 
     private calculateBaseline(): void {

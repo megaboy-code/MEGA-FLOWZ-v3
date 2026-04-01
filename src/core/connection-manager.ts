@@ -9,14 +9,16 @@ import {
 } from '../types';
 
 export interface ConnectionCallbacks {
-    onCandleData?: (data: WebSocketMessage) => void;
-    onTickData?: (data: WebSocketMessage) => void;
-    onAccountUpdate?: (account: AccountInfo) => void;
-    onPositionsUpdate?: (positions: PositionData[]) => void;
-    onStrategyData?: (data: WebSocketMessage) => void;
-    onTradeExecuted?: (data: WebSocketMessage) => void;
+    onCandleData?:       (data: WebSocketMessage) => void;
+    onTickData?:         (data: WebSocketMessage) => void;
+    onAccountUpdate?:    (account: AccountInfo) => void;
+    onPositionsUpdate?:  (positions: PositionData[]) => void;
+    onStrategyData?:     (data: WebSocketMessage) => void;
+    onTradeExecuted?:    (data: WebSocketMessage) => void;
     onConnectionStatus?: (status: 'connected' | 'disconnected' | 'connecting' | 'error') => void;
-    onMT5Status?: (connected: boolean, statusText: string) => void;
+    onMT5Status?:        (connected: boolean, statusText: string) => void;
+    // ✅ Fix #39 — direct callback for watchlist prices
+    onWatchlistUpdate?:  (data: WebSocketMessage) => void;
 }
 
 export class ConnectionManager {
@@ -36,12 +38,8 @@ export class ConnectionManager {
     private callbacks: ConnectionCallbacks = {};
 
     constructor() {
-        console.log('📡 Connection Manager Initialized');
-
         this.currentSymbol    = localStorage.getItem('last_symbol')    || 'EURUSD';
         this.currentTimeframe = localStorage.getItem('last_timeframe') || 'H1';
-
-        console.log(`📡 Loaded: ${this.currentSymbol} @ ${this.currentTimeframe}`);
     }
 
     // ==================== TIMEFRAME NORMALIZATION ====================
@@ -57,10 +55,7 @@ export class ConnectionManager {
             'M1': 'M1', 'M5': 'M5', 'M15': 'M15', 'M30': 'M30',
             'H1': 'H1', 'H4': 'H4', 'D1': 'D1'
         };
-
-        const normalized = map[tf] || tf.toUpperCase();
-        if (tf !== normalized) console.log(`🔄 Timeframe normalized: ${tf} → ${normalized}`);
-        return normalized;
+        return map[tf] || tf.toUpperCase();
     }
 
     // ==================== CONNECTION ====================
@@ -70,16 +65,13 @@ export class ConnectionManager {
             if (this.ws.readyState === WebSocket.OPEN)       return;
             if (this.ws.readyState === WebSocket.CONNECTING) return;
         }
-
-        console.log('🔌 Connecting to WebSocket');
         this.notifyConnectionStatus('connecting');
         this.setupWebSocket();
     }
 
     public disconnect(): void {
-        console.log('🔌 Disconnecting WebSocket');
         if (this.ws) {
-            this.ws.onclose = null;
+            this.ws.onclose          = null;
             this.ws.close();
             this.ws                  = null;
             this.wsConnected         = false;
@@ -97,7 +89,6 @@ export class ConnectionManager {
             } else {
                 this.ws.send(command);
             }
-            console.log(`📤 Sent: ${typeof command === 'object' ? 'JSON' : String(command).substring(0, 50)}`);
         } else {
             console.warn('⚠️ Cannot send — WebSocket not connected');
         }
@@ -106,16 +97,18 @@ export class ConnectionManager {
     // ==================== SYMBOL / TIMEFRAME ====================
 
     public setSymbol(symbol: string): void {
-        const oldSymbol       = this.currentSymbol;
-        this.currentSymbol    = symbol;
+        const oldSymbol    = this.currentSymbol;
+        this.currentSymbol = symbol;
+
+        // ✅ Clear stale prices immediately on symbol change
+        this.lastBidPrice = null;
+        this.lastAskPrice = null;
+
         localStorage.setItem('last_symbol', symbol);
 
         if (this.wsConnected) {
             const key = `${symbol}_${this.currentTimeframe}`;
-            if (this.currentSubscription === key) {
-                console.log(`⏭️ Already subscribed to ${key}`);
-                return;
-            }
+            if (this.currentSubscription === key) return;
             this.currentSubscription = key;
             this.sendCommand(`UNSUBSCRIBE_${oldSymbol}`);
             this.sendCommand(`SUBSCRIBE_${symbol}_${this.currentTimeframe}`);
@@ -129,10 +122,7 @@ export class ConnectionManager {
 
         if (this.wsConnected) {
             const key = `${this.currentSymbol}_${normalized}`;
-            if (this.currentSubscription === key) {
-                console.log(`⏭️ Already subscribed to ${key}`);
-                return;
-            }
+            if (this.currentSubscription === key) return;
             this.currentSubscription = key;
             this.sendCommand(`UNSUBSCRIBE_${this.currentSymbol}`);
             this.sendCommand(`SUBSCRIBE_${this.currentSymbol}_${normalized}`);
@@ -153,31 +143,31 @@ export class ConnectionManager {
 
     public executeTrade(
         direction: 'BUY' | 'SELL',
-        symbol: string,
-        volume: number,
-        price: number,
-        tp: number | null = null,
-        sl: number | null = null
+        symbol:    string,
+        volume:    number,
+        price:     number,
+        tp:        number | null = null,
+        sl:        number | null = null
     ): void {
         const slStr = sl !== null ? String(sl) : '0';
         const tpStr = tp !== null ? String(tp) : '0';
         this.sendCommand(`TRADE_${direction}_${symbol}_${volume}_${price}_${slStr}_${tpStr}`);
     }
 
-    public closeAllPositions(): void              { this.sendCommand('CLOSE_ALL'); }
-    public closePosition(ticket: string): void    { this.sendCommand(`CLOSE_POSITION_${ticket}`); }
-    public getPositions(): void                   { this.sendCommand('GET_POSITIONS'); }
-    public getAccountInfo(): void                 { this.sendCommand('GET_ACCOUNT_INFO'); }
-    public clearCache(): void                     { this.sendCommand('CLEAR_CACHE'); }
+    public closeAllPositions(): void           { this.sendCommand('CLOSE_ALL'); }
+    public closePosition(ticket: string): void { this.sendCommand(`CLOSE_POSITION_${ticket}`); }
+    public getPositions(): void                { this.sendCommand('GET_POSITIONS'); }
+    public getAccountInfo(): void              { this.sendCommand('GET_ACCOUNT_INFO'); }
+    public clearCache(): void                  { this.sendCommand('CLEAR_CACHE'); }
 
     // ==================== STRATEGY COMMANDS ====================
 
     public deployStrategy(
         strategyType: string,
-        symbol: string,
-        timeframe: string,
-        params: object): void
-    {
+        symbol:       string,
+        timeframe:    string,
+        params:       object
+    ): void {
         const tf = this.normalizeTimeframe(timeframe);
         this.sendCommand(`DEPLOY_STRATEGY_${strategyType}_${symbol}_${tf}_${JSON.stringify(params)}`);
     }
@@ -194,11 +184,11 @@ export class ConnectionManager {
 
     public backtestStrategy(
         strategyType: string,
-        symbol: string,
-        timeframe: string,
-        days: number,
-        params: object): void
-    {
+        symbol:       string,
+        timeframe:    string,
+        days:         number,
+        params:       object
+    ): void {
         const tf = this.normalizeTimeframe(timeframe);
         this.sendCommand(`BACKTEST_STRATEGY_${strategyType}_${symbol}_${tf}_${days}_${JSON.stringify(params)}`);
     }
@@ -241,26 +231,28 @@ export class ConnectionManager {
         this.callbacks.onMT5Status = callback;
     }
 
+    // ✅ Fix #39 — direct callback registration for watchlist prices
+    public onWatchlistUpdate(callback: (data: WebSocketMessage) => void): void {
+        this.callbacks.onWatchlistUpdate = callback;
+    }
+
     // ==================== WEBSOCKET SETUP ====================
 
     private setupWebSocket(): void {
         this.ws = new WebSocket('ws://127.0.0.1:8765');
 
         this.ws.onopen = () => {
-            console.log('✅ WebSocket connected');
             this.wsConnected = true;
             this.notifyConnectionStatus('connected');
 
-            // ── Initial requests ──
+            // ✅ GET_ACCOUNT_INFO kept — user may reload after deposit
             this.sendCommand('GET_ACCOUNT_INFO');
-            this.sendCommand('GET_POSITIONS');
 
-            // ── Subscribe to last symbol/TF ──
+            // ✅ Fix #38 — GET_POSITIONS removed, Thread 3 pushes automatically
+
             this.currentSubscription = `${this.currentSymbol}_${this.currentTimeframe}`;
             this.sendCommand(`SUBSCRIBE_${this.currentSymbol}_${this.currentTimeframe}`);
 
-            // ✅ Re-send watchlist symbols to C++ on every connect
-            // Ensures C++ watchlist matches frontend localStorage
             try {
                 const saved = localStorage.getItem('watchlist_symbols');
                 if (saved) {
@@ -269,7 +261,6 @@ export class ConnectionManager {
                         symbols.forEach(symbol => {
                             this.sendCommand(`WATCHLIST_ADD_${symbol}`);
                         });
-                        console.log(`📡 Watchlist synced to backend: ${symbols.join(', ')}`);
                     }
                 }
             } catch (e) {
@@ -287,7 +278,6 @@ export class ConnectionManager {
         };
 
         this.ws.onclose = () => {
-            console.log('🔌 WebSocket disconnected');
             this.wsConnected         = false;
             this.currentSubscription = null;
             this.notifyConnectionStatus('disconnected');
@@ -350,11 +340,9 @@ export class ConnectionManager {
                 }
                 break;
 
-            // ✅ Watchlist prices from C++ backend
+            // ✅ Fix #11 — direct callback, no DOM event
             case 'watchlist_update':
-                document.dispatchEvent(new CustomEvent('watchlist-prices-update', {
-                    detail: data
-                }));
+                if (this.callbacks.onWatchlistUpdate) this.callbacks.onWatchlistUpdate(data);
                 break;
 
             case 'strategy_response':
@@ -370,15 +358,13 @@ export class ConnectionManager {
                 break;
 
             default:
-                console.log(`📨 Unhandled message type: ${data.type}`);
+                break;
         }
     }
 
     private handleConnectionStatus(data: WebSocketMessage): void {
         this.mt5Connected  = data.data?.mt5_connected || false;
         this.mt5StatusText = data.data?.status_text   || 'Unknown';
-
-        console.log(`📡 MT5: ${this.mt5Connected ? '✅' : '❌'} ${this.mt5StatusText}`);
 
         if (this.callbacks.onMT5Status) {
             this.callbacks.onMT5Status(this.mt5Connected, this.mt5StatusText);
@@ -388,7 +374,6 @@ export class ConnectionManager {
     private notifyConnectionStatus(
         status: 'connected' | 'disconnected' | 'connecting' | 'error'
     ): void {
-        console.log(`🔌 Status: ${status}`);
         if (this.callbacks.onConnectionStatus) {
             this.callbacks.onConnectionStatus(status);
         }

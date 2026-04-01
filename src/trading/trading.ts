@@ -62,6 +62,7 @@ interface InlineEditorState {
 
 const MAX_BROKER_LOTS   = 50;
 const TPSL_DEFAULT_PIPS = 20;
+const THROTTLE_MS       = 500; // ✅ Fix #26 — throttle expensive calculations
 
 // ════════════════════════════════════════
 // TRADING MODULE
@@ -112,7 +113,10 @@ export class TradingModule {
 
     private tpSlUpdateInterval: ReturnType<typeof setInterval> | null = null;
 
-    private boundPriceUpdate:    EventListener | null = null;
+    // ✅ Fix #26 — throttling timers
+    private lastMaxSafeLotsCalc: number = 0;
+    private lastRiskPctApply: number = 0;
+
     private boundSafeModeToggle: EventListener | null = null;
     private boundSlider:         EventListener | null = null;
     private boundTpToggle:       EventListener | null = null;
@@ -144,9 +148,7 @@ export class TradingModule {
     // ════════════════════════════════════════
 
     private initialize(): void {
-        console.log('⚡ Trading Module initializing...');
         try {
-            this.setupPriceListener();
             this.setupSafeMode();
             this.setupLotControls();
             this.setupRiskPct();
@@ -157,57 +159,59 @@ export class TradingModule {
             this.setupHotkeyListeners();
             this.startTpSlBackgroundUpdate();
             this.renderAll();
-            console.log('✅ Trading Module initialized');
         } catch (error) {
             console.error('❌ Trading Module failed:', error);
         }
     }
 
     // ════════════════════════════════════════
-    // PRICE LISTENER
+    // PRICE UPDATE — Direct callback from ModuleManager (Fix #9)
     // ════════════════════════════════════════
 
-    private setupPriceListener(): void {
-        this.boundPriceUpdate = (e: Event) => {
-            const { bid, ask, symbol } = (e as CustomEvent).detail;
+    public onTick(data: WebSocketMessage): void {
+        const { bid, ask, symbol } = data;
 
-            // ✅ Update input steps when symbol changes
-            if (symbol && symbol !== this.state.symbol) {
-                this.updateInputSteps(symbol);
-            }
+        // Update input steps when symbol changes
+        if (symbol && symbol !== this.state.symbol) {
+            this.updateInputSteps(symbol);
+        }
 
-            this.state.bid    = bid    ?? this.state.bid;
-            this.state.ask    = ask    ?? this.state.ask;
-            this.state.symbol = symbol ?? this.state.symbol;
+        this.state.bid    = bid    ?? this.state.bid;
+        this.state.ask    = ask    ?? this.state.ask;
+        this.state.symbol = symbol ?? this.state.symbol;
 
-            this.renderBuySellPrices();
-            this.renderLotStats();
+        this.renderBuySellPrices();
+        this.renderLotStats();
 
-            // ✅ Recalculate maxSafeLots on every tick
+        // ✅ Fix #26 — throttle maxSafeLots calculation
+        const now = Date.now();
+        if (now - this.lastMaxSafeLotsCalc >= THROTTLE_MS) {
             if (this.state.ask > 0) {
                 this.state.maxSafeLots = this.calcMaxSafeLots();
                 this.applySafeMode();
             }
+            this.lastMaxSafeLotsCalc = now;
+        }
 
-            // ✅ Update TP/SL panel inputs from pip distances
-            if (this.state.tpEnabled || this.state.slEnabled) {
-                this.renderTpSlInputsFromPips();
-            }
+        // Update TP/SL panel inputs from pip distances
+        if (this.state.tpEnabled || this.state.slEnabled) {
+            this.renderTpSlInputsFromPips();
+        }
 
-            // ✅ Update inline editor on tick
-            if (this.inlineEditor.active) {
-                this.updateInlineOnTick();
-            }
+        // Update inline editor on tick
+        if (this.inlineEditor.active) {
+            this.updateInlineOnTick();
+        }
 
-            // ✅ Recalculate risk% lot size on tick
-            if (this.state.riskPct > 0 && this.state.slEnabled) {
+        // ✅ Fix #26 — throttle risk% lot size calculation
+        if (this.state.riskPct > 0 && this.state.slEnabled) {
+            if (now - this.lastRiskPctApply >= THROTTLE_MS) {
                 this.applyRiskPct(this.state.riskPct);
+                this.lastRiskPctApply = now;
             }
+        }
 
-            this.renderTpSlPips();
-        };
-
-        document.addEventListener('price-update', this.boundPriceUpdate);
+        this.renderTpSlPips();
     }
 
     // ════════════════════════════════════════
@@ -259,7 +263,7 @@ export class TradingModule {
         const slInput = document.getElementById('inlineSlInput') as HTMLInputElement;
         const tpInput = document.getElementById('inlineTpInput') as HTMLInputElement;
 
-        // ✅ SL — if not fixed, update price live from pip distance
+        // SL — if not fixed, update price live from pip distance
         if (!this.inlineEditor.slFixed) {
             const slPrice = isBuy
                 ? price - this.inlineEditor.slPips * pipSize
@@ -270,7 +274,7 @@ export class TradingModule {
             }
         }
 
-        // ✅ TP — if not fixed, update price live from pip distance
+        // TP — if not fixed, update price live from pip distance
         if (!this.inlineEditor.tpFixed) {
             const tpPrice = isBuy
                 ? price + this.inlineEditor.tpPips * pipSize
@@ -281,7 +285,7 @@ export class TradingModule {
             }
         }
 
-        // ✅ Always update pip display
+        // Always update pip display
         this.renderInlinePipsFromState();
     }
 
@@ -723,7 +727,6 @@ export class TradingModule {
             const el = document.getElementById('tpPips');
             if (el) {
                 const newText = `+${this.state.tpPips.toFixed(1)}p`;
-                // ✅ Only update if changed
                 if (el.textContent !== newText) el.textContent = newText;
                 el.className = 'tpsl-pips positive';
             }
@@ -733,7 +736,6 @@ export class TradingModule {
             const el = document.getElementById('slPips');
             if (el) {
                 const newText = `-${this.state.slPips.toFixed(1)}p`;
-                // ✅ Only update if changed
                 if (el.textContent !== newText) el.textContent = newText;
                 el.className = 'tpsl-pips negative';
             }
@@ -786,7 +788,6 @@ export class TradingModule {
         const volume  = this.state.lotSize;
         const pipSize = getPipSize(symbol);
 
-        // ✅ Direction-aware TP/SL at execution time
         let tp: number | null = null;
         let sl: number | null = null;
 
@@ -807,8 +808,6 @@ export class TradingModule {
         document.dispatchEvent(new CustomEvent('execute-trade', {
             detail: { command, tp, sl }
         }));
-
-        console.log(`🚀 Trade dispatched: ${command} TP:${tp} SL:${sl}`);
     }
 
     // ════════════════════════════════════════
@@ -1100,7 +1099,6 @@ export class TradingModule {
             if (existing) {
                 const cells = existing.querySelectorAll('td');
 
-                // ✅ Only write to DOM if value changed
                 const newPrice = String(pos.current_price ?? '—');
                 if (cells[4] && cells[4].textContent !== newPrice) {
                     cells[4].textContent = newPrice;
@@ -1117,7 +1115,6 @@ export class TradingModule {
                 }
 
                 if (cells[7]) {
-                    // ✅ Only write to DOM if value changed
                     if (cells[7].textContent !== pnlStr) {
                         cells[7].textContent = pnlStr;
                     }
@@ -1147,7 +1144,6 @@ export class TradingModule {
         const pnlEl = document.getElementById('summaryTotalPnl');
         if (pnlEl) {
             const newPnl = `${totalPnl >= 0 ? '+$' : '-$'}${Math.abs(totalPnl).toFixed(2)}`;
-            // ✅ Only update if changed
             if (pnlEl.textContent !== newPnl) pnlEl.textContent = newPnl;
             pnlEl.classList.toggle('positive', totalPnl >= 0);
             pnlEl.classList.toggle('negative', totalPnl <  0);
@@ -1185,7 +1181,6 @@ export class TradingModule {
         const pipSize = getPipSize(symbol);
         const isBuy   = pos.type === 'BUY';
 
-        // ✅ Set input steps for this position's symbol
         this.updateInputSteps(symbol);
 
         this.inlineEditor.active = true;
@@ -1359,7 +1354,6 @@ export class TradingModule {
         if (slEl) {
             const newText  = `${isBuy ? '-' : '+'}${slPips.toFixed(1)}p`;
             const newClass = `inline-field-pips ${isBuy ? 'negative' : 'positive'}`;
-            // ✅ Only update if changed
             if (slEl.textContent !== newText) slEl.textContent = newText;
             if (slEl.className   !== newClass) slEl.className  = newClass;
         }
@@ -1367,7 +1361,6 @@ export class TradingModule {
         if (tpEl) {
             const newText  = `${isBuy ? '+' : '-'}${tpPips.toFixed(1)}p`;
             const newClass = `inline-field-pips ${isBuy ? 'positive' : 'negative'}`;
-            // ✅ Only update if changed
             if (tpEl.textContent !== newText) tpEl.textContent = newText;
             if (tpEl.className   !== newClass) tpEl.className  = newClass;
         }
@@ -1439,7 +1432,6 @@ export class TradingModule {
 
         if (pnlEl) {
             const newPnl = `${positive ? '+' : '-'}$${Math.abs(pnl).toFixed(2)}`;
-            // ✅ Only update if changed
             if (pnlEl.textContent !== newPnl) pnlEl.textContent = newPnl;
             pnlEl.classList.toggle('positive', positive);
             pnlEl.classList.toggle('negative', !positive);
@@ -1447,7 +1439,6 @@ export class TradingModule {
 
         if (pctEl) {
             const newPct = `${positive ? '+' : '-'}${pct}%`;
-            // ✅ Only update if changed
             if (pctEl.textContent !== newPct) pctEl.textContent = newPct;
             pctEl.classList.toggle('positive', positive);
             pctEl.classList.toggle('negative', !positive);
@@ -1511,13 +1502,11 @@ export class TradingModule {
     public updatePositions(positions: PositionData[]): void {
         this.state.positions = positions;
 
-        // ✅ Update floating P&L and equity from live position data
         this.state.floatingPnl = positions.reduce((sum, p) => sum + (p.profit ?? 0), 0);
         this.state.equity      = this.state.balance + this.state.floatingPnl;
 
         this.updatePositionsCount();
 
-        // ✅ Batch all visual updates in next animation frame
         requestAnimationFrame(() => {
             this.renderHero();
             this.renderMetrics();
@@ -1530,7 +1519,7 @@ export class TradingModule {
     }
 
     public handleTradeConfirmation(data: WebSocketMessage): void {
-        console.log('✅ Trade confirmed:', data);
+        // Trade confirmation received
     }
 
     // ════════════════════════════════════════
@@ -1542,7 +1531,6 @@ export class TradingModule {
         if (el) el.textContent = value;
     }
 
-    // ✅ Only touches DOM if value actually changed
     private setTextIfChanged(id: string, value: string): void {
         const el = document.getElementById(id);
         if (el && el.textContent !== value) el.textContent = value;
@@ -1566,14 +1554,11 @@ export class TradingModule {
     // ════════════════════════════════════════
 
     public destroy(): void {
-        console.log('🗑️ Cleaning up Trading Module');
-
         this.stopTpSlBackgroundUpdate();
 
         this.dragCleanup?.();
         this.dragCleanup = null;
 
-        if (this.boundPriceUpdate)   document.removeEventListener('price-update',        this.boundPriceUpdate);
         if (this.boundHotkeyAction)  document.removeEventListener('hotkey-global-action', this.boundHotkeyAction);
         if (this.boundHotkeyTrade)   document.removeEventListener('hotkey-trade-action',  this.boundHotkeyTrade);
 
