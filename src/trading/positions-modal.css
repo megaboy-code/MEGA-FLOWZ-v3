@@ -89,7 +89,8 @@
     font-weight: 600;
     cursor: pointer;
     font-family: var(--text-sans);
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .modal-close-all-btn:hover {
@@ -110,7 +111,8 @@
     color: var(--text-muted);
     cursor: pointer;
     font-size: var(--text-base);
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .modal-close-btn:hover {
@@ -209,7 +211,8 @@
 .positions-table tbody tr {
     border-bottom: 1px solid var(--border-light);
     cursor: pointer;
-    transition: background 0.12s ease;
+    /* ✅ FIX: background shorthand → background-color */
+    transition: background-color 0.12s ease;
 }
 
 .positions-table tbody tr:hover { background: var(--bg-hover); }
@@ -227,8 +230,8 @@
     white-space: nowrap;
 }
 
-.positions-table td.type-buy    { color: var(--accent-buy);  font-weight: 700; }
-.positions-table td.type-sell   { color: var(--accent-sell); font-weight: 700; }
+.positions-table td.type-buy     { color: var(--accent-buy);  font-weight: 700; }
+.positions-table td.type-sell    { color: var(--accent-sell); font-weight: 700; }
 .positions-table td.pnl-positive { color: var(--accent-buy); }
 .positions-table td.pnl-negative { color: var(--accent-sell); }
 
@@ -244,7 +247,8 @@
     color: var(--text-muted);
     cursor: pointer;
     font-size: var(--text-xs);
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .row-expand-btn:hover {
@@ -367,7 +371,8 @@
     cursor: pointer;
     font-family: var(--text-sans);
     border: 1px solid transparent;
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .inline-btn-update {
@@ -417,7 +422,8 @@
     color: var(--accent-sell);
     cursor: pointer;
     font-size: var(--text-xs);
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .row-close-btn:hover {
@@ -442,7 +448,8 @@
     font-family: var(--text-mono);
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .inline-pip-btn:hover {

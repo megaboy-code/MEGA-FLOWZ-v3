@@ -63,7 +63,8 @@
     border: 1px solid var(--border);
     border-radius: 5px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .search-result-item:hover {
@@ -116,7 +117,7 @@
     padding: 7px 10px;
     border-bottom: 1px solid var(--border);
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background-color 0.15s ease;
     position: relative;
     gap: 8px;
 }
@@ -198,7 +199,7 @@
     font-size: var(--text-base);
     font-weight: 600;
     color: var(--text-primary);
-    transition: color 0.3s ease;
+    /* ✅ FIX: Removed transition: color — conflicts with JS flash classes */
 }
 
 .watch-price.flash-up   { color: var(--accent-buy); }
@@ -228,7 +229,8 @@
     font-size: var(--text-base);
     cursor: pointer;
     opacity: 0;
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .watch-item:hover .watch-delete { opacity: 1; }
@@ -267,7 +269,8 @@
     font-size: var(--text-sm);
     font-family: var(--text-sans);
     cursor: pointer;
-    transition: all 0.15s ease;
+    /* ✅ FIX: Replaced transition: all */
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .wl-sort-btn.active {
@@ -277,3 +280,11 @@
 }
 
 .wl-sort-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ==================== REDUCED MOTION ==================== */
+@media (prefers-reduced-motion: reduce) {
+    .search-result-item,
+    .watch-item,
+    .watch-delete,
+    .wl-sort-btn { transition: none; }
+}

@@ -4,9 +4,9 @@
 // ModuleManager imports only this file
 // ================================================================
 
-import { AccountInfo, PositionData, WebSocketMessage } from '../types';
-import { TradingPanel }    from './trading-panel';
-import { PositionsModal }  from './positions-modal';
+import { AccountInfo, PositionData } from '../types';
+import { TradingPanel }   from './trading-panel';
+import { PositionsModal } from './positions-modal';
 
 export class TradingModule {
 
@@ -81,18 +81,17 @@ export class TradingModule {
         this.modal.updatePositions(positions);
         this.renderPositionsCount();
 
-        requestAnimationFrame(() => {
-            this.panel.renderHero(this.floatingPnl, this.balance);
-            this.panel.renderMetrics();
+        // ✅ Fix — direct call, no requestAnimationFrame needed at 500ms interval
+        this.panel.renderHero(this.floatingPnl, this.balance);
+        this.panel.renderMetrics();
 
-            const modal = document.getElementById('positionsModal');
-            if (modal && !modal.classList.contains('hidden')) {
-                this.modal.updateRows(positions);
-            }
-        });
+        const modal = document.getElementById('positionsModal');
+        if (modal && !modal.classList.contains('hidden')) {
+            this.modal.updateRows(positions);
+        }
     }
 
-    public handleTradeConfirmation(data: WebSocketMessage): void {
+    public handleTradeConfirmation(): void {
         // Reserved for future use
     }
 

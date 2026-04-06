@@ -173,4 +173,4 @@ public:
 };
 
 // ── Global instance ──
-inline ChartManager chart_manager;
+inline ChartManager chart_manager; 

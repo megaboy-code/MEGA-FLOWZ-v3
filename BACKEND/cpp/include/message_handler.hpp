@@ -1,5 +1,6 @@
 // ================================================================
 // MESSAGE_HANDLER.HPP - WebSocket Message Routing
+// Binary FlatBuffers — replaces all JSON sends
 // ================================================================
 
 #pragma once
@@ -9,27 +10,35 @@
 #include "chart_manager.hpp"
 #include "trade_handler.hpp"
 #include "symbol_cache.hpp"
+#include "flatbuffer_builder.hpp"
 
 // ── Callback types ──
-using SendCallback          = std::function<void(const std::string&)>;
+using SendCallback          = std::function<void(const uint8_t*, size_t)>;
 using SubscribeCallback     = std::function<void(const std::string&, const std::string&)>;
-using PositionsCallback     = std::function<void()>;
-using AccountCallback       = std::function<void()>;
-using PriceCallback         = std::function<void()>;
-using ConnectionCallback    = std::function<void()>;
+using MsgPositionsCallback  = std::function<void()>;
+using MsgAccountCallback    = std::function<void()>;
+using MsgPriceCallback      = std::function<void()>;
+using MsgConnectionCallback = std::function<void()>;
 using StrategyCallback      = std::function<void(const std::string&)>;
 using AutoTradingCallback   = std::function<void(bool)>;
 
 class MessageHandler {
 private:
-    SendCallback        send_cb;
-    SubscribeCallback   subscribe_cb;
-    PositionsCallback   positions_cb;
-    AccountCallback     account_cb;
-    PriceCallback       price_cb;
-    ConnectionCallback  connection_cb;
-    StrategyCallback    strategy_cb;
-    AutoTradingCallback auto_trading_cb;
+    SendCallback          send_cb;
+    SubscribeCallback     subscribe_cb;
+    MsgPositionsCallback  positions_cb;
+    MsgAccountCallback    account_cb;
+    MsgPriceCallback      price_cb;
+    MsgConnectionCallback connection_cb;
+    StrategyCallback      strategy_cb;
+    AutoTradingCallback   auto_trading_cb;
+
+    // ── Send FlatBuffer ──
+    void send(flatbuffers::DetachedBuffer buf) {
+        if (send_cb && buf.size() > 0) {
+            send_cb(buf.data(), buf.size());
+        }
+    }
 
     // ── Parse symbol and timeframe ──
     bool parseSymbolTimeframe(
@@ -46,47 +55,17 @@ private:
         return !symbol.empty() && !timeframe.empty();
     }
 
-    // ── Send JSON helper ──
-    void send(const std::string& json) {
-        if (send_cb) send_cb(json);
-    }
-
-    // ── Build trade response JSON ──
-    std::string buildTradeResponse(const TradeResult& r) {
-        std::string json = "{";
-        json += "\"type\":\"trade_executed\",";
-        json += "\"success\":" + std::string(r.success ? "true" : "false") + ",";
-        if (r.success) {
-            json += "\"direction\":\"" + r.direction + "\",";
-            json += "\"symbol\":\""    + r.symbol    + "\",";
-            json += "\"volume\":"      + std::to_string(r.volume)    + ",";
-            json += "\"price\":"       + std::to_string(r.price)     + ",";
-            json += "\"ticket\":"      + std::to_string(r.ticket)    + ",";
-            json += "\"timestamp\":"   + std::to_string(r.timestamp) + ",";
-            json += "\"message\":\""   + r.message + "\"";
-        } else {
-            json += "\"message\":\"" + r.error + "\"";
-        }
-        json += "}";
-        return json;
-    }
-
-    // ── Build error JSON ──
-    std::string buildError(const std::string& msg) {
-        return "{\"type\":\"error\",\"message\":\"" + msg + "\"}";
-    }
-
 public:
 
     // ── Set callbacks ──
-    void setSendCallback(SendCallback cb)               { send_cb         = cb; }
-    void setSubscribeCallback(SubscribeCallback cb)     { subscribe_cb    = cb; }
-    void setPositionsCallback(PositionsCallback cb)     { positions_cb    = cb; }
-    void setAccountCallback(AccountCallback cb)         { account_cb      = cb; }
-    void setPriceCallback(PriceCallback cb)             { price_cb        = cb; }
-    void setConnectionCallback(ConnectionCallback cb)   { connection_cb   = cb; }
-    void setStrategyCallback(StrategyCallback cb)       { strategy_cb     = cb; }
-    void setAutoTradingCallback(AutoTradingCallback cb) { auto_trading_cb = cb; }
+    void setSendCallback(SendCallback cb)                { send_cb         = cb; }
+    void setSubscribeCallback(SubscribeCallback cb)      { subscribe_cb    = cb; }
+    void setPositionsCallback(MsgPositionsCallback cb)   { positions_cb    = cb; }
+    void setAccountCallback(MsgAccountCallback cb)       { account_cb      = cb; }
+    void setPriceCallback(MsgPriceCallback cb)           { price_cb        = cb; }
+    void setConnectionCallback(MsgConnectionCallback cb) { connection_cb   = cb; }
+    void setStrategyCallback(StrategyCallback cb)        { strategy_cb     = cb; }
+    void setAutoTradingCallback(AutoTradingCallback cb)  { auto_trading_cb = cb; }
 
     // ================================================================
     // PROCESS MESSAGE — main router
@@ -95,7 +74,7 @@ public:
 
         // ── Ping ──
         if (message == "ping") {
-            send("pong");
+            send(FBB::buildPong());
             return;
         }
 
@@ -103,12 +82,14 @@ public:
         if (message.size() >= 10 &&
             message.substr(0, 10) == "SUBSCRIBE_")
         {
-            std::cout << "MSG: " << message << std::endl;
             std::string symbol, timeframe;
-            if (parseSymbolTimeframe(message, "SUBSCRIBE_", symbol, timeframe)) {
+            if (parseSymbolTimeframe(
+                    message, "SUBSCRIBE_", symbol, timeframe)) {
                 if (subscribe_cb) subscribe_cb(symbol, timeframe);
             } else {
-                send(buildError("Use SUBSCRIBE_SYMBOL_TIMEFRAME format"));
+                send(FBB::buildError(
+                    "Use SUBSCRIBE_SYMBOL_TIMEFRAME format"
+                ));
             }
             return;
         }
@@ -117,7 +98,6 @@ public:
         if (message.size() >= 12 &&
             message.substr(0, 12) == "UNSUBSCRIBE_")
         {
-            std::cout << "MSG: " << message << std::endl;
             std::string symbol = message.substr(12);
             chart_manager.clearCandles(symbol);
             chart_manager.clearChartState();
@@ -134,21 +114,13 @@ public:
         if (message.size() >= 6 &&
             message.substr(0, 6) == "TRADE_")
         {
-            auto result = trade_handler.handleTradeCommand(message);
-            send(buildTradeResponse(result));
-            if (result.success) {
-                if (positions_cb) positions_cb();
-            }
+            trade_handler.handleTradeCommand(message, send_cb);
             return;
         }
 
         // ── Close all ──
         if (message == "CLOSE_ALL") {
-            auto result = trade_handler.handleCloseAll();
-            send("{\"type\":\"positions_closed\","
-                 "\"success\":" + std::string(result.success ? "true" : "false") + ","
-                 "\"message\":\"" + result.message + "\"}");
-            if (positions_cb) positions_cb();
+            trade_handler.handleCloseAll(send_cb);
             return;
         }
 
@@ -156,11 +128,7 @@ public:
         if (message.size() >= 15 &&
             message.substr(0, 15) == "CLOSE_POSITION_")
         {
-            auto result = trade_handler.handleClosePosition(message);
-            send("{\"type\":\"position_closed\","
-                 "\"success\":" + std::string(result.success ? "true" : "false") + ","
-                 "\"message\":\"" + result.message + "\"}");
-            if (positions_cb) positions_cb();
+            trade_handler.handleClosePosition(message, send_cb);
             return;
         }
 
@@ -168,11 +136,7 @@ public:
         if (message.size() >= 16 &&
             message.substr(0, 16) == "MODIFY_POSITION_")
         {
-            auto result = trade_handler.handleModifyPosition(message);
-            send("{\"type\":\"position_modified\","
-                 "\"success\":" + std::string(result.success ? "true" : "false") + ","
-                 "\"message\":\"" + result.message + "\"}");
-            if (positions_cb) positions_cb();
+            trade_handler.handleModifyPosition(message, send_cb);
             return;
         }
 
@@ -203,17 +167,17 @@ public:
         // ── Auto trading ──
         if (message == "AUTO_ON") {
             if (auto_trading_cb) auto_trading_cb(true);
-            send("{\"type\":\"auto_trading_status\","
-                 "\"enabled\":true,"
-                 "\"message\":\"Auto trading enabled\"}");
+            send(FBB::buildAutoTradingStatus(
+                true, "Auto trading enabled"
+            ));
             return;
         }
 
         if (message == "AUTO_OFF") {
             if (auto_trading_cb) auto_trading_cb(false);
-            send("{\"type\":\"auto_trading_status\","
-                 "\"enabled\":false,"
-                 "\"message\":\"Auto trading disabled\"}");
+            send(FBB::buildAutoTradingStatus(
+                false, "Auto trading disabled"
+            ));
             return;
         }
 
@@ -221,14 +185,12 @@ public:
         if (message.size() >= 14 &&
             message.substr(0, 14) == "WATCHLIST_ADD_")
         {
-            std::cout << "MSG: " << message << std::endl;
             return;
         }
 
         if (message.size() >= 17 &&
             message.substr(0, 17) == "WATCHLIST_REMOVE_")
         {
-            std::cout << "MSG: " << message << std::endl;
             return;
         }
 
@@ -249,15 +211,13 @@ public:
         if (message == "CLEAR_CACHE") {
             chart_manager.clearCandles();
             symbol_cache.clearAll();
-            send("{\"type\":\"cache_cleared\","
-                 "\"message\":\"Cache cleared\"}");
+            send(FBB::buildCacheCleared("Cache cleared"));
             return;
         }
 
         // ── Unknown ──
-        send(buildError("Unknown command: " + message));
+        send(FBB::buildError("Unknown command: " + message));
     }
 };
 
-// ── Global instance ──
 inline MessageHandler message_handler;

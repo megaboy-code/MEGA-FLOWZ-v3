@@ -1,10 +1,24 @@
 # ===============================================================
 # CONNECTOR.PY - MT5 Interface
+# Three-thread architecture:
+#   Thread 1 — Bar Pulse (100ms)
+#              → on_tick        — raw tick push (bid/ask)
+#              → on_bar_update  — raw M1 OHLC numpy (100ms)
+#   Thread 2 — Trade + History (command queue)
+#              → on_history_result — raw numpy history
+#              → on_daily_open     — D1 open price
+#   Thread 3 — Accountant (500ms)
+#              → on_positions_update — raw positions + account
+#              → on_connection_update — connection status
+# Python does zero calculations — raw data only
 # ===============================================================
 
 import MetaTrader5 as mt5
+import numpy as np
 from datetime import datetime
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List
+import threading
+import queue
 import time
 import config
 
@@ -14,23 +28,51 @@ import config
 # ===============================================================
 
 TF_MAP = {
-    'M1':  (mt5.TIMEFRAME_M1,  1),
-    'M5':  (mt5.TIMEFRAME_M5,  5),
-    'M15': (mt5.TIMEFRAME_M15, 15),
-    'H1':  (mt5.TIMEFRAME_H1,  60),
-    'H4':  (mt5.TIMEFRAME_H4,  240),
-    'D1':  (mt5.TIMEFRAME_D1,  1440),
+    'M1':  mt5.TIMEFRAME_M1,
+    'M5':  mt5.TIMEFRAME_M5,
+    'M15': mt5.TIMEFRAME_M15,
+    'H1':  mt5.TIMEFRAME_H1,
+    'H4':  mt5.TIMEFRAME_H4,
+    'D1':  mt5.TIMEFRAME_D1,
 }
 
 
 class MT5Connector:
 
     def __init__(self):
-        self.connected          = False
-        self.available_symbols  = []
-        self.utc_offset         = 0
-        self.symbol_cache       = {}
-        self._daily_open_cache  = {}  # symbol → (open_price, timestamp)
+        self.connected         = False
+        self.available_symbols = []
+        self.utc_offset        = 0
+        self.symbol_cache      = {}
+
+        # ── Per symbol state ──
+        self.last_tick_msc  = {}
+        self.last_bar_time  = {}
+
+        # ── Thread 2 command queue ──
+        self.trade_queue = queue.Queue()
+
+        # ── Callbacks — set by C++ bridge ──
+        self.on_tick              = None
+        self.on_bar_update        = None
+        self.on_history_result    = None
+        self.on_positions_update  = None
+        self.on_connection_update = None
+        self.on_daily_open        = None
+        self.on_symbol_detected   = None  # ← new: fires detected back to C++
+
+        # ── Thread control ──
+        self._running         = False
+        self._thread1         = None
+        self._thread2         = None
+        self._thread3         = None
+
+        # ── Active symbols for Thread 1 ──
+        self._active_symbols      = []
+        self._active_symbols_lock = threading.Lock()
+
+        # ── Connection check timing ──
+        self._last_connection_check = 0
 
     # ======================
     # CONNECTION MANAGEMENT
@@ -52,6 +94,7 @@ class MT5Connector:
         return True
 
     def disconnect(self):
+        self.stop_threads()
         if self.connected:
             mt5.shutdown()
             self.connected = False
@@ -163,330 +206,450 @@ class MT5Connector:
         else:
             self.symbol_cache.clear()
 
-    def clear_candle_cache(self, symbol: str = None, timeframe: str = None):
-        self.clear_symbol_cache(symbol)
-
     # ======================
-    # PRICE PRECISION
+    # ACTIVE SYMBOLS
     # ======================
 
-    def get_price_precision(self, symbol: str) -> int:
-        symbol_upper = symbol.upper()
-        for key, precision in config.SYMBOL_PRECISION.items():
-            if key in symbol_upper:
-                return precision
-        return config.DEFAULT_PRECISION
+    def set_active_symbols(self, detected_symbols: List[str]):
+        with self._active_symbols_lock:
+            self._active_symbols = detected_symbols
+            for sym in detected_symbols:
+                if sym not in self.last_tick_msc:
+                    self.last_tick_msc[sym] = 0
+                if sym not in self.last_bar_time:
+                    self.last_bar_time[sym] = 0
 
-    def round_price(self, symbol: str, price: float) -> float:
-        if price is None:
-            return 0.0
-        precision = self.get_price_precision(symbol)
-        return round(float(price), precision)
+    def add_active_symbol(self, detected_symbol: str):
+        with self._active_symbols_lock:
+            if detected_symbol not in self._active_symbols:
+                self._active_symbols.append(detected_symbol)
+                self.last_tick_msc[detected_symbol] = 0
+                self.last_bar_time[detected_symbol] = 0
 
-    # ======================
-    # HELPER METHODS
-    # ======================
+    def remove_active_symbol(self, detected_symbol: str):
+        with self._active_symbols_lock:
+            if detected_symbol in self._active_symbols:
+                self._active_symbols.remove(detected_symbol)
+                self.last_tick_msc.pop(detected_symbol, None)
+                self.last_bar_time.pop(detected_symbol, None)
 
-    def bar(self, b, symbol: str = None) -> Dict:
-        if symbol:
-            precision = self.get_price_precision(symbol)
-            return {
-                "time":   int(b["time"]),
-                "open":   round(float(b["open"]),  precision),
-                "high":   round(float(b["high"]),  precision),
-                "low":    round(float(b["low"]),   precision),
-                "close":  round(float(b["close"]), precision),
-                "volume": int(b["tick_volume"]) if "tick_volume" in b.dtype.names else 0
-            }
-        return {
-            "time":   int(b["time"]),
-            "open":   float(b["open"]),
-            "high":   float(b["high"]),
-            "low":    float(b["low"]),
-            "close":  float(b["close"]),
-            "volume": int(b["tick_volume"]) if "tick_volume" in b.dtype.names else 0
-        }
+    # ===============================================================
+    # THREAD 1 — BAR PULSE
+    # ===============================================================
 
-    def _format_tick(self, tick, symbol: str = None) -> Dict:
-        bid    = tick.bid
-        ask    = tick.ask
-        spread = tick.ask - tick.bid
+    def _tick_loop(self):
+        while self._running:
+            start = time.perf_counter()
 
-        if symbol:
-            precision = self.get_price_precision(symbol)
-            bid    = round(bid,    precision)
-            ask    = round(ask,    precision)
-            spread = round(spread, precision)
+            with self._active_symbols_lock:
+                symbols = list(self._active_symbols)
 
-        return {
-            'bid':    bid,
-            'ask':    ask,
-            'last':   tick.last,
-            'spread': spread,
-            'time':   int(tick.time),
-            'symbol': symbol
-        }
+            for symbol in symbols:
+                try:
+                    # ── Job 1 — raw tick push ──
+                    tick = mt5.symbol_info_tick(symbol)
+                    if tick is not None:
+                        last_msc = self.last_tick_msc.get(symbol, 0)
+                        if tick.time_msc > last_msc:
+                            self.last_tick_msc[symbol] = tick.time_msc
+                            if self.on_tick:
+                                self.on_tick(symbol, tick)
 
-    def _get_mt5_tf(self, timeframe: str) -> Optional[int]:
-        entry = TF_MAP.get(timeframe.upper())
-        return entry[0] if entry else None
+                    # ── Job 2 — raw M1 numpy push ──
+                    rates = mt5.copy_rates_from_pos(
+                        symbol, mt5.TIMEFRAME_M1, 0, 1
+                    )
+                    if rates is None or len(rates) == 0:
+                        continue
 
-    def _get_timeframe_minutes(self, timeframe: str) -> int:
-        entry = TF_MAP.get(timeframe.upper())
-        return entry[1] if entry else 60
+                    if self.on_bar_update:
+                        self.on_bar_update(symbol, rates)
 
-    # ======================
-    # WAKE-UP & FETCH PATTERN
-    # ======================
+                    # ── Seed last bar time ──
+                    current_bar_time = int(rates[0]['time'])
+                    if self.last_bar_time.get(symbol, 0) == 0:
+                        self.last_bar_time[symbol] = current_bar_time
 
-    def _wake_up_mt5(self, symbol: str, mt5_tf: int, retries: int = 3) -> bool:
-        mt5.symbol_select(symbol, True)
-        for attempt in range(retries):
+                except Exception:
+                    continue
+
+            elapsed    = time.perf_counter() - start
+            sleep_time = max(0, config.TICK_FETCH_INTERVAL - elapsed)
+            time.sleep(sleep_time)
+
+    # ===============================================================
+    # THREAD 2 — TRADE + HISTORY LOADER
+    # ===============================================================
+
+    def _trade_loop(self):
+        while self._running:
             try:
-                wake_up_data = mt5.copy_rates_from_pos(symbol, mt5_tf, 0, 1)
-                if wake_up_data is not None and len(wake_up_data) > 0:
-                    return True
-                print(f"   ⚠️ Wake-up attempt {attempt + 1} failed, retrying...")
-                time.sleep(0.1)
-            except Exception:
-                time.sleep(0.1)
-        return False
+                cmd = self.trade_queue.get(timeout=1.0)
 
-    def _calculate_handshake_delay(self, timeframe: str) -> float:
-        tf_minutes = self._get_timeframe_minutes(timeframe)
-        base_delay = max(0.05, (tf_minutes / 15) * 0.1)
-        return min(0.3, base_delay)
+                if cmd is None:
+                    continue
+
+                action = cmd.get('cmd')
+
+                if action == 'detect_and_fetch':        # ← new
+                    self._handle_detect_and_fetch(cmd)
+
+                elif action == 'fetch_history':
+                    self._handle_fetch_history(cmd)
+
+                elif action == 'execute_trade':
+                    self._handle_execute_trade(cmd)
+
+                elif action == 'close_position':
+                    self._handle_close_position(cmd)
+
+                elif action == 'close_all':
+                    self._handle_close_all(cmd)
+
+                elif action == 'modify_position':
+                    self._handle_modify_position(cmd)
+
+                elif action == 'fetch_daily_open':
+                    self._handle_fetch_daily_open(cmd)
+
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"⚠️ Thread 2 error: {e}")
+
+    # ===============================================================
+    # THREAD 3 — ACCOUNTANT
+    # ===============================================================
+
+    def _account_loop(self):
+        last_position_count = -1
+
+        while self._running:
+            start = time.perf_counter()
+
+            try:
+                positions = mt5.positions_get()
+                count     = len(positions) if positions is not None else 0
+
+                if count > 0:
+                    if self.on_positions_update:
+                        raw_positions = self._get_raw_positions()
+                        account       = self._get_raw_account()
+                        self.on_positions_update(
+                            raw_positions, account
+                        )
+
+                elif count == 0 and last_position_count != 0:
+                    if self.on_positions_update:
+                        account = self._get_raw_account()
+                        self.on_positions_update([], account)
+
+                last_position_count = count
+
+            except Exception as e:
+                print(f"⚠️ Thread 3 positions error: {e}")
+
+            try:
+                now = time.time()
+                if now - self._last_connection_check >= \
+                        config.CONNECTION_CHECK_INTERVAL:
+                    self._last_connection_check = now
+                    if self.on_connection_update:
+                        status = self.check_mt5_connection()
+                        self.on_connection_update(status)
+
+            except Exception as e:
+                print(f"⚠️ Thread 3 connection error: {e}")
+
+            elapsed    = time.perf_counter() - start
+            sleep_time = max(0, config.POSITION_FETCH_INTERVAL - elapsed)
+            time.sleep(sleep_time)
 
     # ======================
-    # INITIAL CANDLE FETCH
+    # THREAD LIFECYCLE
     # ======================
 
-    def get_initial_candles(self, base_symbol: str, detected_symbol: str,
-                            timeframe: str, count: int = None) -> Tuple[List[Dict], Optional[int]]:
-        if not self.connected:
-            return [], None
+    def start_threads(self):
+        if self._running:
+            return
 
-        if count is None:
-            count = config.CANDLE_FETCH_COUNT
+        self._running = True
 
-        mt5_tf = self._get_mt5_tf(timeframe)
-        if not mt5_tf:
-            return [], None
+        self._thread1 = threading.Thread(
+            target=self._tick_loop,
+            name='Thread1-BarPulse',
+            daemon=True
+        )
+        self._thread2 = threading.Thread(
+            target=self._trade_loop,
+            name='Thread2-TradeLoader',
+            daemon=True
+        )
+        self._thread3 = threading.Thread(
+            target=self._account_loop,
+            name='Thread3-Accountant',
+            daemon=True
+        )
 
-        mt5.symbol_select(detected_symbol, True)
-        broker_tick = mt5.symbol_info_tick(detected_symbol)
+        self._thread1.start()
+        self._thread2.start()
+        self._thread3.start()
 
-        print(f"🔔 Waking up MT5 for {detected_symbol} {timeframe}...")
+        print("✅ All three threads started")
+        print(f"   Thread 1 — Bar Pulse      ({config.TICK_FETCH_INTERVAL*1000:.0f}ms)")
+        print(f"   Thread 2 — Trade + History (queue-driven)")
+        print(f"   Thread 3 — Accountant      ({config.POSITION_FETCH_INTERVAL*1000:.0f}ms)")
 
-        if not self._wake_up_mt5(detected_symbol, mt5_tf):
-            print(f"   ❌ MT5 wake-up failed after 3 attempts")
+    def stop_threads(self):
+        self._running = False
+        self.trade_queue.put(None)
+        print("🛑 All threads stopped")
 
-        delay = self._calculate_handshake_delay(timeframe)
-        print(f"   ⏳ Handshake delay: {delay:.2f}s")
-        time.sleep(delay)
+    # ===============================================================
+    # THREAD 2 HANDLERS
+    # ===============================================================
 
-        print(f"   📥 Fetching {count} candles...")
-        rates = mt5.copy_rates_from_pos(detected_symbol, mt5_tf, 0, count)
-
-        if rates is None or len(rates) == 0:
-            print(f"   ❌ No data received")
-            return [], None
-
-        if len(rates) > count:
-            rates = rates[-count:]
-
-        candle_data    = [self.bar(r, detected_symbol) for r in rates]
-        last_timestamp = candle_data[-1]['time'] if candle_data else None
-
-        if broker_tick:
-            print(f"   📊 Broker: {broker_tick.bid:.5f}/{broker_tick.ask:.5f} @ {broker_tick.time}")
-        else:
-            print(f"   ⚠️ Broker disconnected - showing historical data")
-
-        if broker_tick and last_timestamp:
-            tf_minutes     = self._get_timeframe_minutes(timeframe)
-            gap_seconds    = broker_tick.time - last_timestamp
-            max_acceptable = tf_minutes * 60 * 1.5
-
-            if gap_seconds <= max_acceptable:
-                print(f"✅ {detected_symbol} {timeframe}: {len(candle_data)} candles "
-                      f"- Synced with Broker (gap: {gap_seconds / 60:.1f}min)")
-            else:
-                print(f"⚠️ {detected_symbol} {timeframe}: Data stale "
-                      f"({gap_seconds / 60:.1f}min behind)")
-        else:
-            print(f"✅ {detected_symbol} {timeframe}: {len(candle_data)} candles - Historical data")
-
-        return candle_data, last_timestamp
-
-    # ======================
-    # M1 CANDLE UPDATE
-    # Always fetches M1 — anchor for all TF recompute
-    # ======================
-
-    def get_candle_update(self, detected_symbol: str) -> Optional[Dict]:
+    def _handle_detect_and_fetch(self, cmd: Dict):
         """
-        Fetch latest M1 candle.
-        Always M1 — used as anchor to recompute all cached TFs.
-        Symbol kept warm by price streaming — no wake up needed.
+        Detect symbol + fetch history — all in Thread 2.
+        Safe — registered Python thread, no GIL conflict.
+        Replaces autoDetectSymbol call from detached C++ thread.
         """
-        if not self.connected:
-            return None
+        symbol    = cmd.get('symbol')
+        timeframe = cmd.get('timeframe')
+        count     = cmd.get('count', config.CANDLE_FETCH_COUNT)
 
+        if not symbol or not timeframe:
+            return
+
+        # ── Detect symbol — safe, registered thread ──
+        detected = self.auto_detect_symbol(symbol)
+
+        if not detected:
+            print(f"   ❌ Symbol not found: {symbol}")
+            if self.on_symbol_detected:
+                self.on_symbol_detected(symbol, timeframe, None)
+            return
+
+        print(f"   Detected: {symbol} → {detected}")
+
+        # ── Add to active symbols ──
+        self.add_active_symbol(detected)
+
+        # ── Fire detected back to C++ ──
+        if self.on_symbol_detected:
+            self.on_symbol_detected(symbol, timeframe, detected)
+
+        # ── Fetch history ──
+        self._handle_fetch_history({
+            'symbol':    symbol,
+            'detected':  detected,
+            'timeframe': timeframe,
+            'count':     count
+        })
+
+    def _handle_fetch_history(self, cmd: Dict):
+        symbol    = cmd.get('symbol')
+        detected  = cmd.get('detected')
+        timeframe = cmd.get('timeframe')
+        count     = cmd.get('count', config.CANDLE_FETCH_COUNT)
+
+        if not detected or not timeframe:
+            return
+
+        mt5_tf = TF_MAP.get(timeframe.upper())
+        if mt5_tf is None:
+            return
+
+        mt5.symbol_select(detected, True)
+
+        # ── Wake up symbol ──
+        for attempt in range(3):
+            rates = mt5.copy_rates_from_pos(
+                detected, mt5_tf, 0, 1
+            )
+            if rates is not None and len(rates) > 0:
+                break
+            print(f"   ⚠️ Wake-up attempt {attempt + 1} failed for {detected}")
+            time.sleep(0.1)
+
+        # ── Fetch history — raw numpy ──
         rates = mt5.copy_rates_from_pos(
-            detected_symbol,
-            mt5.TIMEFRAME_M1,
-            0, 1
+            detected, mt5_tf, 0, count
         )
 
         if rates is None or len(rates) == 0:
-            return None
+            print(f"   ❌ No data for {detected} {timeframe}")
+            if self.on_history_result:
+                self.on_history_result(symbol, timeframe, None)
+            return
 
-        return self.bar(rates[0], detected_symbol)
+        # ── Seed tick timestamp ──
+        tick = mt5.symbol_info_tick(detected)
+        if tick:
+            self.last_tick_msc[detected] = tick.time_msc
 
-    # ======================
-    # DAILY OPEN CACHE
-    # Used for watchlist change % calculation
-    # Refreshed every hour
-    # ======================
+        # ── Seed last bar time ──
+        self.last_bar_time[detected] = int(rates[-1]['time'])
 
-    def _get_daily_open(self, detected_symbol: str) -> float:
-        """
-        Get today's D1 open price.
-        Cached per symbol — only fetches from MT5 once per hour.
-        Zero extra MT5 calls after first fetch.
-        """
-        cache_key = f"daily_{detected_symbol}"
-        now       = time.time()
+        print(f"✅ {detected} {timeframe}: {len(rates)} candles fetched")
 
-        # ── Serve from cache if fresh ──
-        if cache_key in self._daily_open_cache:
-            price, timestamp = self._daily_open_cache[cache_key]
-            if now - timestamp < 3600:  # 1 hour
-                return price
+        if self.on_history_result:
+            self.on_history_result(symbol, timeframe, rates)
 
-        # ── Fetch from MT5 ──
+    def _handle_fetch_daily_open(self, cmd: Dict):
+        detected = cmd.get('detected')
+        if not detected:
+            return
+
         try:
             rates = mt5.copy_rates_from_pos(
-                detected_symbol,
-                mt5.TIMEFRAME_D1,
-                0, 1
+                detected, mt5.TIMEFRAME_D1, 0, 1
             )
             if rates is not None and len(rates) > 0:
-                price = float(rates[0]['open'])
-                self._daily_open_cache[cache_key] = (price, now)
-                return price
-        except Exception:
-            pass
+                daily_open = float(rates[0]['open'])
+                print(f"✅ Daily open: {detected} = {daily_open}")
+                if self.on_daily_open:
+                    self.on_daily_open(detected, daily_open)
+            else:
+                print(f"   ❌ No D1 data for {detected}")
+        except Exception as e:
+            print(f"⚠️ Daily open fetch error {detected}: {e}")
 
-        return 0.0
+    def _handle_execute_trade(self, cmd: Dict):
+        result = self.execute_trade(
+            cmd.get('symbol'),
+            cmd.get('direction'),
+            cmd.get('volume'),
+            cmd.get('price', 0),
+            cmd.get('tp'),
+            cmd.get('sl')
+        )
+        cb = cmd.get('callback')
+        if cb:
+            cb(result)
 
-    # ======================
-    # WATCHLIST PRICES
-    # Batch fetch — keeps symbols warm in MT5
-    # Includes daily change % from cached D1 open
-    # ======================
+    def _handle_close_position(self, cmd: Dict):
+        ticket    = cmd.get('ticket')
+        ticket_cb = cmd.get('callback')
 
-    def get_watchlist_prices(self, symbols: List[str]) -> Dict:
+        positions = mt5.positions_get()
+        if positions is None:
+            if ticket_cb:
+                ticket_cb({
+                    'success': False,
+                    'error':   'Failed to get positions'
+                })
+            return
+
+        if not any(p.ticket == int(ticket) for p in positions):
+            print(f"⚠️ Ticket {ticket} already closed")
+            if ticket_cb:
+                ticket_cb({
+                    'success': False,
+                    'error':   'Position already closed'
+                })
+            return
+
+        result = self.close_position(ticket)
+        if ticket_cb:
+            ticket_cb(result)
+
+    def _handle_close_all(self, cmd: Dict):
+        cb     = cmd.get('callback')
+        result = self.close_all_positions()
+        if cb:
+            cb(result)
+
+    def _handle_modify_position(self, cmd: Dict):
+        result = self.modify_position(
+            cmd.get('ticket'),
+            cmd.get('sl'),
+            cmd.get('tp')
+        )
+        cb = cmd.get('callback')
+        if cb:
+            cb(result)
+
+    # ===============================================================
+    # COMMAND QUEUE — C++ pushes requests here
+    # ===============================================================
+
+    def request_detect_and_fetch(self, symbol: str,
+                                  timeframe: str,
+                                  count: int = None):
         """
-        Fetch latest tick for each watchlist symbol.
-        Keeps symbols warm in MT5 — prevents stale data.
-        Includes change % from D1 open (cached — no extra MT5 calls).
+        New — replaces autoDetectSymbol from detached C++ thread.
+        All Python work done safely in Thread 2.
         """
-        if not self.connected:
-            return {}
+        self.trade_queue.put({
+            'cmd':       'detect_and_fetch',
+            'symbol':    symbol,
+            'timeframe': timeframe,
+            'count':     count if count is not None
+                         else config.CANDLE_FETCH_COUNT
+        })
 
-        result = {}
-        for symbol in symbols:
-            try:
-                detected = self.get_cached_symbol(symbol)
-                if not detected:
-                    continue
+    def request_history(self, symbol: str, detected: str,
+                        timeframe: str, count: int = None):
+        self.trade_queue.put({
+            'cmd':       'fetch_history',
+            'symbol':    symbol,
+            'detected':  detected,
+            'timeframe': timeframe,
+            'count':     count if count is not None
+                         else config.CANDLE_FETCH_COUNT
+        })
 
-                tick = mt5.symbol_info_tick(detected)
-                if not tick:
-                    continue
+    def request_daily_open(self, detected: str):
+        self.trade_queue.put({
+            'cmd':      'fetch_daily_open',
+            'detected': detected
+        })
 
-                precision  = self.get_price_precision(detected)
-                daily_open = self._get_daily_open(detected)
+    def request_trade(self, symbol: str, direction: str,
+                      volume: float, price: float,
+                      tp: float, sl: float,
+                      callback=None):
+        self.trade_queue.put({
+            'cmd':       'execute_trade',
+            'symbol':    symbol,
+            'direction': direction,
+            'volume':    volume,
+            'price':     price,
+            'tp':        tp,
+            'sl':        sl,
+            'callback':  callback
+        })
 
-                # ── Calculate daily change % ──
-                change_pct = 0.0
-                if daily_open > 0:
-                    change_pct = round(
-                        ((tick.bid - daily_open) / daily_open) * 100, 2
-                    )
+    def request_close(self, ticket: int, callback=None):
+        self.trade_queue.put({
+            'cmd':      'close_position',
+            'ticket':   ticket,
+            'callback': callback
+        })
 
-                result[symbol] = {
-                    'bid':    round(tick.bid,            precision),
-                    'ask':    round(tick.ask,            precision),
-                    'spread': round(tick.ask - tick.bid, precision),
-                    'time':   int(tick.time),
-                    'change': change_pct,  # ✅ daily change %
-                }
-            except Exception:
-                continue
+    def request_close_all(self, callback=None):
+        self.trade_queue.put({
+            'cmd':      'close_all',
+            'callback': callback
+        })
 
-        return result
+    def request_modify(self, ticket: int, sl: float,
+                       tp: float, callback=None):
+        self.trade_queue.put({
+            'cmd':      'modify_position',
+            'ticket':   ticket,
+            'sl':       sl,
+            'tp':       tp,
+            'callback': callback
+        })
 
-    def get_current_price_with_symbol(self, base_symbol: str,
-                                      detected_symbol: str) -> Optional[Dict]:
-        """
-        Get live bid/ask for active chart symbol.
-        Used for buy/sell buttons, market depth, price display.
-        """
-        if not self.connected:
-            return None
+    # ===============================================================
+    # RAW DATA FETCHERS — Thread 3 only
+    # ===============================================================
 
-        tick = mt5.symbol_info_tick(detected_symbol)
-        if not tick:
-            return None
-
-        return self._format_tick(tick, detected_symbol)
-
-    # ======================
-    # POSITIONS + ACCOUNT COMBINED
-    # Single GIL acquire for both
-    # Called every 500ms
-    # ======================
-
-    def get_positions_and_account(self) -> Dict:
-        """
-        Fetch positions and account info in one call.
-        Single GIL acquire — no contention.
-        Returns combined dict with positions and account.
-        """
-        return {
-            'positions': self.get_positions(),
-            'account':   self.get_account_info()
-        }
-
-    # ======================
-    # ACCOUNT INFO
-    # ======================
-
-    def get_account_info(self) -> Optional[Dict]:
-        if not self.connected:
-            return None
-        account = mt5.account_info()
-        if not account:
-            return None
-        return {
-            'balance':      round(account.balance,      2),
-            'equity':       round(account.equity,       2),
-            'margin':       round(account.margin,       2),
-            'free_margin':  round(account.margin_free,  2),
-            'margin_level': round(account.margin_level, 2),
-            'currency':     account.currency,
-            'server':       account.server,
-            'leverage':     account.leverage
-        }
-
-    # ======================
-    # POSITIONS
-    # ======================
-
-    def get_positions(self) -> List[Dict]:
+    def _get_raw_positions(self) -> List[Dict]:
         if not self.connected:
             return []
 
@@ -496,29 +659,45 @@ class MT5Connector:
 
         result = []
         for pos in positions:
-            precision     = self.get_price_precision(pos.symbol)
-            current_price = round(pos.price_current, precision)
-
             result.append({
                 'ticket':        pos.ticket,
                 'symbol':        pos.symbol,
-                'type':          'BUY' if pos.type == 0 else 'SELL',
+                'type':          pos.type,
                 'volume':        pos.volume,
-                'open_price':    round(pos.price_open,  precision),
-                'current_price': current_price,
-                'sl':            round(pos.sl, precision) if pos.sl and pos.sl > 0 else None,
-                'tp':            round(pos.tp, precision) if pos.tp and pos.tp > 0 else None,
-                'profit':        round(pos.profit,      2),
-                'swap':          round(pos.swap,        2) if hasattr(pos, 'swap')       else 0,
-                'commission':    round(pos.commission,  2) if hasattr(pos, 'commission') else 0,
-                'open_time':     int(pos.time) if hasattr(pos, 'time') else 0
+                'open_price':    pos.price_open,
+                'current_price': pos.price_current,
+                'sl':            pos.sl,
+                'tp':            pos.tp,
+                'profit':        pos.profit,
+                'swap':          pos.swap       if hasattr(pos, 'swap')       else 0,
+                'commission':    pos.commission if hasattr(pos, 'commission') else 0,
+                'open_time':     pos.time       if hasattr(pos, 'time')       else 0
             })
 
         return result
 
-    # ======================
-    # TRADE EXECUTION
-    # ======================
+    def _get_raw_account(self) -> Optional[Dict]:
+        if not self.connected:
+            return None
+
+        account = mt5.account_info()
+        if not account:
+            return None
+
+        return {
+            'balance':      account.balance,
+            'equity':       account.equity,
+            'margin':       account.margin,
+            'free_margin':  account.margin_free,
+            'margin_level': account.margin_level,
+            'currency':     account.currency,
+            'server':       account.server,
+            'leverage':     account.leverage
+        }
+
+    # ===============================================================
+    # TRADE EXECUTION — Thread 2 only
+    # ===============================================================
 
     def execute_trade(self, symbol: str, trade_type: str,
                       volume: float, price: float = 0,
@@ -528,22 +707,25 @@ class MT5Connector:
 
         detected = self.get_cached_symbol(symbol)
         if not detected:
-            return {'success': False, 'error': f'Symbol {symbol} not found'}
+            return {'success': False,
+                    'error': f'Symbol {symbol} not found'}
 
         if not self._check_broker_connection(detected):
-            return {'success': False, 'error': 'Broker disconnected, cannot execute trade'}
+            return {'success': False, 'error': 'Broker disconnected'}
 
         if price == 0:
             tick = mt5.symbol_info_tick(detected)
             if not tick:
-                return {'success': False, 'error': 'Failed to get price'}
+                return {'success': False,
+                        'error': 'Failed to get price'}
             price = tick.ask if trade_type == 'BUY' else tick.bid
 
         request = {
             "action":       mt5.TRADE_ACTION_DEAL,
             "symbol":       detected,
             "volume":       volume,
-            "type":         mt5.ORDER_TYPE_BUY if trade_type == 'BUY' else mt5.ORDER_TYPE_SELL,
+            "type":         mt5.ORDER_TYPE_BUY if trade_type == 'BUY'
+                            else mt5.ORDER_TYPE_SELL,
             "price":        price,
             "sl":           sl if sl is not None else 0.0,
             "tp":           tp if tp is not None else 0.0,
@@ -557,7 +739,8 @@ class MT5Connector:
         try:
             result = mt5.order_send(request)
             if result is None:
-                return {'success': False, 'error': 'order_send returned None'}
+                return {'success': False,
+                        'error': 'order_send returned None'}
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 return {
                     'success': False,
@@ -567,41 +750,41 @@ class MT5Connector:
             return {
                 'success':   True,
                 'ticket':    result.order,
-                'price':     self.round_price(detected, result.price),
+                'price':     result.price,
                 'volume':    result.volume,
                 'symbol':    detected,
                 'direction': trade_type,
                 'timestamp': int(time.time()),
-                'message':   f'Trade executed: {trade_type} {detected} {volume}L @ {result.price}'
+                'message':   f'Trade executed: {trade_type} {detected} '
+                             f'{volume}L @ {result.price}'
             }
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    # ======================
-    # MODIFY POSITION
-    # ======================
-
     def modify_position(self, ticket: int,
-                        sl: float = None, tp: float = None) -> Dict:
+                        sl: float = None,
+                        tp: float = None) -> Dict:
         if not self.connected:
             return {'success': False, 'error': 'Not connected to MT5'}
 
         try:
             all_positions = mt5.positions_get()
             if all_positions is None:
-                return {'success': False, 'error': 'Failed to get positions'}
+                return {'success': False,
+                        'error': 'Failed to get positions'}
 
-            position = None
-            for pos in all_positions:
-                if pos.ticket == ticket:
-                    position = pos
-                    break
+            position = next(
+                (p for p in all_positions if p.ticket == ticket),
+                None
+            )
 
             if not position:
-                return {'success': False, 'error': f'Position not found: {ticket}'}
+                return {'success': False,
+                        'error': f'Position not found: {ticket}'}
 
             if not self._check_broker_connection(position.symbol):
-                return {'success': False, 'error': 'Broker disconnected'}
+                return {'success': False,
+                        'error': 'Broker disconnected'}
 
             request = {
                 "action":   mt5.TRADE_ACTION_SLTP,
@@ -613,7 +796,8 @@ class MT5Connector:
 
             result = mt5.order_send(request)
             if result is None:
-                return {'success': False, 'error': 'order_send returned None'}
+                return {'success': False,
+                        'error': 'order_send returned None'}
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 return {
                     'success': False,
@@ -629,10 +813,6 @@ class MT5Connector:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    # ======================
-    # CLOSE POSITION
-    # ======================
-
     def close_position(self, ticket) -> Dict:
         if not self.connected:
             return {'success': False, 'error': 'Not connected to MT5'}
@@ -640,34 +820,35 @@ class MT5Connector:
         try:
             ticket_int = int(ticket)
         except (ValueError, TypeError):
-            return {'success': False, 'error': f'Invalid ticket format: {ticket}'}
+            return {'success': False,
+                    'error': f'Invalid ticket format: {ticket}'}
 
         all_positions = mt5.positions_get()
         if all_positions is None:
-            return {'success': False, 'error': 'Failed to get positions'}
+            return {'success': False,
+                    'error': 'Failed to get positions'}
 
-        position = None
-        for pos in all_positions:
-            if pos.ticket == ticket_int:
-                position = pos
-                break
+        position = next(
+            (p for p in all_positions if p.ticket == ticket_int),
+            None
+        )
 
         if not position:
-            return {'success': False, 'error': f'Position not found: {ticket_int}'}
+            return {'success': False,
+                    'error': f'Position not found: {ticket_int}'}
 
         if not self._check_broker_connection(position.symbol):
-            return {'success': False, 'error': 'Broker disconnected, cannot close position'}
+            return {'success': False,
+                    'error': 'Broker disconnected'}
 
         tick = mt5.symbol_info_tick(position.symbol)
         if not tick:
-            return {'success': False, 'error': 'Failed to get current price'}
+            return {'success': False,
+                    'error': 'Failed to get current price'}
 
-        if position.type == 0:
-            close_price = tick.bid
-            close_type  = mt5.ORDER_TYPE_SELL
-        else:
-            close_price = tick.ask
-            close_type  = mt5.ORDER_TYPE_BUY
+        close_price = tick.bid if position.type == 0 else tick.ask
+        close_type  = (mt5.ORDER_TYPE_SELL if position.type == 0
+                       else mt5.ORDER_TYPE_BUY)
 
         request = {
             "action":       mt5.TRADE_ACTION_DEAL,
@@ -686,38 +867,36 @@ class MT5Connector:
         try:
             result = mt5.order_send(request)
             if result is None:
-                return {'success': False, 'error': 'order_send returned None'}
+                return {'success': False,
+                        'error': 'order_send returned None'}
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 return {
                     'success': False,
-                    'error':   f'Close failed: {result.comment} (retcode: {result.retcode})',
+                    'error':   f'Close failed: {result.comment} '
+                               f'(retcode: {result.retcode})',
                     'retcode': result.retcode
                 }
-            profit = position.profit if hasattr(position, 'profit') else 0
             return {
                 'success': True,
                 'ticket':  ticket_int,
                 'symbol':  position.symbol,
-                'profit':  round(profit, 2),
-                'message': f'Position {ticket_int} closed. P&L: ${profit:.2f}'
+                'profit':  position.profit,
+                'message': f'Position {ticket_int} closed'
             }
         except Exception as e:
             return {'success': False, 'error': str(e)}
-
-    # ======================
-    # CLOSE ALL POSITIONS
-    # ======================
 
     def close_all_positions(self) -> Dict:
         if not self.connected:
             return {'success': False, 'error': 'Not connected to MT5'}
 
         if not self._check_broker_connection_terminal():
-            return {'success': False, 'error': 'Broker disconnected, cannot close positions'}
+            return {'success': False, 'error': 'Broker disconnected'}
 
         positions = mt5.positions_get()
         if positions is None:
-            return {'success': False, 'error': 'Failed to get positions'}
+            return {'success': False,
+                    'error': 'Failed to get positions'}
 
         if len(positions) == 0:
             return {
@@ -736,7 +915,7 @@ class MT5Connector:
                     closed_count += 1
                     total_profit += result.get('profit', 0)
             except Exception as e:
-                print(f"⚠️ Error closing position {position.ticket}: {e}")
+                print(f"⚠️ Error closing {position.ticket}: {e}")
 
         return {
             'success': True,
@@ -744,7 +923,7 @@ class MT5Connector:
             'details': {
                 'closed':       closed_count,
                 'total':        len(positions),
-                'total_profit': round(total_profit, 2)
+                'total_profit': total_profit
             }
         }
 
@@ -759,6 +938,7 @@ class MT5Connector:
             'mt5_status':        conn_status,
             'symbols_available': len(self.available_symbols),
             'symbols_cached':    len(self.symbol_cache),
+            'active_symbols':    len(self._active_symbols),
             'utc_offset':        self.utc_offset,
             'last_check':        datetime.now().isoformat()
         }

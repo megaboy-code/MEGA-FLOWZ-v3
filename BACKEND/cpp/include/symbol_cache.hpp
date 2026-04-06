@@ -3,6 +3,7 @@
 // Lazy fetch: fetch from MT5 on first visit
 // Serve from cache on subsequent visits
 // M1 candle update recomputes all cached TFs
+// Daily open stored per symbol for watchlist change %
 // ================================================================
 
 #pragma once
@@ -13,7 +14,6 @@
 #include <optional>
 #include <iostream>
 #include <algorithm>
-#include <chrono>
 #include "candle.hpp"
 
 // ── Timeframe minutes ──
@@ -47,6 +47,7 @@ struct CachedSymbol {
     std::string symbol;
     std::string detected;
     std::unordered_map<std::string, CandleBuffer> tf_buffers;
+    double daily_open = 0.0;
 };
 
 class SymbolCache {
@@ -71,6 +72,17 @@ public:
         auto it = cache.find(symbol);
         if (it == cache.end()) return false;
         return it->second.tf_buffers.count(timeframe) > 0;
+    }
+
+    // ── Store detected name only — seed before requestHistory ──
+    void storeDetected(
+        const std::string& symbol,
+        const std::string& detected)
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        auto& sym    = cache[symbol];
+        sym.symbol   = symbol;
+        sym.detected = detected;
     }
 
     // ── Store initial candles for a TF ──
@@ -112,6 +124,15 @@ public:
         return it->second.detected;
     }
 
+    // ── Reverse lookup detected → base symbol ──
+    std::string getBaseSymbol(const std::string& detected) {
+        std::lock_guard<std::mutex> lock(mtx);
+        for (auto& [base, data] : cache) {
+            if (data.detected == detected) return base;
+        }
+        return detected; // fallback — return as-is
+    }
+
     // ── Get all cached TFs for a symbol ──
     std::vector<std::string> getCachedTFs(
         const std::string& symbol)
@@ -134,6 +155,25 @@ public:
             symbols.push_back(kv.first);
         }
         return symbols;
+    }
+
+    // ================================================================
+    // DAILY OPEN — stored from Thread 2 on_daily_open push
+    // Used by broadcast_manager.onTick for change % calculation
+    // ================================================================
+    void storeDailyOpen(
+        const std::string& symbol,
+        double open_price)
+    {
+        std::lock_guard<std::mutex> lock(mtx);
+        cache[symbol].daily_open = open_price;
+    }
+
+    double getDailyOpen(const std::string& symbol) {
+        std::lock_guard<std::mutex> lock(mtx);
+        auto it = cache.find(symbol);
+        if (it == cache.end()) return 0.0;
+        return it->second.daily_open;
     }
 
     // ================================================================
@@ -160,7 +200,7 @@ public:
             int64_t candle_end = last.time + period;
 
             if (m1.time < candle_end) {
-                // ── Same TF candle ──
+                // ── Same TF candle — update in place ──
                 if (m1.high > last.high) last.high  = m1.high;
                 if (m1.low  < last.low)  last.low   = m1.low;
                 last.close  = m1.close;
@@ -217,32 +257,43 @@ public:
     }
 
     // ================================================================
-    // PRINT ACTIVE SYMBOLS — called after every subscribe
-    // Shows all cached symbols and their timeframes vertically
+    // PRINT ACTIVE SYMBOLS
     // ================================================================
-    void printActiveSymbols() {
+    void printActiveSymbols(
+        const std::vector<std::string>& watchlist = {})
+    {
         std::lock_guard<std::mutex> lock(mtx);
 
         if (cache.empty()) return;
+
+        // ── Watchlist header ──
+        if (!watchlist.empty()) {
+            std::string wl = "Watchlist [";
+            for (size_t i = 0; i < watchlist.size(); i++) {
+                if (i > 0) wl += ", ";
+                wl += watchlist[i];
+            }
+            wl += "]";
+            std::cout << wl << std::endl;
+        }
 
         std::cout << "----------------------------" << std::endl;
         std::cout << "Active Symbols:" << std::endl;
 
         for (auto& [sym, data] : cache) {
-            // ── Collect and sort TFs ──
+            if (data.tf_buffers.empty()) continue; // skip watchlist-only
+
             std::vector<std::string> tfs;
             for (auto& [tf, buf] : data.tf_buffers) {
                 tfs.push_back(tf);
             }
 
-            // ── Sort by timeframe order ──
             std::sort(tfs.begin(), tfs.end(),
                 [](const std::string& a, const std::string& b) {
                     return tfOrder(a) < tfOrder(b);
                 }
             );
 
-            // ── Build TF list ──
             std::string tf_list = "";
             for (size_t i = 0; i < tfs.size(); i++) {
                 if (i > 0) tf_list += ", ";

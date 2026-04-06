@@ -20,6 +20,7 @@
 #include "broadcast_manager.hpp"
 #include "connector_bridge.hpp"
 #include "websocket_server.hpp"
+#include "flatbuffer_builder.hpp"
 
 namespace py = pybind11;
 
@@ -28,7 +29,6 @@ std::atomic<bool> should_exit { false };
 void signalHandler(int sig) {
     std::cout << "\nShutdown signal received" << std::endl;
     should_exit = true;
-    broadcast_manager.stop();
     ws_server.stop();
     std::exit(0);
 }
@@ -37,7 +37,6 @@ void signalHandler(int sig) {
 BOOL WINAPI consoleHandler(DWORD type) {
     std::cout << "\nShutdown..." << std::endl;
     should_exit = true;
-    broadcast_manager.stop();
     std::exit(0);
     return TRUE;
 }
@@ -46,7 +45,6 @@ BOOL WINAPI consoleHandler(DWORD type) {
 int main() {
 
 #ifdef _WIN32
-    // ✅ Fix Windows console encoding — show UTF-8 symbols correctly
     SetConsoleOutputCP(65001);
 #endif
 
@@ -64,89 +62,121 @@ int main() {
 
     // ── Initialize connector bridge ──
     if (!connector_bridge.initialize()) {
-        std::cerr << "Failed to initialize connector bridge" << std::endl;
+        std::cerr << "Failed to initialize connector bridge"
+                  << std::endl;
         return 1;
     }
 
-    // ── Connect to MT5 ──
+    // ── Connect to MT5 + start threads + wire callbacks ──
     if (!connector_bridge.connect()) {
         std::cerr << "Warning: MT5 not connected." << std::endl;
     } else {
         std::cout << "MT5 connected" << std::endl;
     }
 
+    // ── Wire tick callback → broadcast manager ──
+    connector_bridge.setTickCallback([](
+        const std::string& symbol,
+        double bid, double ask,
+        int64_t time_msc)
+    {
+        broadcast_manager.onTick(symbol, bid, ask, time_msc);
+    });
+
+    // ── Wire bar update callback → broadcast manager ──
+    connector_bridge.setBarUpdateCallback([](
+        const std::string& symbol,
+        const CandleBuffer& candles)
+    {
+        broadcast_manager.onBarUpdate(symbol, candles);
+    });
+
+    // ── Wire positions callback → broadcast manager ──
+    connector_bridge.setPositionsCallback([](
+        flatbuffers::DetachedBuffer buf)
+    {
+        broadcast_manager.onPositionsUpdate(std::move(buf));
+    });
+
+    // ── Wire connection callback → broadcast manager ──
+    connector_bridge.setConnectionCallback([](
+        bool connected,
+        const std::string& status_text)
+    {
+        broadcast_manager.onConnectionUpdate(
+            connected, status_text
+        );
+    });
+
+    // ── Wire daily open callback → symbol cache ──
+    connector_bridge.setDailyOpenCallback([](
+        const std::string& detected,
+        double open_price)
+    {
+        std::string base = symbol_cache.getBaseSymbol(detected);
+        symbol_cache.storeDailyOpen(base, open_price);
+    });
+
+    // ── Wire symbol detected callback ──
+    connector_bridge.setSymbolDetectedCallback([](
+        const std::string& symbol,
+        const std::string& timeframe,
+        const std::string& detected)
+    {
+        symbol_cache.storeDetected(symbol, detected);
+        chart_manager.setChartState(symbol, timeframe, detected);
+        broadcast_manager.setActiveChart(symbol, timeframe);
+    });
+
+    // ── Wire symbol not found callback ──
+    connector_bridge.setSymbolNotFoundCallback([](
+        const std::string& symbol)
+    {
+        auto buf = FBB::buildError(
+            "Symbol not found: " + symbol
+        );
+        ws_server.broadcastToAll(std::move(buf));
+    });
+
     // ── Wire trade handler ──
     trade_handler.setExecuteTradeCallback([](
         const std::string& symbol,
         const std::string& direction,
         double volume, double price,
-        double sl, double tp) -> TradeResult
+        double sl, double tp,
+        std::function<void(TradeResult)> callback)
     {
-        return connector_bridge.executeTrade(
-            symbol, direction, volume, price, sl, tp
+        connector_bridge.requestTrade(
+            symbol, direction, volume, price, tp, sl, callback
         );
     });
 
-    trade_handler.setClosePositionCallback(
-        [](int64_t ticket) -> TradeResult {
-            return connector_bridge.closePosition(ticket);
-        }
-    );
+    trade_handler.setClosePositionCallback([](
+        int64_t ticket,
+        std::function<void(TradeResult)> callback)
+    {
+        connector_bridge.requestClose(ticket, callback);
+    });
 
-    trade_handler.setCloseAllCallback([]() -> TradeResult {
-        return connector_bridge.closeAllPositions();
+    trade_handler.setCloseAllCallback([](
+        std::function<void(TradeResult)> callback)
+    {
+        connector_bridge.requestCloseAll(callback);
     });
 
     trade_handler.setModifyPositionCallback([](
-        int64_t ticket, double sl, double tp) -> TradeResult
+        int64_t ticket, double sl, double tp,
+        std::function<void(TradeResult)> callback)
     {
-        return connector_bridge.modifyPosition(ticket, sl, tp);
+        connector_bridge.requestModify(ticket, sl, tp, callback);
     });
 
-    // ── Wire broadcast manager ──
-
-    // ✅ M1 candle update — anchor for all TF recompute
-    broadcast_manager.setFetchCandleCallback([](
-        const std::string& detected) -> Candle
-    {
-        return connector_bridge.getCandleUpdate(detected);
-    });
-
-    // ✅ Price stream — active chart bid/ask
-    broadcast_manager.setFetchPriceCallback([]() -> std::string {
-        auto state = chart_manager.getChartState();
-        if (state.symbol.empty() || state.detected.empty()) return "";
-        return connector_bridge.getCurrentPrice(
-            state.symbol, state.detected
-        );
-    });
-
-    // ✅ Positions + Account combined — single GIL acquire
-    broadcast_manager.setFetchPositionsCallback([]() -> std::string {
-        return connector_bridge.getPositionsAndAccount();
-    });
-
-    // ✅ Connection check
-    broadcast_manager.setFetchConnectionCallback([]() -> std::string {
-        return connector_bridge.checkConnection();
-    });
-
-    // ✅ Watchlist prices — keeps symbols warm + change %
-    broadcast_manager.setFetchWatchlistCallback([](
-        const std::vector<std::string>& symbols) -> std::string
-    {
-        return connector_bridge.getWatchlistPrices(symbols);
-    });
-
-    // ✅ MT5 reconnect — clear all caches, fresh start
+    // ── Wire reconnect callback ──
     broadcast_manager.setReconnectCallback([]() {
         auto state = chart_manager.getReconnectionState();
         if (!state) return;
 
-        std::cout << "Reconnect: clearing all caches..." << std::endl;
-
         symbol_cache.clearAll();
-        broadcast_manager.clearActiveSymbols();
 
         std::string detected =
             connector_bridge.autoDetectSymbol(state->symbol);
@@ -156,81 +186,56 @@ int main() {
             state->symbol, state->timeframe, detected
         );
 
-        CandleBuffer candles = connector_bridge.getInitialCandles(
+        connector_bridge.addActiveSymbol(detected);
+        connector_bridge.setActiveSymbols({ detected });
+        symbol_cache.storeDetected(state->symbol, detected);
+
+        connector_bridge.requestHistory(
             state->symbol, detected,
             state->timeframe,
             Config::CANDLE_FETCH_COUNT
         );
+    });
 
+    // ── Wire history callback ──
+    connector_bridge.setHistoryCallback([](
+        const std::string& symbol,
+        const std::string& timeframe,
+        const CandleBuffer& candles)
+    {
         if (candles.empty()) return;
 
-        chart_manager.storeCandles(
-            state->symbol, state->timeframe, candles
-        );
-        chart_manager.markChartReady();
+        std::string detected = symbol_cache.getDetected(symbol);
 
         symbol_cache.storeCandles(
-            state->symbol, detected,
-            state->timeframe, candles
+            symbol, detected, timeframe, candles
         );
 
-        broadcast_manager.addActiveSymbol(state->symbol);
-        broadcast_manager.setActiveChart(
-            state->symbol, state->timeframe
+        chart_manager.markChartReady();
+
+        // ── Build FlatBuffer initial burst ──
+        auto buf = FBB::buildInitialData(
+            symbol, timeframe, candles
         );
+        ws_server.broadcastToAll(std::move(buf));
 
-        std::string json = "{\"type\":\"initial\",";
-        json += "\"symbol\":\"" + state->symbol + "\",";
-        json += "\"timeframe\":\"" + state->timeframe + "\",";
-        json += "\"data\":[";
+        std::cout << "Fetched and sent " << candles.size()
+                  << " candles: "
+                  << symbol << " " << timeframe << std::endl;
 
-        bool first = true;
-        for (const auto& c : candles) {
-            if (!first) json += ",";
-            json += "{";
-            json += "\"time\":"   + std::to_string(c.time)   + ",";
-            json += "\"open\":"   + std::to_string(c.open)   + ",";
-            json += "\"high\":"   + std::to_string(c.high)   + ",";
-            json += "\"low\":"    + std::to_string(c.low)    + ",";
-            json += "\"close\":"  + std::to_string(c.close)  + ",";
-            json += "\"volume\":" + std::to_string(c.volume);
-            json += "}";
-            first = false;
-        }
-
-        json += "],\"count\":"
-             + std::to_string(candles.size()) + "}";
-
-        ws_server.broadcastToAll(json);
-        std::cout << "Reconnect: sent "
-                  << candles.size()
-                  << " fresh candles for "
-                  << state->symbol << std::endl;
+        symbol_cache.printActiveSymbols(
+            broadcast_manager.getWatchlist()
+        );
     });
 
     // ── Wire message handler callbacks ──
-    message_handler.setPositionsCallback([]() {
-        std::string pos = connector_bridge.getPositionsAndAccount();
-        ws_server.broadcastToAll(pos);
-    });
-
-    message_handler.setAccountCallback([]() {
-        std::string acc = connector_bridge.getAccountInfo();
-        if (!acc.empty()) ws_server.broadcastToAll(acc);
-    });
-
-    message_handler.setPriceCallback([]() {
-        auto state = chart_manager.getChartState();
-        if (state.symbol.empty()) return;
-        std::string price = connector_bridge.getCurrentPrice(
-            state.symbol, state.detected
-        );
-        if (!price.empty()) ws_server.broadcastToAll(price);
-    });
+    message_handler.setPositionsCallback([]() {});
+    message_handler.setAccountCallback([]() {});
+    message_handler.setPriceCallback([]() {});
 
     message_handler.setConnectionCallback([]() {
-        std::string conn = connector_bridge.checkConnection();
-        ws_server.broadcastToAll(conn);
+        auto buf = connector_bridge.checkConnection();
+        ws_server.broadcastToAll(std::move(buf));
     });
 
     message_handler.setAutoTradingCallback([](bool enabled) {

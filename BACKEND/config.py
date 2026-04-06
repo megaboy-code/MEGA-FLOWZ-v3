@@ -8,10 +8,9 @@ CANDLE_FETCH_COUNT = 1000
 
 # ==================== FETCH INTERVALS ====================
 
-POSITION_FETCH_INTERVAL   = 0.5    # seconds — position + account updates
-DATA_FETCH_INTERVAL       = 0.1    # seconds — chart candle updates
-PRICE_STREAM_INTERVAL     = 0.5    # seconds — real-time bid/ask
-CONNECTION_CHECK_INTERVAL = 5      # seconds — MT5 connection checks
+TICK_FETCH_INTERVAL       = 0.1    # seconds — Thread 1 (tick + M1 update)
+POSITION_FETCH_INTERVAL   = 0.5    # seconds — Thread 3 (positions + account)
+CONNECTION_CHECK_INTERVAL = 5      # seconds — Thread 3 (connection status)
 
 # ==================== TRADE CONFIGURATION ====================
 

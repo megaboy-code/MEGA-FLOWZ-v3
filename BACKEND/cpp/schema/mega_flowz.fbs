@@ -1,0 +1,186 @@
+// ================================================================
+// MEGA_FLOWZ.FBS - FlatBuffers Schema
+// Binary protocol — replaces all JSON
+// Union payload — zero wasted fields
+// Enums for fixed types — integer compare, no heap alloc
+// ================================================================
+
+namespace MegaFlowz;
+
+// ================================================================
+// ENUMS
+// ================================================================
+
+enum Timeframe : byte {
+    M1  = 0,
+    M5  = 1,
+    M15 = 2,
+    H1  = 3,
+    H4  = 4,
+    D1  = 5
+}
+
+enum PositionType : byte {
+    Buy  = 0,
+    Sell = 1
+}
+
+// ================================================================
+// SHARED STRUCTURES
+// struct = fixed size, inline, zero allocation
+// ================================================================
+
+struct Candle {
+    time:   int64;
+    open:   float64;
+    high:   float64;
+    low:    float64;
+    close:  float64;
+    volume: int64;
+}
+
+// ================================================================
+// PAYLOAD TABLES
+// ================================================================
+
+// ── Initial burst — 1000 candles on subscribe ──
+table InitialData {
+    symbol:    string;
+    timeframe: Timeframe;
+    candles:   [Candle];
+}
+
+// ── Live bar update — 100ms ──
+table BarUpdate {
+    symbol:    string;
+    timeframe: Timeframe;
+    candle:    Candle;
+}
+
+// ── Tick — active chart bid/ask ──
+table PriceUpdate {
+    symbol: string;
+    bid:    float64;
+    ask:    float64;
+    spread: float64;
+    time:   int64;
+}
+
+// ── Watchlist — one symbol per message per tick ──
+table WatchlistUpdate {
+    symbol: string;
+    bid:    float64;
+    ask:    float64;
+    spread: float64;
+    time:   int64;
+    change: float64;
+}
+
+// ── Position entry ──
+table Position {
+    ticket:        int64;
+    symbol:        string;
+    type:          PositionType;
+    volume:        float64;
+    open_price:    float64;
+    current_price: float64;
+    sl:            float64;
+    tp:            float64;
+    profit:        float64;
+    swap:          float64;
+    commission:    float64;
+    open_time:     int64;
+}
+
+// ── Account info ──
+table Account {
+    balance:      float64;
+    equity:       float64;
+    margin:       float64;
+    free_margin:  float64;
+    margin_level: float64;
+    leverage:     int32;
+}
+
+// ── Positions + account — Thread 3 push ──
+table PositionsUpdate {
+    positions: [Position];
+    account:   Account;
+}
+
+// ── Connection state change only ──
+table ConnectionStatus {
+    connected:   bool;
+    status_text: string;
+}
+
+// ── Trade executed ──
+table TradeExecuted {
+    success:   bool;
+    direction: PositionType;
+    symbol:    string;
+    volume:    float64;
+    price:     float64;
+    ticket:    int64;
+    timestamp: int64;
+    message:   string;
+}
+
+// ── Position closed ──
+table PositionClosed {
+    success: bool;
+    ticket:  int64;
+    message: string;
+}
+
+// ── Position modified ──
+table PositionModified {
+    success: bool;
+    ticket:  int64;
+    message: string;
+}
+
+// ── Error ──
+table ErrorMsg {
+    message: string;
+}
+
+// ── Auto trading status ──
+table AutoTradingStatus {
+    enabled: bool;
+    message: string;
+}
+
+// ── Cache cleared ──
+table CacheCleared {
+    message: string;
+}
+
+// ================================================================
+// UNION — one active payload, zero wasted fields
+// ================================================================
+
+union MessagePayload {
+    InitialData,
+    BarUpdate,
+    PriceUpdate,
+    WatchlistUpdate,
+    PositionsUpdate,
+    ConnectionStatus,
+    TradeExecuted,
+    PositionClosed,
+    PositionModified,
+    ErrorMsg,
+    AutoTradingStatus,
+    CacheCleared
+}
+
+// ================================================================
+// ROOT ENVELOPE
+// ================================================================
+
+table Message {
+    payload: MessagePayload;
+}
+
+root_type Message;
