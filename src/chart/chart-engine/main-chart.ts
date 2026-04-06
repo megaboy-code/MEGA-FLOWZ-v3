@@ -212,31 +212,22 @@ export class MainChart {
 
         if (this.dataManager.hasData()) {
             const convertedData = this.dataManager.getDataForCurrentType();
-
-            console.log('hasData:', this.dataManager.hasData());
-            console.log('convertedData length:', convertedData?.length);
-            console.log('convertedData sample:', convertedData?.[0]);
-
             if (convertedData && convertedData.length > 0) {
                 this.seriesManager.setData(convertedData);
             }
-        } else {
-            console.log('hasData: FALSE — no data in manager');
         }
     }
 
     // ==================== DATA HANDLING ====================
 
     public handleInitialData(params: InitialDataParams): void {
-        if (!params.data || !Array.isArray(params.data)) {
-            console.warn('⚠️ Initial data missing or invalid');
-            return;
-        }
+        if (!params.data || !Array.isArray(params.data)) return;
 
         const dataSymbol    = params.symbol    || this._currentSymbol;
         const dataTimeframe = params.timeframe || this._currentTimeframe;
 
-        if (dataSymbol !== this._currentSymbol || dataTimeframe !== this._currentTimeframe) {
+        if (dataSymbol !== this._currentSymbol ||
+            dataTimeframe !== this._currentTimeframe) {
             this._currentSymbol    = dataSymbol;
             this._currentTimeframe = dataTimeframe;
         }
@@ -261,8 +252,6 @@ export class MainChart {
                     chartType: this.currentChartType
                 });
             }
-        } else {
-            console.warn('⚠️ No converted data to set');
         }
 
         this.stateManager.setState('READY');
@@ -296,11 +285,18 @@ export class MainChart {
         }
     }
 
+    // ================================================================
+    // RESET CHART DATA STATE
+    // Fires onBeforeSeriesRemoved FIRST — clears drawing tools while
+    // series is still valid — prevents null timeScale crash on TF/symbol change
+    // ================================================================
+
     public resetChartDataState(): void {
+        this.onBeforeSeriesRemoved?.();       // ← clear drawings first
         this.stateManager.setState('LOADING');
     }
 
-    // ✅ Fix — expose setReady for ModuleManager to clear loading after data arrives
+    // ✅ Fix — expose setReady for ModuleManager
     public setReady(): void {
         this.stateManager.setState('READY');
     }
@@ -313,13 +309,11 @@ export class MainChart {
         if (this.volumeVisible) {
             const mainSeries = this.seriesManager.getSeries();
             if (!mainSeries) {
-                console.error('❌ Cannot create volume: main series not available');
                 this.volumeVisible = false;
                 return;
             }
 
             await this.loadVolumeManager();
-
             if (this._destroyed) return;
 
             this.volumeManager?.createSeries(mainSeries);
@@ -334,17 +328,17 @@ export class MainChart {
         }
 
         if (this.onVolumeToggle) this.onVolumeToggle(this.volumeVisible);
-
         this.saveVolumeState();
     }
 
-    public isVolumeVisible(): boolean {
-        return this.volumeVisible;
-    }
+    public isVolumeVisible(): boolean { return this.volumeVisible; }
 
     private saveVolumeState(): void {
         try {
-            localStorage.setItem('megaflowz_volume_visible', JSON.stringify(this.volumeVisible));
+            localStorage.setItem(
+                'megaflowz_volume_visible',
+                JSON.stringify(this.volumeVisible)
+            );
         } catch (e) {}
     }
 
@@ -392,20 +386,28 @@ export class MainChart {
         if (!chart) return;
 
         if (detail.logScale !== undefined) {
-            chart.applyOptions({ rightPriceScale: { mode: detail.logScale ? 1 : 0 } });
+            chart.applyOptions({
+                rightPriceScale: { mode: detail.logScale ? 1 : 0 }
+            });
         }
         if (detail.percentScale !== undefined) {
-            chart.applyOptions({ rightPriceScale: { mode: detail.percentScale ? 2 : 0 } });
+            chart.applyOptions({
+                rightPriceScale: { mode: detail.percentScale ? 2 : 0 }
+            });
         }
         if (detail.autoScale !== undefined) {
-            chart.applyOptions({ rightPriceScale: { autoScale: detail.autoScale } });
+            chart.applyOptions({
+                rightPriceScale: { autoScale: detail.autoScale }
+            });
         }
     }
 
     public applyScaleMargins(top: number, bottom: number): void {
         const chart = this.chartInstance.getChart();
         if (!chart) return;
-        chart.applyOptions({ rightPriceScale: { scaleMargins: { top, bottom } } });
+        chart.applyOptions({
+            rightPriceScale: { scaleMargins: { top, bottom } }
+        });
     }
 
     public applyScalePosition(position: 'left' | 'right'): void {
@@ -421,16 +423,26 @@ export class MainChart {
 
     public toggleGridVertical():   void { this.chartInstance.toggleGridVertical(); }
     public toggleGridHorizontal(): void { this.chartInstance.toggleGridHorizontal(); }
-    public applyFontSize(size: number): void { this.chartInstance.applyFontSize(size); }
-    public applyCrosshairColor(color: string): void { this.chartInstance.applyCrosshairColor(color); }
+    public toggleGrid():           void { this.chartInstance.toggleGrid(); }
+    public toggleCrosshair():      void { this.chartInstance.toggleCrosshair(); }
+    public toggleTimeScale():      void { this.chartInstance.toggleTimeScale(); }
+    public resetView():            void { this.chartInstance.resetView(); }
+
+    public applyFontSize(size: number): void {
+        this.chartInstance.applyFontSize(size);
+    }
+    public applyCrosshairColor(color: string): void {
+        this.chartInstance.applyCrosshairColor(color);
+    }
     public applyCrosshairStyle(style: 'dotted' | 'dashed' | 'solid'): void {
         this.chartInstance.applyCrosshairStyle(style);
     }
-
-    // ==================== BAR SPACING / TIME VISIBLE / WATERMARK ====================
-
-    public applyBarSpacing(spacing: number): void { this.chartInstance.applyBarSpacing(spacing); }
-    public applyTimeVisible(visible: boolean): void { this.chartInstance.applyTimeVisible(visible); }
+    public applyBarSpacing(spacing: number): void {
+        this.chartInstance.applyBarSpacing(spacing);
+    }
+    public applyTimeVisible(visible: boolean): void {
+        this.chartInstance.applyTimeVisible(visible);
+    }
     public applyWatermark(visible: boolean, color?: string): void {
         this.chartInstance.applyWatermark(visible, color);
     }
@@ -458,7 +470,12 @@ export class MainChart {
         return this.paneManager.removePane(pane);
     }
 
-    public async addSeriesToPane(pane: any, seriesType: any, options?: any, seriesId?: string): Promise<any> {
+    public async addSeriesToPane(
+        pane: any,
+        seriesType: any,
+        options?: any,
+        seriesId?: string
+    ): Promise<any> {
         if (!this.paneManager) return null;
         return this.paneManager.addSeriesToPane(pane, seriesType, options, seriesId);
     }
@@ -470,14 +487,7 @@ export class MainChart {
     public getVolumeSeries()                           { return this.volumeManager?.getSeries() ?? null; }
     public isReady(): boolean                          { return this.stateManager.isReady(); }
     public getState()                                  { return this.stateManager.getState(); }
-
-    // ✅ Fix #P7 — expose SeriesManager for ModuleManager direct wiring
     public getSeriesManager(): SeriesManager           { return this.seriesManager; }
-
-    public toggleGrid():      void { this.chartInstance.toggleGrid(); }
-    public toggleCrosshair(): void { this.chartInstance.toggleCrosshair(); }
-    public toggleTimeScale(): void { this.chartInstance.toggleTimeScale(); }
-    public resetView():       void { this.chartInstance.resetView(); }
 
     public downloadChart(): string | null {
         return this.chartInstance.downloadChart();

@@ -6,7 +6,7 @@ import { Time } from 'lightweight-charts';
 import { OHLCData, IndicatorSettings, PriceSource } from '../chart-types';
 
 export interface IndicatorPoint {
-    time: Time;
+    time: number;
     value: number;
 }
 
@@ -531,7 +531,7 @@ export class IndicatorCalculator {
         return points.filter(point => !isNaN(point.value));
     }
 
-    public formatForChart(points: IndicatorPoint[]): { time: Time; value: number }[] {
+    public formatForChart(points: IndicatorPoint[]): { time: number; value: number }[] {
         return this.filterValidValues(points);
     }
 

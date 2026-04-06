@@ -57,8 +57,7 @@ export class TradingPanel {
     };
 
     // ── Throttle timers ──
-    private lastMaxSafeLotsCalc: number = 0;
-    private lastRiskPctApply:    number = 0;
+    private lastRiskPctApply: number = 0;
 
     // ── Bound listeners ──
     private boundSafeModeToggle: EventListener | null = null;
@@ -110,22 +109,13 @@ export class TradingPanel {
         this.renderBuySellPrices();
         this.renderLotStats();
 
-        // ✅ Fix #P3 — throttle maxSafeLots, not every tick
-        const now = Date.now();
-        if (now - this.lastMaxSafeLotsCalc >= THROTTLE_MS) {
-            if (this.state.ask > 0) {
-                this.state.maxSafeLots = this.calcMaxSafeLots();
-                this.applySafeMode();
-            }
-            this.lastMaxSafeLotsCalc = now;
-        }
-
         if (this.state.tpEnabled || this.state.slEnabled) {
             this.renderTpSlInputsFromPips();
         }
 
-        // ✅ Fix #P3 — throttle risk% recalc
+        // ✅ Fix #P3 — throttle risk% recalc only
         if (this.state.riskPct > 0 && this.state.slEnabled) {
+            const now = Date.now();
             if (now - this.lastRiskPctApply >= THROTTLE_MS) {
                 this.applyRiskPct(this.state.riskPct);
                 this.lastRiskPctApply = now;
@@ -262,10 +252,12 @@ export class TradingPanel {
     }
 
     private calcMaxSafeLots(): number {
-        if (this.state.ask <= 0) return 2.72;
+        if (this.state.ask <= 0 || this.state.leverage <= 0) return 2.72;
         const contractSize = getContractSize(this.state.symbol);
-        const max          = this.state.freeMargin / (contractSize * this.state.ask / this.state.leverage);
-        return parseFloat(max.toFixed(2));
+        if (contractSize <= 0) return 2.72;
+        const max = this.state.freeMargin / (contractSize * this.state.ask / this.state.leverage);
+        if (!isFinite(max) || max <= 0) return 2.72;
+        return parseFloat(Math.min(max, MAX_BROKER_LOTS).toFixed(2));
     }
 
     // ================================================================

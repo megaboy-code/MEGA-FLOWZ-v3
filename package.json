@@ -12,7 +12,7 @@
     "flatbuffers": "^25.9.23",
     "lightweight-charts": "^5.0.0",
     "lightweight-charts-line-tools-circle": "file:lightweight-charts-line-tools-circle",
-    "lightweight-charts-line-tools-core": "github:difurious/lightweight-charts-line-tools-core",
+    "lightweight-charts-line-tools-core": "file:lightweight-charts-line-tools-core",
     "lightweight-charts-line-tools-fib-retracement": "file:lightweight-charts-line-tools-fib-retracement",
     "lightweight-charts-line-tools-freehand": "file:lightweight-charts-line-tools-freehand",
     "lightweight-charts-line-tools-lines": "file:lightweight-charts-line-tools-lines",
