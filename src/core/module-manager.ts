@@ -195,13 +195,7 @@ export class ModuleManager {
                     { title: 'Trade Failed' }
                 );
             }
-            this.tradingInstance?.handleTradeConfirmation({
-                type:      'trade_executed',
-                success, direction, symbol,
-                volume, price, ticket,
-                timestamp: String(timestamp),
-                message
-            });
+            this.tradingInstance?.handleTradeConfirmation();
         });
 
         // ── Position closed ──
