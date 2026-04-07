@@ -198,7 +198,6 @@ export class ChartDrawingModule {
         if (!value) {
           this.removeTradeArrows('buy');
         } else {
-          // ✅ Flag turned ON — notify module-manager to re-inject buy arrows
           document.dispatchEvent(new CustomEvent('chart-arrows-toggle-on', {
             detail: { type: 'buy' }
           }));
@@ -210,7 +209,6 @@ export class ChartDrawingModule {
         if (!value) {
           this.removeTradeArrows('sell');
         } else {
-          // ✅ Flag turned ON — notify module-manager to re-inject sell arrows
           document.dispatchEvent(new CustomEvent('chart-arrows-toggle-on', {
             detail: { type: 'sell' }
           }));
@@ -474,20 +472,31 @@ export class ChartDrawingModule {
 
   // ==================== SYMBOL + TF SWITCHING ====================
 
-  public async onTimeframeChange(timeframe: string): Promise<void> {
+  // ✅ Save under OLD key before updating currentTimeframe
+  public saveAndSwitchTimeframe(timeframe: string): void {
     if (this.currentTimeframe === timeframe) return;
-    this.saveDrawings();
-    this.currentTimeframe = timeframe;
-    this.removeTradeArrows();
+    this.saveDrawings();                   // save under OLD key ✅
+    this.currentTimeframe = timeframe;     // then update key
     console.log(`📐 TF tracking updated: ${timeframe}`);
   }
 
-  public async onSymbolChange(symbol: string): Promise<void> {
+  // ✅ Save under OLD key before updating currentSymbol
+  public saveAndSwitchSymbol(symbol: string): void {
     if (this.currentSymbol === symbol) return;
-    this.saveDrawings();
-    this.currentSymbol = symbol;
-    this.removeTradeArrows();
+    this.saveDrawings();                   // save under OLD key ✅
+    this.currentSymbol = symbol;           // then update key
     console.log(`📐 Symbol tracking updated: ${symbol}`);
+  }
+
+  // ✅ Kept for backward compat — now just delegates
+  public async onTimeframeChange(timeframe: string): Promise<void> {
+    this.saveAndSwitchTimeframe(timeframe);
+    this.removeTradeArrows();
+  }
+
+  public async onSymbolChange(symbol: string): Promise<void> {
+    this.saveAndSwitchSymbol(symbol);
+    this.removeTradeArrows();
   }
 
   public clearToolsOnly(): void {
@@ -513,8 +522,6 @@ export class ChartDrawingModule {
       await this.loadDrawings();
       console.log(`📐 Drawings restored for ${this.currentSymbol} ${this.currentTimeframe}`);
 
-      // ✅ Notify module-manager that drawings are ready
-      // module-manager listens to re-inject trade arrows at the right time
       document.dispatchEvent(new CustomEvent('chart-drawings-ready'));
 
     } catch (error) {
@@ -825,8 +832,6 @@ export class ChartDrawingModule {
     if (!this.lineTools || !this.isInitialized) return;
     try {
       const saved = localStorage.getItem(this.STORAGE_KEY);
-
-      this.lineTools.removeAllLineTools();
 
       if (saved && saved !== '[]') {
         const tools = JSON.parse(saved);
