@@ -14,13 +14,7 @@ interface JournalTrade {
 
 export class JournalMiniModule {
 
-    private trades: JournalTrade[] = [
-        { id: 1, pair: 'EURUSD', direction: 'LONG',  size: '0.50', pnl:  125, result: 'WIN',  date: new Date() },
-        { id: 2, pair: 'GBPUSD', direction: 'SHORT', size: '0.30', pnl:  -45, result: 'LOSS', date: new Date() },
-        { id: 3, pair: 'XAUUSD', direction: 'LONG',  size: '0.10', pnl:   87, result: 'WIN',  date: new Date() },
-        { id: 4, pair: 'USDJPY', direction: 'LONG',  size: '0.40', pnl:  220, result: 'WIN',  date: new Date(Date.now() - 86400000) },
-        { id: 5, pair: 'BTCUSD', direction: 'SHORT', size: '0.05', pnl:  -32, result: 'LOSS', date: new Date(Date.now() - 86400000) },
-    ];
+    private trades: JournalTrade[] = [];
 
     // ── DOM refs ──
     private listEl:       HTMLElement | null = null;
@@ -48,6 +42,31 @@ export class JournalMiniModule {
         this.openFullBtn?.addEventListener('click', () => {
             document.dispatchEvent(new CustomEvent('open-journal-tab'));
         });
+    }
+
+    // ==================== PUBLIC API ====================
+
+    public setTrades(trades: JournalTrade[]): void {
+        this.trades = trades;
+        this.render();
+    }
+
+    public addTrade(trade: JournalTrade): void {
+        const today = new Date().toDateString();
+        if (trade.date.toDateString() !== today) return;
+
+        const exists = this.trades.findIndex(t => t.id === trade.id);
+        if (exists >= 0) {
+            this.trades[exists] = trade;
+        } else {
+            this.trades.push(trade);
+        }
+
+        this.render();
+    }
+
+    public destroy(): void {
+        this.openFullBtn?.removeEventListener('click', () => {});
     }
 
     // ==================== RENDER ====================
@@ -121,11 +140,5 @@ export class JournalMiniModule {
 
             this.listEl!.appendChild(item);
         });
-    }
-
-    // ==================== PUBLIC API ====================
-
-    public destroy(): void {
-        this.openFullBtn?.removeEventListener('click', () => {});
     }
 }

@@ -8,6 +8,8 @@ export { Candle } from './mega-flowz/candle.js';
 export { ConnectionStatus } from './mega-flowz/connection-status.js';
 export { ErrorMsg } from './mega-flowz/error-msg.js';
 export { InitialData } from './mega-flowz/initial-data.js';
+export { JournalData } from './mega-flowz/journal-data.js';
+export { JournalTrade } from './mega-flowz/journal-trade.js';
 export { Message } from './mega-flowz/message.js';
 export { MessagePayload } from './mega-flowz/message-payload.js';
 export { Notification } from './mega-flowz/notification.js';

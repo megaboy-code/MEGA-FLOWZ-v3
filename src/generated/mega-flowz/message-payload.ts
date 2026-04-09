@@ -6,6 +6,7 @@ import { CacheCleared } from '../mega-flowz/cache-cleared.js';
 import { ConnectionStatus } from '../mega-flowz/connection-status.js';
 import { ErrorMsg } from '../mega-flowz/error-msg.js';
 import { InitialData } from '../mega-flowz/initial-data.js';
+import { JournalData } from '../mega-flowz/journal-data.js';
 import { Notification } from '../mega-flowz/notification.js';
 import { PositionModified } from '../mega-flowz/position-modified.js';
 import { PositionsUpdate } from '../mega-flowz/positions-update.js';
@@ -27,13 +28,14 @@ export enum MessagePayload {
   ErrorMsg = 9,
   AutoTradingStatus = 10,
   CacheCleared = 11,
-  Notification = 12
+  Notification = 12,
+  JournalData = 13
 }
 
 export function unionToMessagePayload(
   type: MessagePayload,
-  accessor: (obj:AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate) => AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate|null
-): AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate|null {
+  accessor: (obj:AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|JournalData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate) => AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|JournalData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate|null
+): AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|JournalData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate|null {
   switch(MessagePayload[type]) {
     case 'NONE': return null; 
     case 'InitialData': return accessor(new InitialData())! as InitialData;
@@ -48,15 +50,16 @@ export function unionToMessagePayload(
     case 'AutoTradingStatus': return accessor(new AutoTradingStatus())! as AutoTradingStatus;
     case 'CacheCleared': return accessor(new CacheCleared())! as CacheCleared;
     case 'Notification': return accessor(new Notification())! as Notification;
+    case 'JournalData': return accessor(new JournalData())! as JournalData;
     default: return null;
   }
 }
 
 export function unionListToMessagePayload(
   type: MessagePayload, 
-  accessor: (index: number, obj:AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate) => AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate|null, 
+  accessor: (index: number, obj:AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|JournalData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate) => AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|JournalData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate|null, 
   index: number
-): AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate|null {
+): AutoTradingStatus|BarUpdate|CacheCleared|ConnectionStatus|ErrorMsg|InitialData|JournalData|Notification|PositionModified|PositionsUpdate|PriceUpdate|TradeExecuted|WatchlistUpdate|null {
   switch(MessagePayload[type]) {
     case 'NONE': return null; 
     case 'InitialData': return accessor(index, new InitialData())! as InitialData;
@@ -71,6 +74,7 @@ export function unionListToMessagePayload(
     case 'AutoTradingStatus': return accessor(index, new AutoTradingStatus())! as AutoTradingStatus;
     case 'CacheCleared': return accessor(index, new CacheCleared())! as CacheCleared;
     case 'Notification': return accessor(index, new Notification())! as Notification;
+    case 'JournalData': return accessor(index, new JournalData())! as JournalData;
     default: return null;
   }
 }

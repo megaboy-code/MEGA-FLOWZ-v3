@@ -22,6 +22,7 @@ export interface ConnectionCallbacks {
     onError?:            (message: string) => void;
     onAutoTrading?:      (enabled: boolean, message: string) => void;
     onCacheCleared?:     (message: string) => void;
+    onJournalData?:      (trades: any[]) => void;
 }
 
 export class ConnectionManager {
@@ -159,6 +160,7 @@ export class ConnectionManager {
     public getPositions(): void                { this.sendCommand('GET_POSITIONS'); }
     public getAccountInfo(): void              { this.sendCommand('GET_ACCOUNT_INFO'); }
     public clearCache(): void                  { this.sendCommand('CLEAR_CACHE'); }
+    public getJournalToday(): void             { this.sendCommand('GET_JOURNAL_TODAY'); }
 
     // ==================== STRATEGY COMMANDS ====================
 
@@ -218,6 +220,7 @@ export class ConnectionManager {
     public onError(cb: ConnectionCallbacks['onError']): void                       { this.callbacks.onError            = cb; }
     public onAutoTrading(cb: ConnectionCallbacks['onAutoTrading']): void           { this.callbacks.onAutoTrading      = cb; }
     public onCacheCleared(cb: ConnectionCallbacks['onCacheCleared']): void         { this.callbacks.onCacheCleared     = cb; }
+    public onJournalData(cb: ConnectionCallbacks['onJournalData']): void           { this.callbacks.onJournalData      = cb; }
 
     // ==================== WEBSOCKET SETUP ====================
 
@@ -232,6 +235,7 @@ export class ConnectionManager {
             this.notifyConnectionStatus('connected');
 
             this.sendCommand('GET_ACCOUNT_INFO');
+            this.sendCommand('GET_JOURNAL_TODAY');
 
             this.currentSubscription =
                 `${this.currentSymbol}_${this.currentTimeframe}`;
@@ -387,6 +391,12 @@ export class ConnectionManager {
             case 'notification':
                 if (this.callbacks.onNotification) {
                     this.callbacks.onNotification(msg.data);
+                }
+                break;
+
+            case 'journal_data':
+                if (this.callbacks.onJournalData) {
+                    this.callbacks.onJournalData(msg.data.trades);
                 }
                 break;
 

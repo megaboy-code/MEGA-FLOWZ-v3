@@ -199,10 +199,38 @@ export class ModuleManager {
             this.tradingInstance?.handleTradeConfirmation();
         });
 
-        // ── Notification — universal rich toast ──
-        // Routes all position close, alerts, and future events
+        // ── Notification — universal rich toast + journal live append ──
         this.connectionManager.onNotification((data: NotificationPayload) => {
             this.handleNotification(data);
+
+            // ── Append closed trade to journal mini panel live ──
+            if (data.profit !== undefined && data.profit !== 0 &&
+                data.direction && data.symbol && data.volume)
+            {
+                this.journalMiniInstance?.addTrade({
+                    id:        data.ticket ?? Date.now(),
+                    pair:      data.symbol,
+                    direction: data.direction === 'BUY' ? 'LONG' : 'SHORT',
+                    size:      String(data.volume),
+                    pnl:       data.profit,
+                    result:    data.profit >= 0 ? 'WIN' : 'LOSS',
+                    date:      new Date()
+                });
+            }
+        });
+
+        // ── Journal data — initial load from server ──
+        this.connectionManager.onJournalData((trades) => {
+            const mapped = trades.map((t: any) => ({
+                id:        t.ticket ?? t.id,
+                pair:      t.symbol,
+                direction: t.direction === 'BUY' ? 'LONG' : 'SHORT' as 'LONG' | 'SHORT',
+                size:      String(t.volume),
+                pnl:       t.profit,
+                result:    t.profit >= 0 ? 'WIN' : 'LOSS' as 'WIN' | 'LOSS',
+                date:      new Date(t.close_time * 1000)
+            }));
+            this.journalMiniInstance?.setTrades(mapped);
         });
 
         // ── Position modified ──
@@ -490,7 +518,6 @@ export class ModuleManager {
         try {
             const { JournalModule } = await import('../journal/journal');
             this.journalInstance = new JournalModule();
-            // ✅ FIX 2: call mount() not initialize()
             this.journalInstance.mount();
         } catch (error) {
             this.notifications.error(
