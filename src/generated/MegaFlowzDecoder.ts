@@ -23,6 +23,8 @@ import {
     AutoTradingStatus,
     CacheCleared,
     Notification,
+    JournalData,
+    JournalTrade,
     NotificationType,
     Severity,
     Timeframe,
@@ -154,6 +156,24 @@ export interface PongPayload {
     message: string;
 }
 
+export interface JournalTradeData {
+    ticket:      number;
+    symbol:      string;
+    type:        'BUY' | 'SELL';
+    volume:      number;
+    open_price:  number;
+    close_price: number;
+    profit:      number;
+    swap:        number;
+    commission:  number;
+    open_time:   number;
+    close_time:  number;
+}
+
+export interface JournalDataPayload {
+    trades: JournalTradeData[];
+}
+
 // ================================================================
 // DISCRIMINATED UNION — single return type
 // ================================================================
@@ -172,6 +192,7 @@ export type DecodedMessage =
     | { type: 'auto_trading';     data: AutoTradingPayload      }
     | { type: 'cache_cleared';    data: CacheClearedPayload     }
     | { type: 'pong';             data: PongPayload             }
+    | { type: 'journal_data';     data: JournalDataPayload      }
     | { type: 'unknown' };
 
 // ================================================================
@@ -474,6 +495,37 @@ export class MegaFlowzDecoder {
                     return {
                         type: 'cache_cleared',
                         data: { message }
+                    };
+                }
+
+                // ── Journal data ──
+                case MessagePayload.JournalData: {
+                    const p = msg.payload(
+                        new JournalData()
+                    ) as JournalData;
+
+                    const trades: JournalTradeData[] = [];
+                    for (let i = 0; i < p.tradesLength(); i++) {
+                        const t = p.trades(i);
+                        if (!t) continue;
+                        trades.push({
+                            ticket:      parseInt(t.ticket().toString(), 10),
+                            symbol:      t.symbol()     ?? '',
+                            type:        posTypeToString(t.type()),
+                            volume:      t.volume(),
+                            open_price:  t.openPrice(),
+                            close_price: t.closePrice(),
+                            profit:      t.profit(),
+                            swap:        t.swap(),
+                            commission:  t.commission(),
+                            open_time:   parseInt(t.openTime().toString(), 10),
+                            close_time:  parseInt(t.closeTime().toString(), 10)
+                        });
+                    }
+
+                    return {
+                        type: 'journal_data',
+                        data: { trades }
                     };
                 }
 
