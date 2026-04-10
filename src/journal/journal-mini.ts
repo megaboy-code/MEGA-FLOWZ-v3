@@ -124,14 +124,12 @@ export class JournalMiniModule {
             item.className = 'journal-trade-item';
 
             const dirClass = trade.direction === 'LONG' ? 'long' : 'short';
-            const arrow    = trade.direction === 'LONG' ? '▲' : '▼';
             const pnlClass = trade.result === 'WIN' ? 'win' : 'loss';
             const pnlText  = `${trade.pnl >= 0 ? '+' : '-'}$${Math.abs(trade.pnl).toFixed(2)}`;
 
             item.innerHTML = `
                 <span class="jm-pair">${trade.pair}</span>
                 <div class="jm-direction ${dirClass}">
-                    <span class="jm-direction-arrow">${arrow}</span>
                     <span class="jm-direction-text">${trade.direction}</span>
                     <span class="jm-direction-size">${trade.size}L</span>
                 </div>
