@@ -116,14 +116,10 @@
     gap: 4px;
 }
 
-.jm-direction-arrow { font-size: var(--text-sm); font-weight: 700; }
 .jm-direction-text  { font-size: var(--text-sm); font-weight: 600; }
 .jm-direction-size  { font-size: var(--text-xs); color: var(--text-muted); }
 
-.jm-direction.long .jm-direction-arrow,
 .jm-direction.long .jm-direction-text  { color: var(--accent-buy); }
-
-.jm-direction.short .jm-direction-arrow,
 .jm-direction.short .jm-direction-text { color: var(--accent-sell); }
 
 .jm-pnl {
