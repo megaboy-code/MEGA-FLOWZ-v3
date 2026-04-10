@@ -37,6 +37,42 @@
 .journal-mini-stat-value.positive { color: var(--accent-buy); }
 .journal-mini-stat-value.negative { color: var(--accent-sell); }
 
+/* ── Dropdown menu ── */
+.journal-dropdown {
+    display: none;
+    position: absolute;
+    top: 38px;
+    right: 8px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    z-index: 100;
+    min-width: 140px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.journal-dropdown.open { display: block; }
+
+.journal-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-family: var(--text-sans);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    text-align: left;
+}
+
+.journal-dropdown-item:hover { background: var(--bg-hover); }
+.journal-dropdown-item i     { color: var(--text-muted); font-size: var(--text-sm); }
+
 /* ── Column headers ── */
 .journal-mini-cols {
     display: flex;
@@ -116,8 +152,8 @@
     gap: 4px;
 }
 
-.jm-direction-text  { font-size: var(--text-sm); font-weight: 600; }
-.jm-direction-size  { font-size: var(--text-xs); color: var(--text-muted); }
+.jm-direction-text { font-size: var(--text-sm); font-weight: 600; }
+.jm-direction-size { font-size: var(--text-xs); color: var(--text-muted); }
 
 .jm-direction.long .jm-direction-text  { color: var(--accent-buy); }
 .jm-direction.short .jm-direction-text { color: var(--accent-sell); }
@@ -150,16 +186,6 @@
 .journal-mini-empty p { font-size: var(--text-base); }
 
 /* ── Footer button ── */
-.journal-footer-info {
-    font-size: var(--text-sm);
-    color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
-.journal-footer-info i { color: var(--accent-warn); font-size: var(--text-sm); }
-
 .journal-open-full-btn {
     display: flex;
     align-items: center;
@@ -169,7 +195,7 @@
     border: 1px solid var(--border);
     border-radius: 5px;
     color: var(--accent-info);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     font-family: var(--text-sans);
     cursor: pointer;
     transition: background-color 0.15s ease, border-color 0.15s ease;
@@ -183,5 +209,6 @@
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
     .journal-trade-item,
+    .journal-dropdown-item,
     .journal-open-full-btn { transition: none; }
 }
