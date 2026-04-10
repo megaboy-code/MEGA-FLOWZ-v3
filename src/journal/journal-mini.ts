@@ -83,7 +83,7 @@ export class JournalMiniModule {
         if (!this.pnlEl || !this.winRateEl || !this.tradeCountEl) return;
 
         if (trades.length === 0) {
-            this.pnlEl.textContent        = '$0';
+            this.pnlEl.textContent        = '$0.00';
             this.pnlEl.className          = 'journal-mini-stat-value';
             this.winRateEl.textContent    = '0%';
             this.winRateEl.className      = 'journal-mini-stat-value';
@@ -96,7 +96,7 @@ export class JournalMiniModule {
         const winRate    = Math.round((wins / trades.length) * 100);
         const isPositive = totalPnl >= 0;
 
-        this.pnlEl.textContent     = `${isPositive ? '+' : ''}$${Math.abs(totalPnl)}`;
+        this.pnlEl.textContent     = `${isPositive ? '+' : '-'}$${Math.abs(totalPnl).toFixed(2)}`;
         this.pnlEl.className       = `journal-mini-stat-value ${isPositive ? 'positive' : 'negative'}`;
         this.winRateEl.textContent = `${winRate}%`;
         this.winRateEl.className   = `journal-mini-stat-value ${winRate >= 50 ? 'positive' : 'negative'}`;
@@ -126,7 +126,7 @@ export class JournalMiniModule {
             const dirClass = trade.direction === 'LONG' ? 'long' : 'short';
             const arrow    = trade.direction === 'LONG' ? '▲' : '▼';
             const pnlClass = trade.result === 'WIN' ? 'win' : 'loss';
-            const pnlText  = `${trade.pnl >= 0 ? '+' : ''}$${Math.abs(trade.pnl)}`;
+            const pnlText  = `${trade.pnl >= 0 ? '+' : '-'}$${Math.abs(trade.pnl).toFixed(2)}`;
 
             item.innerHTML = `
                 <span class="jm-pair">${trade.pair}</span>
