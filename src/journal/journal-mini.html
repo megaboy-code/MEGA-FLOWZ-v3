@@ -10,10 +10,20 @@
             <span>Today's Trades</span>
         </div>
         <div class="panel-header-right">
-            <button class="panel-icon-btn" id="openFullJournalBtn" title="Full Journal">
-                <i class="fas fa-arrow-up-right-from-square"></i>
+            <button class="panel-icon-btn" id="journalMenuBtn" title="Options">
+                <i class="fas fa-ellipsis-v"></i>
             </button>
         </div>
+    </div>
+
+    <!-- Dropdown Menu -->
+    <div class="journal-dropdown" id="journalDropdown">
+        <button class="journal-dropdown-item" id="journalRefreshBtn">
+            <i class="fas fa-rotate-right"></i> Refresh
+        </button>
+        <button class="journal-dropdown-item" id="journalExportBtn">
+            <i class="fas fa-file-csv"></i> Export CSV
+        </button>
     </div>
 
     <!-- Stats -->
@@ -44,9 +54,6 @@
 
     <!-- Footer -->
     <div class="panel-footer">
-        <div class="journal-footer-info">
-            <i class="fas fa-circle"></i> Mock Data
-        </div>
         <button class="journal-open-full-btn" id="journalOpenFullBtn">
             Full Journal <i class="fas fa-arrow-right"></i>
         </button>
