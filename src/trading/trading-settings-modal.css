@@ -3,12 +3,12 @@
    ================================================================ */
 
 /* ==================== BACKDROP ==================== */
-/* Covers everything to the right of the trading panel */
+/* Covers everything to the LEFT of the trading panel */
 .trading-prefs-backdrop {
     position: fixed;
-    top: 0;
-    left: var(--panel-width, 300px);
-    right: 0;
+    top: var(--header-height);
+    left: 0;
+    right: calc(var(--panel-width) + var(--sidebar-left-width));
     bottom: 0;
     background: rgba(0, 0, 0, 0.55);
     z-index: 900;
@@ -23,18 +23,18 @@
 }
 
 /* ==================== MODAL ==================== */
-/* Slides in over the trading panel on the left */
+/* Sits over the trading panel on the RIGHT side */
 .trading-prefs-modal {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: var(--panel-width, 300px);
-    height: 100vh;
+    top: var(--header-height);
+    right: var(--sidebar-right-width);
+    width: var(--panel-content-width);
+    height: calc(100vh - var(--header-height));
     background: var(--bg-elevated);
-    border-right: 1px solid var(--border);
+    border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    z-index: 901;
+    z-index: 1001;
     animation: tpSlideIn 0.2s ease;
     overflow: hidden;
 }
@@ -42,7 +42,7 @@
 .trading-prefs-modal.hidden { display: none; }
 
 @keyframes tpSlideIn {
-    from { opacity: 0; transform: translateX(-12px); }
+    from { opacity: 0; transform: translateX(12px); }
     to   { opacity: 1; transform: translateX(0); }
 }
 
@@ -51,7 +51,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 14px;
+    padding: 8px 8px;
     background: var(--bg-surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -69,17 +69,17 @@
 .trading-prefs-header-left i { color: var(--accent-info); }
 
 .trading-prefs-close {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: var(--bg-base);
     border: 1px solid var(--border);
-    border-radius: var(--radius-xs);
+    border-radius: 5px;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
 }
 
@@ -93,7 +93,7 @@
 .trading-prefs-body {
     flex: 1;
     overflow-y: auto;
-    padding: 10px 12px;
+    padding: 10px 8px;
 }
 
 .trading-prefs-body::-webkit-scrollbar { width: 4px; }
@@ -105,8 +105,8 @@
 
 /* ==================== GROUP ==================== */
 .trading-prefs-group {
-    margin-bottom: 16px;
-    padding-bottom: 14px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--border);
 }
 
@@ -119,7 +119,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     font-weight: 700;
     color: var(--accent-info);
     text-transform: uppercase;
@@ -127,13 +127,10 @@
     margin-bottom: 10px;
 }
 
-.trading-prefs-group-title i { font-size: var(--text-sm); }
+.trading-prefs-group-title i { font-size: var(--text-base); }
 
 /* ==================== ITEM ==================== */
-.trading-prefs-item {
-    margin-bottom: 12px;
-}
-
+.trading-prefs-item { margin-bottom: 10px; }
 .trading-prefs-item:last-child { margin-bottom: 0; }
 
 .trading-prefs-label {
@@ -141,7 +138,7 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 5px;
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     color: var(--text-secondary);
 }
 
@@ -178,13 +175,13 @@
 /* ==================== SELECT ==================== */
 .trading-prefs-select {
     width: 100%;
-    padding: 6px 10px;
+    padding: 5px 8px;
     background: var(--bg-base);
     border: 1px solid var(--border);
     border-radius: var(--radius-xs);
     color: var(--text-primary);
     font-family: var(--text-sans);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     outline: none;
     cursor: pointer;
     transition: border-color 0.15s ease;
@@ -203,19 +200,19 @@
 }
 
 .trading-prefs-limit-label {
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     color: var(--text-muted);
 }
 
 .trading-prefs-limit-input {
-    width: 65px;
+    width: 60px;
     padding: 3px 6px;
     background: var(--bg-base);
     border: 1px solid var(--border);
     border-radius: var(--radius-xs);
     color: var(--text-primary);
     font-family: var(--text-mono);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     text-align: right;
     outline: none;
     transition: border-color 0.15s ease;
@@ -224,7 +221,7 @@
 .trading-prefs-limit-input:focus { border-color: var(--accent-info); }
 
 .trading-prefs-limit-unit {
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     color: var(--text-muted);
 }
 
@@ -232,15 +229,15 @@
 .trading-prefs-checkbox {
     display: flex;
     align-items: flex-start;
-    gap: 9px;
+    gap: 8px;
     margin-bottom: 8px;
 }
 
 .trading-prefs-checkbox:last-child { margin-bottom: 0; }
 
 .trading-prefs-checkbox input[type="checkbox"] {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     cursor: pointer;
     flex-shrink: 0;
     margin-top: 2px;
@@ -248,7 +245,7 @@
 }
 
 .trading-prefs-checkbox label {
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     color: var(--text-secondary);
     cursor: pointer;
     line-height: 1.4;
@@ -256,7 +253,7 @@
 
 /* ==================== HINTS ==================== */
 .trading-prefs-hint {
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     color: var(--text-muted);
     font-style: italic;
     margin-top: 3px;
@@ -270,7 +267,7 @@
 /* ==================== METHOD BLOCK ==================== */
 .trading-prefs-method {
     margin-top: 8px;
-    padding: 10px;
+    padding: 8px;
     background: var(--bg-base);
     border: 1px solid var(--border-light);
     border-radius: var(--radius-xs);
@@ -280,7 +277,7 @@
 .trading-prefs-footer {
     display: flex;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 8px 8px;
     border-top: 1px solid var(--border);
     background: var(--bg-elevated);
     flex-shrink: 0;
@@ -292,12 +289,12 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 9px;
+    padding: 8px;
     background: var(--accent-info);
     border: none;
     border-radius: var(--radius-sm);
     color: #ffffff;
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     font-weight: 600;
     cursor: pointer;
     font-family: var(--text-sans);
@@ -308,12 +305,12 @@
 
 .trading-prefs-cancel-btn {
     flex: 1;
-    padding: 9px;
+    padding: 8px;
     background: var(--bg-base);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
     font-weight: 600;
     cursor: pointer;
     font-family: var(--text-sans);
