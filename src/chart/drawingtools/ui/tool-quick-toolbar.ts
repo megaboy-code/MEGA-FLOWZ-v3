@@ -102,6 +102,9 @@ export interface QuickToolbarCallbacks {
   onSettingsClick: (tool: any) => void;
   onLockToggle:    (toolId: string, locked: boolean) => void;
   onDelete:        (toolId: string) => void;
+  // ✅ Fix 3 — per-TF toggle callbacks
+  onAllTFToggle:   (toolId: string, allTF: boolean) => void;
+  getToolMeta:     (toolId: string) => any | null;
 }
 
 export class ToolQuickToolbar {
@@ -176,18 +179,15 @@ export class ToolQuickToolbar {
       this.liveValues[ctrl.key] = val !== undefined ? val : ctrl.default;
     });
 
-    // ✅ Always extract text font color if tool has text
     if (options.text !== undefined) {
       const textColor = getPropertyValue(options, 'text.font.color');
       this.liveValues['text.font.color'] = textColor || '#2962ff';
     }
   }
 
-  // ✅ Check if tool has text capability
   private toolHasText(): boolean {
     const options = this.currentTool?.options;
     if (!options) return false;
-    // Has text options defined — show T button
     return options.text !== undefined;
   }
 
@@ -212,6 +212,12 @@ export class ToolQuickToolbar {
     const toolType = this.currentTool?.toolType || '';
     const controls = QUICK_CONTROLS[toolType] || [];
     const hasText  = this.toolHasText();
+
+    // ✅ Fix 3 — read allTF from meta for initial button state
+    const meta  = this.currentTool?.id
+      ? this.callbacks.getToolMeta(this.currentTool.id)
+      : null;
+    const allTF = meta?.allTF ?? true;
 
     let controlsHTML = '';
 
@@ -274,9 +280,8 @@ export class ToolQuickToolbar {
       }
     });
 
-    // ✅ Text color T button — shown for any tool with text options
     if (hasText) {
-      const textColor = this.liveValues['text.font.color'] || '#2962ff';
+      const textColor    = this.liveValues['text.font.color'] || '#2962ff';
       const displayColor = this.toDisplayColor(textColor);
       controlsHTML += `
         <div class="qtb-divider"></div>
@@ -311,6 +316,15 @@ export class ToolQuickToolbar {
       <div class="qtb-item">
         <button class="qtb-btn" id="qtbLockBtn" title="Lock tool">
           <i class="fas fa-lock-open" id="qtbLockIcon"></i>
+        </button>
+      </div>
+
+      <div class="qtb-divider"></div>
+      <div class="qtb-item">
+        <button class="qtb-btn ${allTF ? 'qtb-btn-active' : ''}"
+                id="qtbAllTFBtn"
+                title="${allTF ? 'Showing on all timeframes' : 'Locked to current timeframe'}">
+          <i class="fas fa-layer-group" id="qtbAllTFIcon"></i>
         </button>
       </div>
 
@@ -353,13 +367,13 @@ export class ToolQuickToolbar {
       }
     });
 
-    // ✅ Update T underline color
     const tUnderline = this.container.querySelector('#qtbTUnderline') as HTMLElement;
     if (tUnderline) {
       tUnderline.style.background = this.toDisplayColor(this.liveValues['text.font.color']);
     }
 
     this.updateLockButton();
+    this.updateAllTFButton();
   }
 
   private updateLockButton(): void {
@@ -370,6 +384,20 @@ export class ToolQuickToolbar {
     lockIcon.className = isLocked ? 'fas fa-lock' : 'fas fa-lock-open';
     lockBtn.title      = isLocked ? 'Unlock tool' : 'Lock tool';
     lockBtn.classList.toggle('qtb-btn-active', isLocked);
+  }
+
+  // ✅ Fix 3 — update allTF button state
+  private updateAllTFButton(): void {
+    const btn = this.container?.querySelector('#qtbAllTFBtn') as HTMLElement;
+    if (!btn || !this.currentTool?.id) return;
+
+    const meta  = this.callbacks.getToolMeta(this.currentTool.id);
+    const allTF = meta?.allTF ?? true;
+
+    btn.classList.toggle('qtb-btn-active', allTF);
+    btn.title = allTF
+      ? 'Showing on all timeframes'
+      : 'Locked to current timeframe';
   }
 
   // ==================== SETUP BUTTONS ====================
@@ -456,7 +484,7 @@ export class ToolQuickToolbar {
       }
     });
 
-    // ✅ Text color T button
+    // Text color T button
     const textColorBtn = this.container.querySelector('#qtbTextColorBtn');
     if (textColorBtn) {
       textColorBtn.addEventListener('click', async (e) => {
@@ -473,7 +501,6 @@ export class ToolQuickToolbar {
             const newVal = opacity < 1 ? this.hexToRgba(hex, opacity) : hex;
             this.liveValues['text.font.color'] = newVal;
 
-            // ✅ Update T underline
             const tUnderline = this.container?.querySelector('#qtbTUnderline') as HTMLElement;
             if (tUnderline) tUnderline.style.background = this.toDisplayColor(newVal);
 
@@ -488,13 +515,13 @@ export class ToolQuickToolbar {
       });
     }
 
-    // ✅ Settings — hide quick toolbar then open properties modal
+    // Settings
     this.container.querySelector('#qtbSettingsBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.closeDropdowns();
       if (this.currentTool) {
-        this.hide();                                          // ✅ hide quick toolbar first
-        this.callbacks.onSettingsClick(this.currentTool);   // ✅ open properties modal
+        this.hide();
+        this.callbacks.onSettingsClick(this.currentTool);
       }
     });
 
@@ -509,6 +536,18 @@ export class ToolQuickToolbar {
         this.updateLockButton();
         this.callbacks.onLockToggle(this.currentTool.id, !isLocked);
       }
+    });
+
+    // ✅ Fix 3 — allTF toggle button
+    this.container.querySelector('#qtbAllTFBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeDropdowns();
+      if (!this.currentTool?.id) return;
+
+      const meta  = this.callbacks.getToolMeta(this.currentTool.id);
+      const allTF = meta?.allTF ?? true;
+      this.callbacks.onAllTFToggle(this.currentTool.id, !allTF);
+      this.updateAllTFButton();
     });
 
     // Delete
@@ -799,7 +838,6 @@ export class ToolQuickToolbar {
 
       .qtb-color-btn:hover .qtb-color-dot { border-color: var(--text-muted); }
 
-      /* ✅ Text color T button */
       .qtb-text-color-btn {
         width: 28px;
         height: 26px;
