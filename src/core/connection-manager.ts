@@ -239,8 +239,8 @@ export class ConnectionManager {
             this.wsConnected = true;
             this.notifyConnectionStatus('connected');
 
-            this.sendCommand('GET_ACCOUNT_INFO');
-            this.sendCommand('GET_JOURNAL_TODAY');
+            // ── Startup config covers journal + account instantly ──
+            this.sendCommand('GET_STARTUP_CONFIG');
 
             this.currentSubscription =
                 `${this.currentSymbol}_${this.currentTimeframe}`;
