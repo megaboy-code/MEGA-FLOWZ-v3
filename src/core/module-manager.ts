@@ -219,18 +219,25 @@ export class ModuleManager {
             }
         });
 
-        // ── Journal data — initial load from server ──
-        this.connectionManager.onJournalData((trades) => {
+        // ── Journal data — split by scope ──
+        this.connectionManager.onJournalData((trades, scope) => {
             const mapped = trades.map((t: any) => ({
                 id:        t.ticket ?? t.id,
                 pair:      t.symbol,
-                direction: t.direction === 'BUY' ? 'LONG' : 'SHORT' as 'LONG' | 'SHORT',
+                direction: t.type === 'BUY' ? 'LONG' : 'SHORT' as 'LONG' | 'SHORT',
                 size:      String(t.volume),
                 pnl:       t.profit,
                 result:    t.profit >= 0 ? 'WIN' : 'LOSS' as 'WIN' | 'LOSS',
                 date:      new Date(t.close_time * 1000)
             }));
-            this.journalMiniInstance?.setTrades(mapped);
+
+            if (scope === 'today') {
+                // ── Mini journal — sidebar panel ──
+                this.journalMiniInstance?.setTrades(mapped);
+            } else if (scope === 'month') {
+                // ── Full journal — calendar view ──
+                this.journalInstance?.setTrades(mapped);
+            }
         });
 
         // ── Position modified ──
@@ -508,17 +515,48 @@ export class ModuleManager {
         document.addEventListener('hide-panel', () => {
             this.panels.hide();
         });
+
+        // ── Journal month navigate — full journal fires this ──
+        document.addEventListener('journal-month-changed', (e: Event) => {
+            const { year, month } = (e as CustomEvent).detail;
+            if (year && month !== undefined) {
+                this.connectionManager.getJournalMonth(year, month);
+            }
+        });
+
+        // ── Journal refresh — mini panel three dot menu ──
+        document.addEventListener('journal-refresh', () => {
+            this.connectionManager.getJournalToday();
+        });
     }
 
     // ==================== LAZY LOADERS ====================
 
     private async loadJournalModule(): Promise<void> {
-        if (this.journalInstance || this.journalLoading) return;
+        if (this.journalLoading) return;
+
+        // ── Already loaded — just request current month ──
+        if (this.journalInstance) {
+            const now = new Date();
+            this.connectionManager.getJournalMonth(
+                now.getFullYear(),
+                now.getMonth() + 1
+            );
+            return;
+        }
+
         this.journalLoading = true;
         try {
             const { JournalModule } = await import('../journal/journal');
             this.journalInstance = new JournalModule();
             this.journalInstance.mount();
+
+            // ── Request current month on first load ──
+            const now = new Date();
+            this.connectionManager.getJournalMonth(
+                now.getFullYear(),
+                now.getMonth() + 1
+            );
         } catch (error) {
             this.notifications.error(
                 'Failed to load journal module',
