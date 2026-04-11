@@ -139,7 +139,6 @@ export class ChartModule {
         return this.chartDataManager;
     }
 
-    // ✅ Fix — clear loading state after data arrives
     public setReady(): void {
         this.mainChart.setReady();
     }
@@ -426,6 +425,8 @@ export class ChartModule {
     public handleChartTypeChange(newChartType: string): void {
         if (this.mainChart.currentChartType === newChartType) return;
 
+        // ✅ Fix 1 — block onDataReady from importing drawings during switch
+        this.drawingModule?.beginChartTypeSwitch();
         this.drawingModule?.saveDrawings();
         this.mainChart.setChartType(newChartType);
 
@@ -433,6 +434,8 @@ export class ChartModule {
         if (this.drawingModule && newSeries) {
             this.drawingModule.updateSeries(newSeries);
         }
+        // ✅ Fix 1 — unblock onDataReady after updateSeries handles reimport
+        this.drawingModule?.endChartTypeSwitch();
 
         this.initializePriceAlerts();
         if (this.chartUI) this.chartUI.updateChartType(newChartType);
