@@ -15,10 +15,10 @@ export class DrawingPersistence {
     private _metaMap: Map<string, ToolMeta> = new Map();
 
     constructor(
-        private lineTools:         () => any,
-        private isInitialized:     () => boolean,
-        private currentSymbol:     () => string,
-        private currentTimeframe:  () => string
+        private lineTools:        () => any,
+        private isInitialized:    () => boolean,
+        private currentSymbol:    () => string,
+        private currentTimeframe: () => string
     ) {}
 
     private get STORAGE_KEY(): string {
@@ -40,11 +40,15 @@ export class DrawingPersistence {
     }
 
     public deleteMeta(toolId: string): void {
-        // ✅ Fix — mark deleted:true instead of removing entry
+        console.log('🗑️ deleteMeta called for:', toolId);
         const meta = this._metaMap.get(toolId);
+        console.log('🗑️ meta found:', meta);
         if (meta) {
             meta.deleted = true;
             this._metaMap.set(toolId, meta);
+            console.log('🗑️ meta after marking deleted:', this._metaMap.get(toolId));
+        } else {
+            console.warn('🗑️ NO META FOUND for toolId:', toolId);
         }
     }
 
@@ -74,6 +78,9 @@ export class DrawingPersistence {
     // ==================== SAVE ====================
 
     public saveDrawings(storageKey?: string): void {
+        console.trace('💾 saveDrawings called');
+        console.log('💾 _metaMap state:', JSON.stringify([...this._metaMap.entries()]));
+
         const lt = this.lineTools();
         if (!lt || !this.isInitialized()) return;
         try {
@@ -84,8 +91,8 @@ export class DrawingPersistence {
                 ? tools
                     .filter((t: any) => !NON_PERSISTENT_TOOLS.has(t.toolType))
                     .filter((t: any) => {
-                        // ✅ Fix — filter out deleted tools on every save
                         const meta = this._metaMap.get(t.id);
+                        console.log(`💾 tool ${t.id} meta:`, meta);
                         return !meta?.deleted;
                     })
                     .map((t: any) => ({
@@ -98,6 +105,8 @@ export class DrawingPersistence {
                         }
                     }))
                 : [];
+
+            console.log('💾 persistable tools after filter:', persistable.map((t: any) => t.id));
 
             const key = storageKey ?? this.STORAGE_KEY;
             localStorage.setItem(key, JSON.stringify(persistable));
@@ -173,7 +182,6 @@ export class DrawingPersistence {
                     : [];
 
                 if (persistable.length > 0) {
-                    // ✅ Restore _meta into metaMap, strip before passing to core
                     persistable.forEach((t: any) => {
                         if (t._meta && t.id) {
                             this._metaMap.set(t.id, t._meta);
@@ -198,12 +206,15 @@ export class DrawingPersistence {
     // ==================== REMOVE ONE FROM STORAGE ====================
 
     public removeToolFromStorage(toolId: string): void {
+        console.log('🗑️ removeToolFromStorage called for:', toolId);
         try {
             const saved = localStorage.getItem(this.STORAGE_KEY);
+            console.log('🗑️ current storage before remove:', saved);
             if (!saved) return;
             const tools    = JSON.parse(saved);
             if (!Array.isArray(tools)) return;
             const filtered = tools.filter((t: any) => t.id !== toolId);
+            console.log('🗑️ storage after filter:', JSON.stringify(filtered));
             localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filtered));
         } catch (error) {
             console.error('❌ Failed to remove tool from storage:', error);
