@@ -33,8 +33,15 @@ tradesLength():number {
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
+scope():string|null
+scope(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+scope(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 6);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
 static startJournalData(builder:flatbuffers.Builder) {
-  builder.startObject(1);
+  builder.startObject(2);
 }
 
 static addTrades(builder:flatbuffers.Builder, tradesOffset:flatbuffers.Offset) {
@@ -53,14 +60,19 @@ static startTradesVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
+static addScope(builder:flatbuffers.Builder, scopeOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(1, scopeOffset, 0);
+}
+
 static endJournalData(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createJournalData(builder:flatbuffers.Builder, tradesOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createJournalData(builder:flatbuffers.Builder, tradesOffset:flatbuffers.Offset, scopeOffset:flatbuffers.Offset):flatbuffers.Offset {
   JournalData.startJournalData(builder);
   JournalData.addTrades(builder, tradesOffset);
+  JournalData.addScope(builder, scopeOffset);
   return JournalData.endJournalData(builder);
 }
 }
