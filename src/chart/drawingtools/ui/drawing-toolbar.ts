@@ -22,6 +22,9 @@ export class DrawingToolbar {
   private updateToolProperties: (toolId: string, updates: any) => void;
   private lockTool:             (toolId: string, locked: boolean) => void;
   private deleteTool:           (toolId: string) => void;
+  // ✅ Fix 3 — per-TF toggle callbacks
+  private setToolAllTF:         (toolId: string, allTF: boolean) => void;
+  private getToolMeta:          (toolId: string) => any | null;
 
   constructor(
     drawingModule: any,
@@ -33,6 +36,9 @@ export class DrawingToolbar {
       updateToolProperties: (toolId: string, updates: any) => void;
       lockTool:             (toolId: string, locked: boolean) => void;
       deleteTool:           (toolId: string) => void;
+      // ✅ Fix 3
+      setToolAllTF:         (toolId: string, allTF: boolean) => void;
+      getToolMeta:          (toolId: string) => any | null;
     }
   ) {
     this.drawingModule        = drawingModule;
@@ -43,6 +49,8 @@ export class DrawingToolbar {
     this.updateToolProperties = callbacks.updateToolProperties;
     this.lockTool             = callbacks.lockTool;
     this.deleteTool           = callbacks.deleteTool;
+    this.setToolAllTF         = callbacks.setToolAllTF;
+    this.getToolMeta          = callbacks.getToolMeta;
   }
 
   // ==================== INITIALIZATION ====================
@@ -134,6 +142,16 @@ export class DrawingToolbar {
         this.deleteTool(toolId);
         this.selectedTool = null;
         this.hideToolProperties();
+      },
+
+      // ✅ Fix 3 — wire allTF toggle through to drawing module
+      onAllTFToggle: (toolId: string, allTF: boolean) => {
+        this.setToolAllTF(toolId, allTF);
+      },
+
+      // ✅ Fix 3 — wire meta getter through to drawing module
+      getToolMeta: (toolId: string) => {
+        return this.getToolMeta(toolId);
       }
     });
 
@@ -211,13 +229,11 @@ export class DrawingToolbar {
     const template = loadToolTemplate(toolId);
 
     if (template) {
-      // ✅ Template exists — override text color with current theme
       if (template.text?.font) {
         template.text.font.color = this.getThemeTextColor();
       }
       this.startDrawing(toolId, template);
     } else {
-      // ✅ No template — default text color from current theme
       const textColor = this.getThemeTextColor();
       this.startDrawing(toolId, {
         text: { font: { color: textColor } }
@@ -265,7 +281,6 @@ export class DrawingToolbar {
       });
     }
 
-    // ✅ Double click — show quick toolbar
     if (this.drawingModule.subscribeLineToolsDoubleClick) {
       this.drawingModule.subscribeLineToolsDoubleClick((payload: any) => {
         const tool = payload?.selectedLineTool || payload;
@@ -354,7 +369,6 @@ export class DrawingToolbar {
           this.quickToolbar?.hide();
         },
 
-        // ✅ Reshow quick toolbar when properties modal closes
         onClose: () => {
           if (this.selectedTool) {
             this.quickToolbar?.show(this.selectedTool);
@@ -415,9 +429,6 @@ export class DrawingToolbar {
 
   // ==================== PUBLIC API ====================
 
-  // ✅ Called from ChartDrawingModule.updateSeries()
-  // Resubscribes toolbar events to new lineTools instance
-  // after chart type change — fixes double click not working
   public resubscribeCoreEvents(): void {
     this.setupCoreEventSubscriptions();
   }
