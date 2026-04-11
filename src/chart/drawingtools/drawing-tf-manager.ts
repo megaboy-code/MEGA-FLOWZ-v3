@@ -1,0 +1,145 @@
+// ================================================================
+// 🎨 DRAWING TF MANAGER - TF/Symbol switch + visibility
+// ================================================================
+
+import { DrawingPersistence, ToolMeta } from './drawing-persistence';
+
+export const TF_INTERVALS: Record<string, number> = {
+    M1:  60,
+    M5:  300,
+    M15: 900,
+    M30: 1800,
+    H1:  3600,
+    H4:  14400,
+    D1:  86400,
+    W1:  604800,
+    MN:  2592000
+};
+
+export class DrawingTFManager {
+    constructor(
+        private lineTools:        () => any,
+        private isInitialized:    () => boolean,
+        private persistence:      DrawingPersistence,
+        private removeTradeArrows: () => void
+    ) {}
+
+    // ==================== SYMBOL / TF SWITCH ====================
+
+    public saveAndSwitchTimeframe(
+        newTimeframe:      string,
+        currentTimeframe:  string,
+        onTFUpdated:       (tf: string) => void
+    ): void {
+        if (currentTimeframe === newTimeframe) return;
+        // ✅ Save under OLD key before updating
+        this.persistence.saveDrawings();
+        onTFUpdated(newTimeframe);
+        console.log(`📐 TF tracking updated: ${newTimeframe}`);
+    }
+
+    public saveAndSwitchSymbol(
+        newSymbol:     string,
+        currentSymbol: string,
+        onSymUpdated:  (sym: string) => void
+    ): void {
+        if (currentSymbol === newSymbol) return;
+        this.persistence.saveDrawings();
+        onSymUpdated(newSymbol);
+        console.log(`📐 Symbol tracking updated: ${newSymbol}`);
+    }
+
+    public async onTimeframeChange(
+        newTimeframe:     string,
+        currentTimeframe: string,
+        onTFUpdated:      (tf: string) => void
+    ): Promise<void> {
+        if (currentTimeframe === newTimeframe) return;
+        this.persistence.saveDrawings();
+        onTFUpdated(newTimeframe);
+        this.removeTradeArrows();
+        this.applyTFVisibility(newTimeframe);
+    }
+
+    public async onSymbolChange(
+        newSymbol:     string,
+        currentSymbol: string,
+        onSymUpdated:  (sym: string) => void
+    ): Promise<void> {
+        if (currentSymbol === newSymbol) return;
+        this.persistence.saveDrawings();
+        onSymUpdated(newSymbol);
+        this.removeTradeArrows();
+    }
+
+    // ==================== VISIBILITY ====================
+
+    public applyTFVisibility(newTimeframe: string): void {
+        const lt = this.lineTools();
+        if (!lt || !this.isInitialized()) return;
+
+        try {
+            const json  = lt.exportLineTools();
+            const tools = JSON.parse(json);
+            if (!Array.isArray(tools)) return;
+
+            tools.forEach((tool: any) => {
+                if (!tool?.id) return;
+
+                const meta = this.persistence.getMeta(tool.id);
+                if (!meta) return;
+                if (meta.deleted) return;
+
+                if (meta.allTF) {
+                    // ✅ Snap timestamps to new TF bar grid
+                    const snappedPoints = this.snapPoints(tool.points, newTimeframe);
+                    if (snappedPoints) {
+                        lt.applyLineToolOptions({
+                            id:       tool.id,
+                            toolType: tool.toolType,
+                            options:  { ...tool.options, visible: true },
+                            points:   snappedPoints
+                        });
+                    }
+                } else {
+                    // ✅ Per-TF — hide or show based on ownership
+                    const visible = meta.timeframe === newTimeframe;
+                    lt.applyLineToolOptions({
+                        id:       tool.id,
+                        toolType: tool.toolType,
+                        options:  { ...tool.options, visible }
+                    });
+                }
+            });
+
+        } catch (error) {
+            console.error('❌ applyTFVisibility failed:', error);
+        }
+    }
+
+    // ==================== SNAP ====================
+
+    public snapPoints(points: any[], timeframe: string): any[] | null {
+        if (!Array.isArray(points) || points.length === 0) return null;
+        const interval = TF_INTERVALS[timeframe];
+        if (!interval) return null;
+
+        return points.map(point => ({
+            ...point,
+            timestamp: point.timestamp
+                ? Math.round(point.timestamp / interval) * interval
+                : point.timestamp
+        }));
+    }
+
+    // ==================== ALL TF TOGGLE ====================
+
+    public setToolAllTF(toolId: string, allTF: boolean): void {
+        this.persistence.setAllTF(toolId, allTF);
+        console.log(`📐 Tool ${toolId} allTF set to ${allTF}`);
+    }
+
+    public getToolMeta(toolId: string): ToolMeta | null {
+        return this.persistence.getMeta(toolId);
+    }
+}
