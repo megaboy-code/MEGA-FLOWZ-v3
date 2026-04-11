@@ -111,7 +111,7 @@ export class JournalMiniModule {
 
         const header = 'Ticket,Pair,Direction,Size,PnL,Result,Date';
         const rows   = this.trades.map(t =>
-            `${t.id},${t.pair},${t.direction},${t.size},${t.pnl.toFixed(2)},${t.result},${t.date.toISOString()}`
+            `${t.id},${t.pair},${t.direction},${parseFloat(t.size).toFixed(2)},${t.pnl.toFixed(2)},${t.result},${t.date.toISOString()}`
         );
 
         const csv  = [header, ...rows].join('\n');
@@ -183,12 +183,13 @@ export class JournalMiniModule {
             const dirClass = trade.direction === 'LONG' ? 'long' : 'short';
             const pnlClass = trade.result === 'WIN' ? 'win' : 'loss';
             const pnlText  = `${trade.pnl >= 0 ? '+' : '-'}$${Math.abs(trade.pnl).toFixed(2)}`;
+            const lotSize  = parseFloat(trade.size).toFixed(2);
 
             item.innerHTML = `
                 <span class="jm-pair">${trade.pair}</span>
                 <div class="jm-direction ${dirClass}">
                     <span class="jm-direction-text">${trade.direction}</span>
-                    <span class="jm-direction-size">${trade.size}L</span>
+                    <span class="jm-direction-size">${lotSize}L</span>
                 </div>
                 <div class="jm-pnl ${pnlClass}">${pnlText}</div>
             `;
