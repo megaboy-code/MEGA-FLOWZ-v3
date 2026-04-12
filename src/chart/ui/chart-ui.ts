@@ -1,42 +1,23 @@
 // ================================================================
 // ⚡ CHART UI - Professional controls (symbol, timeframe, chart type, indicators)
+// Config-driven — all symbols, timeframes, indicators from backend
+// Frontend owns visuals only — flags, icons, badges, categories
 // ================================================================
 
-const FAVORITES_KEY = 'mega_flowz_indicator_favorites';
+const FAVORITES_KEY        = 'mega_flowz_indicator_favorites';
+const SYMBOL_FAVORITES_KEY = 'mega_flowz_symbol_favorites';
 
-export interface ChartUICallbacks {
-  onSymbolChange: (symbol: string) => void;
-  onTimeframeChange: (timeframe: string) => void;
-  onChartTypeChange: (chartType: string) => void;
-}
+// ================================================================
+// FRONTEND STATIC MAPS — visual decoration only
+// Backend never sees these
+// ================================================================
 
-export class ChartUI {
-  private callbacks: ChartUICallbacks;
-  private isInitialized: boolean = false;
-  private currentSymbol: string;
-  private currentTimeframe: string;
-  private currentChartType: string;
-
-  // ✅ Store bound listeners for cleanup
-  private boundClickOutside: (e: Event) => void;
-  private boundIndicatorClose: (e: Event) => void;
-  private boundSymbolModalClose: (e: Event) => void;
-
-  // ✅ Strategy type mapping — modal value → backend name
-  private readonly strategyMap: Record<string, string> = {
-    'MA_CROSS':   'ma_crossover',
-    'EMA_CROSS':  '',
-    'MACD_CROSS': '',
-    'RSI_OB_OS':  '',
-  };
-
-  // ✅ Symbol flag/icon map
-  private readonly symbolIconMap: Record<string, {
-    base: string;
-    quote: string;
-    baseType: 'flag' | 'icon';
+const symbolIconMap: Record<string, {
+    base:      string;
+    quote:     string;
+    baseType:  'flag' | 'icon';
     quoteType: 'flag' | 'icon';
-  }> = {
+}> = {
     'EURUSD': { base: 'https://flagcdn.com/w320/eu.png', quote: 'https://flagcdn.com/w320/us.png', baseType: 'flag', quoteType: 'flag' },
     'GBPUSD': { base: 'https://flagcdn.com/w320/gb.png', quote: 'https://flagcdn.com/w320/us.png', baseType: 'flag', quoteType: 'flag' },
     'USDJPY': { base: 'https://flagcdn.com/w320/us.png', quote: 'https://flagcdn.com/w320/jp.png', baseType: 'flag', quoteType: 'flag' },
@@ -49,733 +30,1209 @@ export class ChartUI {
     'ETHUSD': { base: 'eth', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
     'LTCUSD': { base: 'ltc', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
     'XRPUSD': { base: 'xrp', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
-  };
+    'GBPJPY': { base: 'https://flagcdn.com/w320/gb.png', quote: 'https://flagcdn.com/w320/jp.png', baseType: 'flag', quoteType: 'flag' },
+    'EURJPY': { base: 'https://flagcdn.com/w320/eu.png', quote: 'https://flagcdn.com/w320/jp.png', baseType: 'flag', quoteType: 'flag' },
+    'EURGBP': { base: 'https://flagcdn.com/w320/eu.png', quote: 'https://flagcdn.com/w320/gb.png', baseType: 'flag', quoteType: 'flag' },
+    'XAGUSD': { base: 'xag', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
+    'USOIL':  { base: 'oil', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
+};
 
-  private readonly iconCircleMap: Record<string, string> = {
+const iconCircleMap: Record<string, string> = {
     'btc': '<i class="fab fa-bitcoin"></i>',
     'eth': '<i class="fab fa-ethereum"></i>',
     'ltc': '<span>Ł</span>',
     'xrp': '<span>X</span>',
     'xau': '<i class="fas fa-coins"></i>',
-  };
+    'xag': '<i class="fas fa-coins"></i>',
+    'oil': '<i class="fas fa-oil-well"></i>',
+};
 
-  constructor(
-    callbacks: ChartUICallbacks,
-    initialSymbol: string,
-    initialTimeframe: string,
-    initialChartType: string
-  ) {
-    console.log('🎮 Chart UI Initialized');
-    this.callbacks = callbacks;
-    this.currentSymbol = initialSymbol;
-    this.currentTimeframe = initialTimeframe;
-    this.currentChartType = initialChartType;
+const categoryMap: Record<string, string[]> = {
+    majors:      ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD'],
+    metals:      ['XAUUSD', 'XAGUSD'],
+    crypto:      ['BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD'],
+    indices:     ['US30', 'SPX500', 'NAS100', 'GER40'],
+    stocks:      ['AAPL', 'TSLA', 'MSFT'],
+    most_traded: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD', 'ETHUSD'],
+    top_movers:  ['XAUUSD', 'BTCUSD', 'XRPUSD', 'NAS100', 'TSLA', 'AAPL'],
+};
 
-    this.boundClickOutside = () => this.closeAllDropdowns();
-    this.boundIndicatorClose = (e: Event) => this.handleIndicatorClickOutside(e);
-    this.boundSymbolModalClose = (e: Event) => this.handleSymbolModalClickOutside(e);
-  }
+// ================================================================
+// LOCAL CONFIG INTERFACES — no imports from generated files
+// ================================================================
 
-  public initialize(): void {
-    if (this.isInitialized) return;
+interface ConfigSymbol {
+    name:        string;
+    description: string;
+}
 
-    console.log('🖱️ Setting up chart UI controls...');
+interface ConfigItem {
+    key:         string;
+    label:       string;
+    description: string;
+    badge:       string;
+}
 
-    this.setupSymbolControls();
-    this.setupTimeframeControls();
-    this.setupChartTypeControls();
-    this.setupIndicatorsModal();
-    this.setupActionButtons();
-    this.setupClickOutside();
+interface AvailableConfig {
+    symbols:            ConfigSymbol[];
+    timeframes_visible: string[];
+    timeframes_more:    string[];
+    indicators:         ConfigItem[];
+    strategies:         ConfigItem[];
+    patterns:           ConfigItem[];
+}
 
-    this.isInitialized = true;
-    console.log('✅ Chart UI ready');
-  }
+export interface ChartUICallbacks {
+    onSymbolChange:    (symbol: string)    => void;
+    onTimeframeChange: (timeframe: string) => void;
+    onChartTypeChange: (chartType: string) => void;
+}
 
-  // ==================== SYMBOL CONTROLS ====================
+export class ChartUI {
+    private callbacks:        ChartUICallbacks;
+    private isInitialized:    boolean = false;
+    private currentSymbol:    string;
+    private currentTimeframe: string;
+    private currentChartType: string;
 
-  private setupSymbolControls(): void {
-    const symbolPill = document.getElementById('symbolPill');
-    const hiddenSelect = document.getElementById('chartPairsSelect') as HTMLSelectElement;
+    // ── Config received from backend ──
+    private config: AvailableConfig | null = null;
 
-    if (!symbolPill || !hiddenSelect) {
-      console.warn('⚠️ Symbol pill or select not found');
-      return;
+    // ── Search debounce ──
+    private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    private lastSearchQuery:     string = '';
+
+    // ── Active category ──
+    private activeCategory: string = 'favorites';
+
+    // ── Bound listeners ──
+    private boundClickOutside:       (e: Event) => void;
+    private boundIndicatorClose:     (e: Event) => void;
+    private boundSymbolModalClose:   (e: Event) => void;
+    private boundAvailableConfig:    (e: Event) => void;
+    private boundSymbolSearchResult: (e: Event) => void;
+
+    // ── Active indicator category ──
+    private activeIndCat: string = 'favorites';
+
+    constructor(
+        callbacks:        ChartUICallbacks,
+        initialSymbol:    string,
+        initialTimeframe: string,
+        initialChartType: string
+    ) {
+        this.callbacks        = callbacks;
+        this.currentSymbol    = initialSymbol;
+        this.currentTimeframe = initialTimeframe;
+        this.currentChartType = initialChartType;
+
+        this.boundClickOutside       = () => this.closeAllDropdowns();
+        this.boundIndicatorClose     = (e: Event) => this.handleIndicatorClickOutside(e);
+        this.boundSymbolModalClose   = (e: Event) => this.handleSymbolModalClickOutside(e);
+        this.boundAvailableConfig    = (e: Event) => this.handleAvailableConfig(e);
+        this.boundSymbolSearchResult = (e: Event) => this.handleSymbolSearchResult(e);
     }
 
-    this.updateSymbolPill(this.currentSymbol);
-    hiddenSelect.value = this.currentSymbol;
+    public initialize(): void {
+        if (this.isInitialized) return;
 
-    symbolPill.addEventListener('click', (e: Event) => {
-      e.stopPropagation();
-      this.openSymbolModal();
-    });
+        this.setupSymbolControls();
+        this.setupTimeframeControls();
+        this.setupChartTypeControls();
+        this.setupIndicatorsModal();
+        this.setupActionButtons();
+        this.setupClickOutside();
+        this.setupIndicatorLeftNav();
 
-    hiddenSelect.addEventListener('change', (e: Event) => {
-      const newSymbol = (e.target as HTMLSelectElement).value;
-      if (newSymbol !== this.currentSymbol) {
-        this.currentSymbol = newSymbol;
-        this.updateSymbolPill(newSymbol);
-        this.callbacks.onSymbolChange(newSymbol);
-      }
-    });
+        // ── Listen for config from backend ──
+        document.addEventListener('available-config-received', this.boundAvailableConfig);
 
-    this.setupSymbolModal();
-  }
+        // ── Listen for symbol search results ──
+        document.addEventListener('symbol-search-result', this.boundSymbolSearchResult);
 
-  // ==================== SYMBOL SEARCH MODAL ====================
-
-  private setupSymbolModal(): void {
-    const overlay = document.getElementById('symbolModalOverlay');
-    const closeBtn = document.getElementById('symbolModalClose');
-    const searchInput = document.getElementById('symbolSearchInput') as HTMLInputElement;
-    const hiddenSelect = document.getElementById('chartPairsSelect') as HTMLSelectElement;
-
-    if (!overlay) {
-      console.warn('⚠️ Symbol modal not found');
-      return;
+        this.isInitialized = true;
     }
 
-    if (closeBtn) {
-      closeBtn.addEventListener('click', (e: Event) => {
-        e.stopPropagation();
-        this.closeSymbolModal();
-      });
+    // ================================================================
+    // AVAILABLE CONFIG — received from backend via DOM event
+    // ================================================================
+
+    private handleAvailableConfig(e: Event): void {
+        const config = (e as CustomEvent).detail as AvailableConfig;
+        if (!config) return;
+
+        this.config = config;
+
+        this.renderTimeframes();
+        this.renderSymbolRows();
+        this.renderIndicatorRows();
+        this.updateIndicatorCounts();
     }
 
-    document.addEventListener('click', this.boundSymbolModalClose);
+    // ================================================================
+    // RENDER TIMEFRAMES — inject from config
+    // ================================================================
 
-    if (searchInput) {
-      searchInput.addEventListener('input', (e: Event) => {
-        const query = (e.target as HTMLInputElement).value.toLowerCase();
-        this.filterSymbolModal(query);
-      });
-      searchInput.addEventListener('click', (e: Event) => e.stopPropagation());
+    private renderTimeframes(): void {
+        if (!this.config) return;
+
+        const tfGroup        = document.getElementById('tfGroup');
+        const tfMoreDropdown = document.getElementById('tfMoreDropdown');
+        const tfMore         = document.getElementById('tfMore');
+
+        if (!tfGroup) return;
+
+        // ── Remove old visible buttons (keep tfMore) ──
+        Array.from(tfGroup.children).forEach(child => {
+            if ((child as HTMLElement).id !== 'tfMore') {
+                tfGroup.removeChild(child);
+            }
+        });
+
+        // ── Inject visible TF buttons before tfMore ──
+        this.config.timeframes_visible.forEach(tf => {
+            const btn = document.createElement('button');
+            btn.className    = 'tf-btn';
+            btn.dataset.tf   = tf;
+            btn.textContent  = tf;
+            if (tf === this.currentTimeframe) btn.classList.add('active');
+            tfGroup.insertBefore(btn, tfMore);
+        });
+
+        // ── Inject more TF items ──
+        if (tfMoreDropdown) {
+            tfMoreDropdown.innerHTML = '';
+            this.config.timeframes_more.forEach(tf => {
+                const item = document.createElement('div');
+                item.className   = 'tf-more-item';
+                item.dataset.tf  = tf;
+                item.textContent = tf;
+                if (tf === this.currentTimeframe) item.classList.add('active');
+                tfMoreDropdown.appendChild(item);
+            });
+        }
     }
 
-    const modalBody = document.getElementById('symbolModalBody');
-    if (modalBody) {
-      modalBody.addEventListener('click', (e: Event) => {
-        const target = e.target as HTMLElement;
-        const item = target.closest('.symbol-modal-item') as HTMLElement;
-        if (!item) return;
+    // ================================================================
+    // RENDER SYMBOL ROWS — inject from config
+    // ================================================================
 
-        const value = item.dataset.value;
-        if (!value) return;
+    private renderSymbolRows(): void {
+        if (!this.config) return;
 
-        modalBody.querySelectorAll('.symbol-modal-item').forEach(el => el.classList.remove('active'));
-        item.classList.add('active');
+        const modalBody = document.getElementById('symbolModalBody');
+        if (!modalBody) return;
 
-        this.updateSymbolPill(value);
-        if (hiddenSelect) hiddenSelect.value = value;
-        this.closeSymbolModal();
+        // ── Keep empty state elements ──
+        const emptyFav    = document.getElementById('symbolEmptyFavorites');
+        const emptySearch = document.getElementById('symbolEmptySearch');
+        const searching   = document.getElementById('symbolSearching');
 
-        this.currentSymbol = value;
-        this.callbacks.onSymbolChange(value);
+        // ── Clear existing rows ──
+        modalBody.querySelectorAll('.symbol-modal-row').forEach(el => el.remove());
 
-        console.log('🔄 Symbol changed via modal:', value);
-      });
-    }
-  }
+        const favorites = this.loadSymbolFavorites();
 
-  private openSymbolModal(): void {
-    const overlay = document.getElementById('symbolModalOverlay');
-    const searchInput = document.getElementById('symbolSearchInput') as HTMLInputElement;
-    if (!overlay) return;
+        this.config.symbols.forEach(sym => {
+            const row = this.createSymbolRow(sym, favorites.includes(sym.name));
+            modalBody.insertBefore(row, emptyFav);
+        });
 
-    overlay.classList.add('open');
-    this.filterSymbolModal('');
-
-    if (searchInput) {
-      searchInput.value = '';
-      setTimeout(() => searchInput.focus(), 50);
+        // ── Apply current category filter ──
+        this.filterByCategory(this.activeCategory);
     }
 
-    const modalBody = document.getElementById('symbolModalBody');
-    if (modalBody) {
-      modalBody.querySelectorAll('.symbol-modal-item').forEach(el => {
-        el.classList.toggle('active', (el as HTMLElement).dataset.value === this.currentSymbol);
-      });
-    }
-  }
+    private createSymbolRow(sym: ConfigSymbol, isStarred: boolean): HTMLElement {
+        const row = document.createElement('div');
+        row.className        = 'symbol-modal-row';
+        row.dataset.value    = sym.name;
+        row.dataset.desc     = sym.description;
 
-  private closeSymbolModal(): void {
-    const overlay = document.getElementById('symbolModalOverlay');
-    if (overlay) overlay.classList.remove('open');
-  }
+        if (sym.name === this.currentSymbol) row.classList.add('active');
 
-  private handleSymbolModalClickOutside(e: Event): void {
-    const overlay = document.getElementById('symbolModalOverlay');
-    if (!overlay || !overlay.classList.contains('open')) return;
-    const modal = document.getElementById('symbolModal');
-    const symbolPill = document.getElementById('symbolPill');
-    if (modal && !modal.contains(e.target as Node) && e.target !== symbolPill) {
-      this.closeSymbolModal();
-    }
-  }
+        const flagStack = this.buildFlagStack(sym.name);
+        const starClass = isStarred ? 'symbol-star-btn active' : 'symbol-star-btn';
 
-  private filterSymbolModal(query: string): void {
-    const modalBody = document.getElementById('symbolModalBody');
-    const emptyState = document.getElementById('symbolModalEmpty');
-    if (!modalBody) return;
+        row.innerHTML = `
+            <div class="symbol-modal-name">
+                ${flagStack}
+                <span>${sym.name}</span>
+            </div>
+            <div class="symbol-modal-desc">${sym.description}</div>
+            <button class="${starClass}" data-value="${sym.name}">
+                <i class="fas fa-star"></i>
+            </button>
+        `;
 
-    const items = modalBody.querySelectorAll('.symbol-modal-item');
-    const groups = modalBody.querySelectorAll('.symbol-modal-group');
-    let totalVisible = 0;
-
-    items.forEach(item => {
-      const name = (item as HTMLElement).dataset.value?.toLowerCase() || '';
-      const desc = item.querySelector('.symbol-modal-desc')?.textContent?.toLowerCase() || '';
-      const match = query === '' || name.includes(query) || desc.includes(query);
-      (item as HTMLElement).style.display = match ? '' : 'none';
-      if (match) totalVisible++;
-    });
-
-    groups.forEach(group => {
-      const visibleItems = Array.from(group.querySelectorAll('.symbol-modal-item'))
-        .some(item => (item as HTMLElement).style.display !== 'none');
-      (group as HTMLElement).style.display = visibleItems ? '' : 'none';
-    });
-
-    if (emptyState) {
-      emptyState.style.display = totalVisible === 0 && query !== '' ? 'block' : 'none';
-    }
-  }
-
-  // ==================== SYMBOL PILL UPDATE ====================
-
-  private updateSymbolPill(symbol: string): void {
-    const symbolText = document.getElementById('symbolText');
-    if (symbolText) symbolText.textContent = symbol;
-    this.updateSymbolFlags(symbol);
-  }
-
-  private updateSymbolFlags(symbol: string): void {
-    const baseEl = document.getElementById('symbolFlagBase');
-    const quoteEl = document.getElementById('symbolFlagQuote');
-    if (!baseEl || !quoteEl) return;
-
-    const config = this.symbolIconMap[symbol];
-    if (!config) return;
-
-    if (config.baseType === 'flag') {
-      baseEl.className = 'flag-circle flag-base';
-      baseEl.style.backgroundImage = `url('${config.base}')`;
-      baseEl.innerHTML = '';
-    } else {
-      baseEl.className = `flag-circle flag-base icon-circle ${config.base}`;
-      baseEl.style.backgroundImage = '';
-      baseEl.innerHTML = this.iconCircleMap[config.base] || '';
+        return row;
     }
 
-    if (config.quoteType === 'flag') {
-      quoteEl.className = 'flag-circle flag-quote';
-      quoteEl.style.backgroundImage = `url('${config.quote}')`;
-      quoteEl.innerHTML = '';
-    } else {
-      quoteEl.className = `flag-circle flag-quote icon-circle ${config.quote}`;
-      quoteEl.style.backgroundImage = '';
-      quoteEl.innerHTML = this.iconCircleMap[config.quote] || '';
-    }
-  }
+    private buildFlagStack(symbol: string): string {
+        const config = symbolIconMap[symbol];
 
-  // ==================== TIMEFRAME CONTROLS ====================
-
-  private setupTimeframeControls(): void {
-    const tfGroup = document.getElementById('tfGroup');
-    const tfMoreBtn = document.getElementById('tfMoreBtn');
-    const tfMore = document.getElementById('tfMore');
-    const tfMoreDropdown = document.getElementById('tfMoreDropdown');
-    const hiddenSelect = document.getElementById('timeframeSelect') as HTMLSelectElement;
-
-    if (!tfGroup || !hiddenSelect) {
-      console.warn('⚠️ Timeframe group or select not found');
-      return;
-    }
-
-    hiddenSelect.value = this.currentTimeframe;
-    this.updateTimeframeButtons(this.currentTimeframe);
-
-    tfGroup.addEventListener('click', (e: Event) => {
-      const target = e.target as HTMLElement;
-      const btn = target.closest('.tf-btn:not(.tf-more-btn)') as HTMLElement;
-      if (!btn) return;
-
-      const tf = btn.dataset.tf;
-      if (!tf) return;
-
-      this.closeAllDropdowns();
-      this.updateTimeframeButtons(tf);
-      hiddenSelect.value = tf;
-      this.currentTimeframe = tf;
-      this.callbacks.onTimeframeChange(tf);
-
-      console.log('🔄 Timeframe changed via buttons:', tf);
-    });
-
-    if (tfMoreBtn && tfMore) {
-      tfMoreBtn.addEventListener('click', (e: Event) => {
-        e.stopPropagation();
-        const isOpen = tfMore.classList.contains('open');
-        this.closeAllDropdowns();
-        if (!isOpen) tfMore.classList.add('open');
-      });
-    }
-
-    if (tfMoreDropdown) {
-      tfMoreDropdown.addEventListener('click', (e: Event) => {
-        const target = e.target as HTMLElement;
-        const item = target.closest('.tf-more-item') as HTMLElement;
-        if (!item) return;
-
-        const tf = item.dataset.tf;
-        if (!tf) return;
-
-        this.closeAllDropdowns();
-        this.updateTimeframeButtons(tf);
-        hiddenSelect.value = tf;
-        this.currentTimeframe = tf;
-        this.callbacks.onTimeframeChange(tf);
-
-        console.log('🔄 Timeframe changed via more dropdown:', tf);
-      });
-    }
-
-    hiddenSelect.addEventListener('change', (e: Event) => {
-      const newTf = (e.target as HTMLSelectElement).value;
-      if (newTf !== this.currentTimeframe) {
-        this.currentTimeframe = newTf;
-        this.updateTimeframeButtons(newTf);
-        this.callbacks.onTimeframeChange(newTf);
-      }
-    });
-  }
-
-  private updateTimeframeButtons(timeframe: string): void {
-    document.querySelectorAll('.tf-btn:not(.tf-more-btn)').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tf-more-item').forEach(item => item.classList.remove('active'));
-
-    const matchingBtn = document.querySelector(`.tf-btn[data-tf="${timeframe}"]`) as HTMLElement;
-    if (matchingBtn) {
-      matchingBtn.classList.add('active');
-      return;
-    }
-
-    const matchingMoreItem = document.querySelector(`.tf-more-item[data-tf="${timeframe}"]`) as HTMLElement;
-    if (matchingMoreItem) {
-      matchingMoreItem.classList.add('active');
-      const tfMoreBtn = document.getElementById('tfMoreBtn');
-      if (tfMoreBtn) tfMoreBtn.classList.add('active');
-    }
-  }
-
-  // ==================== CHART TYPE CONTROLS ====================
-
-  private setupChartTypeControls(): void {
-    const chartTypePill = document.getElementById('chartTypePill');
-    const chartTypeDropdown = document.getElementById('chartTypeDropdown');
-    const hiddenSelect = document.getElementById('chartTypeSelect') as HTMLSelectElement;
-
-    if (!chartTypePill || !hiddenSelect) {
-      console.warn('⚠️ Chart type pill or select not found');
-      return;
-    }
-
-    hiddenSelect.value = this.currentChartType;
-    this.updateChartTypePill(this.currentChartType);
-
-    chartTypePill.addEventListener('click', (e: Event) => {
-      e.stopPropagation();
-      const isOpen = chartTypePill.classList.contains('open');
-      this.closeAllDropdowns();
-      if (!isOpen) chartTypePill.classList.add('open');
-    });
-
-    if (chartTypeDropdown) {
-      chartTypeDropdown.addEventListener('click', (e: Event) => {
-        const target = e.target as HTMLElement;
-        const item = target.closest('.chart-type-item') as HTMLElement;
-        if (!item) return;
-
-        const type = item.dataset.type;
-        const icon = item.dataset.icon;
-        const label = item.dataset.label;
-        if (!type) return;
-
-        chartTypeDropdown.querySelectorAll('.chart-type-item').forEach(el => el.classList.remove('active'));
-        item.classList.add('active');
-
-        this.updateChartTypePill(type, icon, label);
-        hiddenSelect.value = type;
-        chartTypePill.classList.remove('open');
-
-        this.currentChartType = type;
-        this.callbacks.onChartTypeChange(type);
-
-        console.log('🔄 Chart type changed via pill:', type);
-      });
-    }
-
-    hiddenSelect.addEventListener('change', (e: Event) => {
-      const newType = (e.target as HTMLSelectElement).value;
-      if (newType !== this.currentChartType) {
-        this.currentChartType = newType;
-        this.updateChartTypePill(newType);
-        this.callbacks.onChartTypeChange(newType);
-      }
-    });
-  }
-
-  private updateChartTypePill(type: string, icon?: string, label?: string): void {
-    const chartTypeIcon = document.getElementById('chartTypeIcon');
-    const chartTypeText = document.getElementById('chartTypeText');
-
-    const typeMap: Record<string, { icon: string; label: string }> = {
-      'candlestick': { icon: 'fa-chart-candlestick', label: 'Candles'  },
-      'bar':         { icon: 'fa-chart-bar',         label: 'Bars'     },
-      'line':        { icon: 'fa-chart-line',         label: 'Line'     },
-      'area':        { icon: 'fa-chart-area',         label: 'Area'     },
-      'baseline':    { icon: 'fa-minus',              label: 'Baseline' }
-    };
-
-    const mapped = typeMap[type] || typeMap['candlestick'];
-    const finalIcon = icon || mapped.icon;
-    const finalLabel = label || mapped.label;
-
-    if (chartTypeIcon) chartTypeIcon.className = `fas ${finalIcon} chart-type-icon`;
-    if (chartTypeText) chartTypeText.textContent = finalLabel;
-
-    document.querySelectorAll('.chart-type-item').forEach(item => {
-      item.classList.toggle('active', (item as HTMLElement).dataset.type === type);
-    });
-  }
-
-  // ==================== INDICATORS MODAL ====================
-
-  private setupIndicatorsModal(): void {
-    const indicatorsBtn = document.getElementById('indicatorsBtn');
-    const overlay = document.getElementById('indicatorsModalOverlay');
-    const closeBtn = document.getElementById('indicatorsModalClose');
-    const searchInput = document.getElementById('indicatorSearchInput') as HTMLInputElement;
-
-    if (!indicatorsBtn || !overlay) {
-      console.warn('⚠️ Indicators button or modal not found');
-      return;
-    }
-
-    indicatorsBtn.addEventListener('click', (e: Event) => {
-      e.stopPropagation();
-      this.closeAllDropdowns();
-      overlay.classList.add('open');
-      this.renderFavorites();
-      this.syncFavoriteStars();
-      if (searchInput) {
-        searchInput.value = '';
-        this.filterIndicators('');
-        setTimeout(() => searchInput.focus(), 50);
-      }
-    });
-
-    if (closeBtn) {
-      closeBtn.addEventListener('click', (e: Event) => {
-        e.stopPropagation();
-        overlay.classList.remove('open');
-      });
-    }
-
-    document.addEventListener('click', this.boundIndicatorClose);
-
-    if (searchInput) {
-      searchInput.addEventListener('input', (e: Event) => {
-        const query = (e.target as HTMLInputElement).value.toLowerCase();
-        this.filterIndicators(query);
-      });
-    }
-
-    const modalBody = document.getElementById('indicatorsModalBody');
-    if (modalBody) {
-      modalBody.addEventListener('click', (e: Event) => {
-        const target = e.target as HTMLElement;
-
-        // ✅ Category header toggle
-        const categoryHeader = target.closest('.indicators-category-header') as HTMLElement;
-        if (categoryHeader) {
-          const category = categoryHeader.closest('.indicators-category') as HTMLElement;
-          if (category) category.classList.toggle('open');
-          return;
+        if (!config) {
+            return `<div class="symbol-flag-stack">
+                <div class="flag-circle flag-base" style="background:#444"></div>
+            </div>`;
         }
 
-        // ✅ Star toggle — stop here, don't proceed to item click
-        if (target.classList.contains('indicator-fav-star')) {
-          e.stopPropagation();
-          const item = target.closest('.indicator-item') as HTMLElement;
-          if (!item) return;
-          const value = item.dataset.value;
-          const name = item.dataset.name;
-          if (!value || !name) return;
-          this.toggleFavorite(value, name, target);
-          return;
+        const baseHtml = config.baseType === 'flag'
+            ? `<div class="flag-circle flag-base" style="background-image:url('${config.base}')"></div>`
+            : `<div class="flag-circle flag-base icon-circle ${config.base}">${iconCircleMap[config.base] || ''}</div>`;
+
+        const quoteHtml = config.quoteType === 'flag'
+            ? `<div class="flag-circle flag-quote" style="background-image:url('${config.quote}')"></div>`
+            : `<div class="flag-circle flag-quote icon-circle ${config.quote}">${iconCircleMap[config.quote] || ''}</div>`;
+
+        return `<div class="symbol-flag-stack">${baseHtml}${quoteHtml}</div>`;
+    }
+
+    // ================================================================
+    // RENDER INDICATOR ROWS — inject from config
+    // ================================================================
+
+    private renderIndicatorRows(): void {
+        if (!this.config) return;
+
+        const list = document.getElementById('indicatorsRightList');
+        if (!list) return;
+
+        // ── Keep empty state elements ──
+        const emptyFav    = document.getElementById('indEmptyFavorites');
+        const emptySearch = document.getElementById('indEmptySearch');
+
+        // ── Clear existing rows ──
+        list.querySelectorAll('.ind-row').forEach(el => el.remove());
+
+        const favorites = this.loadFavorites();
+
+        // ── Render based on active category ──
+        this.renderIndCategory(this.activeIndCat);
+    }
+
+    private renderIndCategory(cat: string): void {
+        if (!this.config) return;
+
+        const list = document.getElementById('indicatorsRightList');
+        if (!list) return;
+
+        const label = document.getElementById('indicatorsRightLabel');
+
+        // ── Clear existing rows ──
+        list.querySelectorAll('.ind-row').forEach(el => el.remove());
+
+        const favorites = this.loadFavorites();
+
+        const labelMap: Record<string, string> = {
+            favorites:  '⭐ Favorites',
+            indicators: '📈 Indicators',
+            strategies: '🤖 Strategies',
+            patterns:   '🔷 Patterns',
+        };
+
+        if (label) label.textContent = labelMap[cat] || cat;
+
+        let items: ConfigItem[]  = [];
+        let type:  string        = cat;
+
+        if (cat === 'favorites') {
+            // ── Build favorites from all categories ──
+            const allItems = [
+                ...this.config.indicators.map(i => ({ ...i, type: 'indicator' })),
+                ...this.config.strategies.map(i => ({ ...i, type: 'strategy' })),
+                ...this.config.patterns.map(i  => ({ ...i, type: 'pattern'  })),
+            ];
+
+            const favItems = allItems.filter(i => favorites.includes(i.key));
+
+            if (favItems.length === 0) {
+                document.getElementById('indEmptyFavorites')?.style.setProperty('display', 'flex');
+                return;
+            }
+
+            document.getElementById('indEmptyFavorites')?.style.setProperty('display', 'none');
+
+            favItems.forEach(item => {
+                list.appendChild(this.createIndRow(item, item.type, true));
+            });
+            return;
         }
 
-        // ✅ Indicator / Strategy item click
-        const item = target.closest('.indicator-item') as HTMLElement;
-        if (!item) return;
-        if (target.classList.contains('indicator-fav-star')) return;
+        document.getElementById('indEmptyFavorites')?.style.setProperty('display', 'none');
 
-        const value = item.dataset.value;
-        const type  = item.dataset.type;
-        if (!value) return;
+        if (cat === 'indicators') items = this.config.indicators;
+        if (cat === 'strategies') items = this.config.strategies;
+        if (cat === 'patterns')   items = this.config.patterns;
 
-        if (type === 'strategy') {
-          this.deployStrategyFromModal(value);
+        items.forEach(item => {
+            const isStarred = favorites.includes(item.key);
+            list.appendChild(this.createIndRow(item, cat === 'indicators' ? 'indicator' : cat.slice(0, -1), isStarred));
+        });
+    }
+
+    private createIndRow(item: ConfigItem, type: string, isStarred: boolean): HTMLElement {
+        const row = document.createElement('div');
+        row.className      = 'ind-row';
+        row.dataset.value  = item.key;
+        row.dataset.type   = type;
+        row.dataset.name   = item.label;
+
+        const starClass  = isStarred ? 'ind-star-btn active' : 'ind-star-btn';
+        const badgeClass = `ind-badge ${item.badge}`;
+
+        row.innerHTML = `
+            <div class="ind-row-icon">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="ind-row-info">
+                <div class="ind-row-name">${item.label}</div>
+                <div class="ind-row-desc">${item.description}</div>
+            </div>
+            <span class="${badgeClass}">${item.badge}</span>
+            <button class="${starClass}" data-value="${item.key}" data-name="${item.label}">
+                <i class="fas fa-star"></i>
+            </button>
+        `;
+
+        return row;
+    }
+
+    // ================================================================
+    // INDICATOR LEFT NAV
+    // ================================================================
+
+    private setupIndicatorLeftNav(): void {
+        const nav = document.getElementById('indicatorsLeftNav');
+        if (!nav) return;
+
+        nav.addEventListener('click', (e: Event) => {
+            const target = e.target as HTMLElement;
+            const item   = target.closest('.ind-nav-item') as HTMLElement;
+            if (!item) return;
+
+            const cat = item.dataset.cat;
+            if (!cat) return;
+
+            nav.querySelectorAll('.ind-nav-item').forEach(el => el.classList.remove('active'));
+            item.classList.add('active');
+
+            this.activeIndCat = cat;
+            this.renderIndCategory(cat);
+        });
+    }
+
+    // ================================================================
+    // UPDATE INDICATOR COUNTS
+    // ================================================================
+
+    private updateIndicatorCounts(): void {
+        if (!this.config) return;
+
+        const favorites = this.loadFavorites();
+
+        const allItems = [
+            ...this.config.indicators,
+            ...this.config.strategies,
+            ...this.config.patterns,
+        ];
+
+        const favCount = allItems.filter(i => favorites.includes(i.key)).length;
+
+        const countMap: Record<string, number> = {
+            favorites:  favCount,
+            indicators: this.config.indicators.length,
+            strategies: this.config.strategies.length,
+            patterns:   this.config.patterns.length,
+        };
+
+        Object.entries(countMap).forEach(([cat, count]) => {
+            const el = document.getElementById(`ind-count-${cat}`);
+            if (el) el.textContent = String(count);
+        });
+    }
+
+    // ================================================================
+    // SYMBOL CONTROLS
+    // ================================================================
+
+    private setupSymbolControls(): void {
+        const symbolPill  = document.getElementById('symbolPill');
+        const hiddenSelect = document.getElementById('chartPairsSelect') as HTMLSelectElement;
+
+        if (!symbolPill || !hiddenSelect) return;
+
+        this.updateSymbolPill(this.currentSymbol);
+        hiddenSelect.value = this.currentSymbol;
+
+        symbolPill.addEventListener('click', (e: Event) => {
+            e.stopPropagation();
+            this.openSymbolModal();
+        });
+
+        hiddenSelect.addEventListener('change', (e: Event) => {
+            const newSymbol = (e.target as HTMLSelectElement).value;
+            if (newSymbol !== this.currentSymbol) {
+                this.currentSymbol = newSymbol;
+                this.updateSymbolPill(newSymbol);
+                this.callbacks.onSymbolChange(newSymbol);
+            }
+        });
+
+        this.setupSymbolModal();
+    }
+
+    // ================================================================
+    // SYMBOL MODAL
+    // ================================================================
+
+    private setupSymbolModal(): void {
+        const overlay      = document.getElementById('symbolModalOverlay');
+        const closeBtn     = document.getElementById('symbolModalClose');
+        const searchInput  = document.getElementById('symbolSearchInput') as HTMLInputElement;
+        const hiddenSelect = document.getElementById('chartPairsSelect') as HTMLSelectElement;
+        const categorySelect = document.getElementById('symbolCategorySelect') as HTMLSelectElement;
+
+        if (!overlay) return;
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', (e: Event) => {
+                e.stopPropagation();
+                this.closeSymbolModal();
+            });
+        }
+
+        document.addEventListener('click', this.boundSymbolModalClose);
+
+        // ── Category filter ──
+        if (categorySelect) {
+            categorySelect.addEventListener('change', (e: Event) => {
+                const cat = (e.target as HTMLSelectElement).value;
+                this.activeCategory = cat;
+                this.filterByCategory(cat);
+            });
+        }
+
+        // ── Search input ──
+        if (searchInput) {
+            searchInput.addEventListener('input', (e: Event) => {
+                const query = (e.target as HTMLInputElement).value;
+                this.handleSymbolSearch(query);
+            });
+            searchInput.addEventListener('click', (e: Event) => e.stopPropagation());
+        }
+
+        // ── Row click + star click ──
+        const modalBody = document.getElementById('symbolModalBody');
+        if (modalBody) {
+            modalBody.addEventListener('click', (e: Event) => {
+                const target = e.target as HTMLElement;
+
+                // ── Star click ──
+                const starBtn = target.closest('.symbol-star-btn') as HTMLElement;
+                if (starBtn) {
+                    e.stopPropagation();
+                    const value = starBtn.dataset.value;
+                    if (value) this.toggleSymbolFavorite(value, starBtn);
+                    return;
+                }
+
+                // ── Row click ──
+                const row = target.closest('.symbol-modal-row') as HTMLElement;
+                if (!row) return;
+
+                const value = row.dataset.value;
+                if (!value) return;
+
+                modalBody.querySelectorAll('.symbol-modal-row').forEach(el => el.classList.remove('active'));
+                row.classList.add('active');
+
+                this.updateSymbolPill(value);
+                if (hiddenSelect) hiddenSelect.value = value;
+                this.closeSymbolModal();
+
+                this.currentSymbol = value;
+                this.callbacks.onSymbolChange(value);
+            });
+        }
+    }
+
+    private handleSymbolSearch(query: string): void {
+        const trimmed = query.trim();
+
+        if (trimmed === '') {
+            this.clearSearchState();
+            this.filterByCategory(this.activeCategory);
+            return;
+        }
+
+        // ── Local filter first ──
+        this.filterSymbolModal(trimmed.toLowerCase());
+
+        // ── Debounce MT5 search for unknown symbols ──
+        if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+        this.searchDebounceTimer = setTimeout(() => {
+            if (trimmed.length >= 2 && trimmed !== this.lastSearchQuery) {
+                this.lastSearchQuery = trimmed;
+                this.showSearchingState();
+                document.dispatchEvent(new CustomEvent('symbol-search-request', {
+                    detail: { query: trimmed }
+                }));
+            }
+        }, 400);
+    }
+
+    private handleSymbolSearchResult(e: Event): void {
+        const { symbols } = (e as CustomEvent).detail as { symbols: ConfigSymbol[] };
+        this.hideSearchingState();
+
+        if (!symbols || symbols.length === 0) return;
+
+        const modalBody = document.getElementById('symbolModalBody');
+        if (!modalBody) return;
+
+        const favorites = this.loadSymbolFavorites();
+
+        // ── Add results not already in list ──
+        const existing = new Set(
+            Array.from(modalBody.querySelectorAll('.symbol-modal-row'))
+                .map(el => (el as HTMLElement).dataset.value)
+        );
+
+        const emptyFav = document.getElementById('symbolEmptyFavorites');
+
+        symbols.forEach(sym => {
+            if (existing.has(sym.name)) return;
+            const row = this.createSymbolRow(sym, favorites.includes(sym.name));
+            row.classList.add('search-result');
+            modalBody.insertBefore(row, emptyFav);
+        });
+    }
+
+    private showSearchingState(): void {
+        const el = document.getElementById('symbolSearching');
+        if (el) el.style.display = 'flex';
+    }
+
+    private hideSearchingState(): void {
+        const el = document.getElementById('symbolSearching');
+        if (el) el.style.display = 'none';
+    }
+
+    private clearSearchState(): void {
+        this.hideSearchingState();
+        this.lastSearchQuery = '';
+
+        // ── Remove search result rows ──
+        const modalBody = document.getElementById('symbolModalBody');
+        if (modalBody) {
+            modalBody.querySelectorAll('.symbol-modal-row.search-result')
+                .forEach(el => el.remove());
+        }
+    }
+
+    private openSymbolModal(): void {
+        const overlay    = document.getElementById('symbolModalOverlay');
+        const searchInput = document.getElementById('symbolSearchInput') as HTMLInputElement;
+        if (!overlay) return;
+
+        overlay.classList.add('open');
+        this.filterByCategory(this.activeCategory);
+
+        if (searchInput) {
+            searchInput.value = '';
+            setTimeout(() => searchInput.focus(), 50);
+        }
+
+        const modalBody = document.getElementById('symbolModalBody');
+        if (modalBody) {
+            modalBody.querySelectorAll('.symbol-modal-row').forEach(el => {
+                el.classList.toggle('active', (el as HTMLElement).dataset.value === this.currentSymbol);
+            });
+        }
+    }
+
+    private closeSymbolModal(): void {
+        const overlay = document.getElementById('symbolModalOverlay');
+        if (overlay) overlay.classList.remove('open');
+        this.clearSearchState();
+    }
+
+    private handleSymbolModalClickOutside(e: Event): void {
+        const overlay = document.getElementById('symbolModalOverlay');
+        if (!overlay || !overlay.classList.contains('open')) return;
+        const modal      = document.getElementById('symbolModal');
+        const symbolPill = document.getElementById('symbolPill');
+        if (modal && !modal.contains(e.target as Node) && e.target !== symbolPill) {
+            this.closeSymbolModal();
+        }
+    }
+
+    // ================================================================
+    // CATEGORY FILTER — frontend only
+    // ================================================================
+
+    private filterByCategory(cat: string): void {
+        const modalBody    = document.getElementById('symbolModalBody');
+        const emptyFav     = document.getElementById('symbolEmptyFavorites');
+        const emptySearch  = document.getElementById('symbolEmptySearch');
+        if (!modalBody) return;
+
+        const favorites    = this.loadSymbolFavorites();
+        const catSymbols   = categoryMap[cat] || null;
+
+        let visibleCount   = 0;
+
+        modalBody.querySelectorAll('.symbol-modal-row').forEach(el => {
+            const row   = el as HTMLElement;
+            const value = row.dataset.value || '';
+
+            let show = false;
+
+            if (cat === 'favorites') {
+                show = favorites.includes(value);
+            } else if (cat === 'all') {
+                show = true;
+            } else if (catSymbols) {
+                show = catSymbols.includes(value);
+            } else {
+                show = true;
+            }
+
+            row.style.display = show ? '' : 'none';
+            if (show) visibleCount++;
+        });
+
+        if (emptyFav) {
+            emptyFav.style.display =
+                cat === 'favorites' && visibleCount === 0 ? 'flex' : 'none';
+        }
+        if (emptySearch) emptySearch.style.display = 'none';
+    }
+
+    private filterSymbolModal(query: string): void {
+        const modalBody   = document.getElementById('symbolModalBody');
+        const emptySearch = document.getElementById('symbolEmptySearch');
+        if (!modalBody) return;
+
+        let totalVisible = 0;
+
+        modalBody.querySelectorAll('.symbol-modal-row').forEach(el => {
+            const row   = el as HTMLElement;
+            const name  = (row.dataset.value || '').toLowerCase();
+            const desc  = (row.dataset.desc  || '').toLowerCase();
+            const match = name.includes(query) || desc.includes(query);
+            row.style.display = match ? '' : 'none';
+            if (match) totalVisible++;
+        });
+
+        if (emptySearch) {
+            emptySearch.style.display =
+                totalVisible === 0 && query !== '' ? 'block' : 'none';
+        }
+    }
+
+    // ================================================================
+    // SYMBOL FAVORITES
+    // ================================================================
+
+    private loadSymbolFavorites(): string[] {
+        try {
+            return JSON.parse(localStorage.getItem(SYMBOL_FAVORITES_KEY) || '[]');
+        } catch { return []; }
+    }
+
+    private saveSymbolFavorites(favs: string[]): void {
+        localStorage.setItem(SYMBOL_FAVORITES_KEY, JSON.stringify(favs));
+    }
+
+    private toggleSymbolFavorite(value: string, starEl: HTMLElement): void {
+        const favs  = this.loadSymbolFavorites();
+        const index = favs.indexOf(value);
+
+        if (index === -1) {
+            favs.push(value);
+            starEl.classList.add('active');
         } else {
-          document.dispatchEvent(new CustomEvent('add-indicator', {
-            detail: { type: value }
-          }));
+            favs.splice(index, 1);
+            starEl.classList.remove('active');
         }
 
-        overlay.classList.remove('open');
-        console.log(`📊 ${type === 'strategy' ? 'Strategy' : 'Indicator'} selected:`, value);
-      });
+        this.saveSymbolFavorites(favs);
+
+        // ── Sync all star buttons for this symbol ──
+        document.querySelectorAll(`.symbol-star-btn[data-value="${value}"]`).forEach(btn => {
+            btn.classList.toggle('active', favs.includes(value));
+        });
     }
 
-    // ✅ Apply button — just closes modal
-    const applyBtn = document.getElementById('indicatorsApplyBtn');
-    if (applyBtn) {
-      applyBtn.addEventListener('click', () => {
-        overlay.classList.remove('open');
-      });
+    // ================================================================
+    // SYMBOL PILL UPDATE
+    // ================================================================
+
+    private updateSymbolPill(symbol: string): void {
+        const symbolText = document.getElementById('symbolText');
+        if (symbolText) symbolText.textContent = symbol;
+        this.updateSymbolFlags(symbol);
     }
 
-    // ✅ ONLY CHANGE — Custom Strategy button opens Strategy tab
-    const customStrategyBtn = document.getElementById('indicatorsCreateBtn');
-    if (customStrategyBtn) {
-      customStrategyBtn.addEventListener('click', () => {
-        overlay.classList.remove('open');
-        document.dispatchEvent(new CustomEvent('open-strategy-tab'));
-      });
+    private updateSymbolFlags(symbol: string): void {
+        const baseEl  = document.getElementById('symbolFlagBase');
+        const quoteEl = document.getElementById('symbolFlagQuote');
+        if (!baseEl || !quoteEl) return;
+
+        const config = symbolIconMap[symbol];
+        if (!config) return;
+
+        if (config.baseType === 'flag') {
+            baseEl.className           = 'flag-circle flag-base';
+            baseEl.style.backgroundImage = `url('${config.base}')`;
+            baseEl.innerHTML           = '';
+        } else {
+            baseEl.className           = `flag-circle flag-base icon-circle ${config.base}`;
+            baseEl.style.backgroundImage = '';
+            baseEl.innerHTML           = iconCircleMap[config.base] || '';
+        }
+
+        if (config.quoteType === 'flag') {
+            quoteEl.className           = 'flag-circle flag-quote';
+            quoteEl.style.backgroundImage = `url('${config.quote}')`;
+            quoteEl.innerHTML           = '';
+        } else {
+            quoteEl.className           = `flag-circle flag-quote icon-circle ${config.quote}`;
+            quoteEl.style.backgroundImage = '';
+            quoteEl.innerHTML           = iconCircleMap[config.quote] || '';
+        }
     }
 
-    this.renderFavorites();
-    this.syncFavoriteStars();
-  }
+    // ================================================================
+    // TIMEFRAME CONTROLS
+    // ================================================================
 
-  // ==================== FAVORITES ====================
+    private setupTimeframeControls(): void {
+        const tfGroup        = document.getElementById('tfGroup');
+        const tfMoreBtn      = document.getElementById('tfMoreBtn');
+        const tfMore         = document.getElementById('tfMore');
+        const tfMoreDropdown = document.getElementById('tfMoreDropdown');
+        const hiddenSelect   = document.getElementById('timeframeSelect') as HTMLSelectElement;
 
-  private loadFavorites(): string[] {
-    try {
-      return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-    } catch {
-      return [];
-    }
-  }
+        if (!tfGroup || !hiddenSelect) return;
 
-  private saveFavorites(favorites: string[]): void {
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
-  }
+        hiddenSelect.value = this.currentTimeframe;
+        this.updateTimeframeButtons(this.currentTimeframe);
 
-  private toggleFavorite(value: string, name: string, starEl: HTMLElement): void {
-    const favorites = this.loadFavorites();
-    const index = favorites.indexOf(value);
+        tfGroup.addEventListener('click', (e: Event) => {
+            const target = e.target as HTMLElement;
+            const btn    = target.closest('.tf-btn:not(.tf-more-btn)') as HTMLElement;
+            if (!btn) return;
 
-    if (index === -1) {
-      favorites.push(value);
-      starEl.classList.add('active');
-    } else {
-      favorites.splice(index, 1);
-      starEl.classList.remove('active');
-    }
+            const tf = btn.dataset.tf;
+            if (!tf) return;
 
-    this.saveFavorites(favorites);
-    this.renderFavorites();
+            this.closeAllDropdowns();
+            this.updateTimeframeButtons(tf);
+            hiddenSelect.value    = tf;
+            this.currentTimeframe = tf;
+            this.callbacks.onTimeframeChange(tf);
+        });
 
-    console.log(`⭐ Favorite ${index === -1 ? 'added' : 'removed'}:`, value);
-  }
+        if (tfMoreBtn && tfMore) {
+            tfMoreBtn.addEventListener('click', (e: Event) => {
+                e.stopPropagation();
+                const isOpen = tfMore.classList.contains('open');
+                this.closeAllDropdowns();
+                if (!isOpen) tfMore.classList.add('open');
+            });
+        }
 
-  private renderFavorites(): void {
-    const favList = document.getElementById('indicatorsFavoritesList');
-    if (!favList) return;
+        if (tfMoreDropdown) {
+            tfMoreDropdown.addEventListener('click', (e: Event) => {
+                const target = e.target as HTMLElement;
+                const item   = target.closest('.tf-more-item') as HTMLElement;
+                if (!item) return;
 
-    const favorites = this.loadFavorites();
+                const tf = item.dataset.tf;
+                if (!tf) return;
 
-    if (favorites.length === 0) {
-      favList.innerHTML = `
-        <div class="indicators-fav-empty">
-          <i class="fas fa-star"></i>
-          <span>Star an indicator to add it here</span>
-        </div>
-      `;
-      return;
-    }
+                this.closeAllDropdowns();
+                this.updateTimeframeButtons(tf);
+                hiddenSelect.value    = tf;
+                this.currentTimeframe = tf;
+                this.callbacks.onTimeframeChange(tf);
+            });
+        }
 
-    const nameMap: Record<string, { name: string; type: string }> = {};
-    document.querySelectorAll('.indicator-item').forEach(item => {
-      const el = item as HTMLElement;
-      const v = el.dataset.value;
-      const n = el.dataset.name;
-      const t = el.dataset.type;
-      if (v && n && t) nameMap[v] = { name: n, type: t };
-    });
-
-    favList.innerHTML = '';
-    favorites.forEach(value => {
-      const info = nameMap[value];
-      if (!info) return;
-
-      const favItem = document.createElement('div');
-      favItem.className = 'indicator-item favorite-item';
-      favItem.dataset.value = value;
-      favItem.dataset.type  = info.type;
-      favItem.dataset.name  = info.name;
-      favItem.innerHTML = `
-        <i class="fas fa-star" style="color: #FFD700;"></i>
-        <span class="indicator-name">${info.name}</span>
-        ${info.type === 'strategy' ? '<span class="indicator-badge strategy">strategy</span>' : ''}
-      `;
-
-      favList.appendChild(favItem);
-    });
-  }
-
-  private syncFavoriteStars(): void {
-    const favorites = this.loadFavorites();
-    document.querySelectorAll('.indicator-fav-star').forEach(star => {
-      const item = star.closest('.indicator-item') as HTMLElement;
-      if (!item) return;
-      const value = item.dataset.value;
-      star.classList.toggle('active', !!value && favorites.includes(value));
-    });
-  }
-
-  // ==================== CLICK OUTSIDE ====================
-
-  private handleIndicatorClickOutside(e: Event): void {
-    const overlay = document.getElementById('indicatorsModalOverlay');
-    const indicatorsBtn = document.getElementById('indicatorsBtn');
-    if (!overlay || !overlay.classList.contains('open')) return;
-    const modal = overlay.querySelector('.indicators-modal') as HTMLElement;
-    if (modal && !modal.contains(e.target as Node) && e.target !== indicatorsBtn) {
-      overlay.classList.remove('open');
-    }
-  }
-
-  private setupClickOutside(): void {
-    document.addEventListener('click', this.boundClickOutside);
-  }
-
-  private closeAllDropdowns(): void {
-    document.getElementById('symbolPill')?.classList.remove('open');
-    document.getElementById('chartTypePill')?.classList.remove('open');
-    document.getElementById('tfMore')?.classList.remove('open');
-  }
-
-  // ==================== STRATEGY DEPLOY ====================
-
-  // ✅ Unchanged — deploys directly on chart as before
-  private deployStrategyFromModal(modalValue: string): void {
-    const backendName = this.strategyMap[modalValue];
-
-    if (backendName === undefined) {
-      console.warn(`⚠️ No backend mapping for strategy: ${modalValue}`);
-      document.dispatchEvent(new CustomEvent('show-notification', {
-        detail: { type: 'error', title: 'Strategy Error', message: `Unknown strategy: ${modalValue}` }
-      }));
-      return;
+        hiddenSelect.addEventListener('change', (e: Event) => {
+            const newTf = (e.target as HTMLSelectElement).value;
+            if (newTf !== this.currentTimeframe) {
+                this.currentTimeframe = newTf;
+                this.updateTimeframeButtons(newTf);
+                this.callbacks.onTimeframeChange(newTf);
+            }
+        });
     }
 
-    if (backendName === '') {
-      document.dispatchEvent(new CustomEvent('show-notification', {
-        detail: { type: 'info', title: 'Coming Soon', message: 'This strategy will be available soon' }
-      }));
-      return;
+    private updateTimeframeButtons(timeframe: string): void {
+        document.querySelectorAll('.tf-btn:not(.tf-more-btn)').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tf-more-item').forEach(item => item.classList.remove('active'));
+
+        const matchingBtn = document.querySelector(`.tf-btn[data-tf="${timeframe}"]`) as HTMLElement;
+        if (matchingBtn) {
+            matchingBtn.classList.add('active');
+            return;
+        }
+
+        const matchingMoreItem = document.querySelector(`.tf-more-item[data-tf="${timeframe}"]`) as HTMLElement;
+        if (matchingMoreItem) {
+            matchingMoreItem.classList.add('active');
+            const tfMoreBtn = document.getElementById('tfMoreBtn');
+            if (tfMoreBtn) tfMoreBtn.classList.add('active');
+        }
     }
 
-    document.dispatchEvent(new CustomEvent('deploy-strategy', {
-      detail: {
-        strategyType: backendName,
-        symbol:       this.currentSymbol,
-        timeframe:    this.currentTimeframe,
-        params:       {}
-      }
-    }));
+    // ================================================================
+    // CHART TYPE CONTROLS
+    // ================================================================
 
-    console.log(`🚀 Deploying strategy: ${backendName} on ${this.currentSymbol} ${this.currentTimeframe}`);
-  }
+    private setupChartTypeControls(): void {
+        const chartTypePill     = document.getElementById('chartTypePill');
+        const chartTypeDropdown = document.getElementById('chartTypeDropdown');
+        const hiddenSelect      = document.getElementById('chartTypeSelect') as HTMLSelectElement;
 
-  // ==================== FILTER ====================
+        if (!chartTypePill || !hiddenSelect) return;
 
-  private filterIndicators(query: string): void {
-    const categories = document.querySelectorAll('.indicators-category');
-    const emptySearch = document.getElementById('indicatorsEmptySearch');
-    let totalVisible = 0;
+        hiddenSelect.value = this.currentChartType;
+        this.updateChartTypePill(this.currentChartType);
 
-    categories.forEach(category => {
-      const items = category.querySelectorAll('.indicator-item');
-      let hasVisible = false;
+        chartTypePill.addEventListener('click', (e: Event) => {
+            e.stopPropagation();
+            const isOpen = chartTypePill.classList.contains('open');
+            this.closeAllDropdowns();
+            if (!isOpen) chartTypePill.classList.add('open');
+        });
 
-      items.forEach(item => {
-        const text = item.textContent?.toLowerCase() || '';
-        const match = query === '' || text.includes(query);
-        (item as HTMLElement).style.display = match ? '' : 'none';
-        if (match) { hasVisible = true; totalVisible++; }
-      });
+        if (chartTypeDropdown) {
+            chartTypeDropdown.addEventListener('click', (e: Event) => {
+                const target = e.target as HTMLElement;
+                const item   = target.closest('.chart-type-item') as HTMLElement;
+                if (!item) return;
 
-      (category as HTMLElement).style.display = hasVisible ? '' : 'none';
-    });
+                const type  = item.dataset.type;
+                const icon  = item.dataset.icon;
+                const label = item.dataset.label;
+                if (!type) return;
 
-    if (emptySearch) {
-      emptySearch.style.display = totalVisible === 0 && query !== '' ? 'block' : 'none';
+                chartTypeDropdown.querySelectorAll('.chart-type-item').forEach(el => el.classList.remove('active'));
+                item.classList.add('active');
+
+                this.updateChartTypePill(type, icon, label);
+                hiddenSelect.value = type;
+                chartTypePill.classList.remove('open');
+
+                this.currentChartType = type;
+                this.callbacks.onChartTypeChange(type);
+            });
+        }
+
+        hiddenSelect.addEventListener('change', (e: Event) => {
+            const newType = (e.target as HTMLSelectElement).value;
+            if (newType !== this.currentChartType) {
+                this.currentChartType = newType;
+                this.updateChartTypePill(newType);
+                this.callbacks.onChartTypeChange(newType);
+            }
+        });
     }
-  }
 
-  // ==================== ACTION BUTTONS ====================
+    private updateChartTypePill(type: string, icon?: string, label?: string): void {
+        const chartTypeIcon = document.getElementById('chartTypeIcon');
+        const chartTypeText = document.getElementById('chartTypeText');
 
-  private setupActionButtons(): void {
-    const resetBtn = document.getElementById('resetChartBtn');
-    if (resetBtn) {
-      resetBtn.addEventListener('click', () => {
-        document.dispatchEvent(new CustomEvent('chart-reset-request'));
-      });
+        const typeMap: Record<string, { icon: string; label: string }> = {
+            'candlestick': { icon: 'fa-chart-candlestick', label: 'Candles'  },
+            'bar':         { icon: 'fa-chart-bar',         label: 'Bars'     },
+            'line':        { icon: 'fa-chart-line',         label: 'Line'     },
+            'area':        { icon: 'fa-chart-area',         label: 'Area'     },
+            'baseline':    { icon: 'fa-minus',              label: 'Baseline' }
+        };
+
+        const mapped     = typeMap[type] || typeMap['candlestick'];
+        const finalIcon  = icon  || mapped.icon;
+        const finalLabel = label || mapped.label;
+
+        if (chartTypeIcon) chartTypeIcon.className = `fas ${finalIcon} chart-type-icon`;
+        if (chartTypeText) chartTypeText.textContent = finalLabel;
+
+        document.querySelectorAll('.chart-type-item').forEach(item => {
+            item.classList.toggle('active', (item as HTMLElement).dataset.type === type);
+        });
     }
 
-    const downloadBtn = document.getElementById('downloadChartBtn');
-    if (downloadBtn) {
-      downloadBtn.addEventListener('click', () => {
-        document.dispatchEvent(new CustomEvent('chart-download-request'));
-      });
+    // ================================================================
+    // INDICATORS MODAL
+    // ================================================================
+
+    private setupIndicatorsModal(): void {
+        const indicatorsBtn = document.getElementById('indicatorsBtn');
+        const overlay       = document.getElementById('indicatorsModalOverlay');
+        const closeBtn      = document.getElementById('indicatorsModalClose');
+        const searchInput   = document.getElementById('indicatorSearchInput') as HTMLInputElement;
+
+        if (!indicatorsBtn || !overlay) return;
+
+        indicatorsBtn.addEventListener('click', (e: Event) => {
+            e.stopPropagation();
+            this.closeAllDropdowns();
+            overlay.classList.add('open');
+            this.activeIndCat = 'favorites';
+            this.setActiveIndNav('favorites');
+            this.renderIndCategory('favorites');
+            this.updateIndicatorCounts();
+            if (searchInput) {
+                searchInput.value = '';
+                setTimeout(() => searchInput.focus(), 50);
+            }
+        });
+
+        if (closeBtn) {
+            closeBtn.addEventListener('click', (e: Event) => {
+                e.stopPropagation();
+                overlay.classList.remove('open');
+            });
+        }
+
+        document.addEventListener('click', this.boundIndicatorClose);
+
+        if (searchInput) {
+            searchInput.addEventListener('input', (e: Event) => {
+                const query = (e.target as HTMLInputElement).value.toLowerCase();
+                this.filterIndicators(query);
+            });
+        }
+
+        const list = document.getElementById('indicatorsRightList');
+        if (list) {
+            list.addEventListener('click', (e: Event) => {
+                const target = e.target as HTMLElement;
+
+                // ── Star click ──
+                const starBtn = target.closest('.ind-star-btn') as HTMLElement;
+                if (starBtn) {
+                    e.stopPropagation();
+                    const value = starBtn.dataset.value;
+                    const name  = starBtn.dataset.name;
+                    if (value && name) this.toggleFavorite(value, name, starBtn);
+                    return;
+                }
+
+                // ── Row click ──
+                const row = target.closest('.ind-row') as HTMLElement;
+                if (!row) return;
+
+                const value = row.dataset.value;
+                const type  = row.dataset.type;
+                if (!value) return;
+
+                if (type === 'strategy') {
+                    this.deployStrategyFromModal(value);
+                } else {
+                    document.dispatchEvent(new CustomEvent('add-indicator', {
+                        detail: { type: value }
+                    }));
+                }
+
+                overlay.classList.remove('open');
+            });
+        }
+
+        const applyBtn = document.getElementById('indicatorsApplyBtn');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', () => {
+                overlay.classList.remove('open');
+            });
+        }
+
+        const customStrategyBtn = document.getElementById('indicatorsCreateBtn');
+        if (customStrategyBtn) {
+            customStrategyBtn.addEventListener('click', () => {
+                overlay.classList.remove('open');
+                document.dispatchEvent(new CustomEvent('open-strategy-tab'));
+            });
+        }
     }
-  }
 
-  // ==================== PUBLIC UPDATE METHODS ====================
+    private setActiveIndNav(cat: string): void {
+        const nav = document.getElementById('indicatorsLeftNav');
+        if (!nav) return;
+        nav.querySelectorAll('.ind-nav-item').forEach(el => {
+            el.classList.toggle('active', (el as HTMLElement).dataset.cat === cat);
+        });
+    }
 
-  public updateSymbol(symbol: string): void {
-    this.currentSymbol = symbol;
-    const select = document.getElementById('chartPairsSelect') as HTMLSelectElement;
-    if (select && select.value !== symbol) select.value = symbol;
-    this.updateSymbolPill(symbol);
-  }
+    // ================================================================
+    // INDICATOR FAVORITES
+    // ================================================================
 
-  public updateTimeframe(timeframe: string): void {
-    this.currentTimeframe = timeframe;
-    const select = document.getElementById('timeframeSelect') as HTMLSelectElement;
-    if (select && select.value !== timeframe) select.value = timeframe;
-    this.updateTimeframeButtons(timeframe);
-  }
+    private loadFavorites(): string[] {
+        try {
+            return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+        } catch { return []; }
+    }
 
-  public updateChartType(chartType: string): void {
-    this.currentChartType = chartType;
-    const select = document.getElementById('chartTypeSelect') as HTMLSelectElement;
-    if (select && select.value !== chartType) select.value = chartType;
-    this.updateChartTypePill(chartType);
-  }
+    private saveFavorites(favorites: string[]): void {
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    }
 
-  // ==================== DESTROY ====================
+    private toggleFavorite(value: string, name: string, starEl: HTMLElement): void {
+        const favorites = this.loadFavorites();
+        const index     = favorites.indexOf(value);
 
-  public destroy(): void {
-    document.removeEventListener('click', this.boundClickOutside);
-    document.removeEventListener('click', this.boundIndicatorClose);
-    document.removeEventListener('click', this.boundSymbolModalClose);
-    this.isInitialized = false;
-    console.log('🎮 Chart UI destroyed');
-  }
+        if (index === -1) {
+            favorites.push(value);
+            starEl.classList.add('active');
+        } else {
+            favorites.splice(index, 1);
+            starEl.classList.remove('active');
+        }
+
+        this.saveFavorites(favorites);
+        this.updateIndicatorCounts();
+    }
+
+    // ================================================================
+    // FILTER INDICATORS
+    // ================================================================
+
+    private filterIndicators(query: string): void {
+        const list        = document.getElementById('indicatorsRightList');
+        const emptySearch = document.getElementById('indEmptySearch');
+        if (!list) return;
+
+        let totalVisible = 0;
+
+        list.querySelectorAll('.ind-row').forEach(el => {
+            const text  = el.textContent?.toLowerCase() || '';
+            const match = query === '' || text.includes(query);
+            (el as HTMLElement).style.display = match ? '' : 'none';
+            if (match) totalVisible++;
+        });
+
+        if (emptySearch) {
+            emptySearch.style.display =
+                totalVisible === 0 && query !== '' ? 'block' : 'none';
+        }
+    }
+
+    // ================================================================
+    // STRATEGY DEPLOY — reads from config
+    // ================================================================
+
+    private deployStrategyFromModal(key: string): void {
+        if (!this.config) {
+            document.dispatchEvent(new CustomEvent('show-notification', {
+                detail: { type: 'error', title: 'Strategy Error', message: 'Config not loaded yet' }
+            }));
+            return;
+        }
+
+        const strategy = this.config.strategies.find(s => s.key === key);
+
+        if (!strategy) {
+            document.dispatchEvent(new CustomEvent('show-notification', {
+                detail: { type: 'error', title: 'Strategy Error', message: `Unknown strategy: ${key}` }
+            }));
+            return;
+        }
+
+        document.dispatchEvent(new CustomEvent('deploy-strategy', {
+            detail: {
+                strategyType: key.toLowerCase(),
+                symbol:       this.currentSymbol,
+                timeframe:    this.currentTimeframe,
+                params:       {}
+            }
+        }));
+    }
+
+    // ================================================================
+    // CLICK OUTSIDE
+    // ================================================================
+
+    private handleIndicatorClickOutside(e: Event): void {
+        const overlay       = document.getElementById('indicatorsModalOverlay');
+        const indicatorsBtn = document.getElementById('indicatorsBtn');
+        if (!overlay || !overlay.classList.contains('open')) return;
+        const modal = overlay.querySelector('.indicators-modal') as HTMLElement;
+        if (modal && !modal.contains(e.target as Node) && e.target !== indicatorsBtn) {
+            overlay.classList.remove('open');
+        }
+    }
+
+    private setupClickOutside(): void {
+        document.addEventListener('click', this.boundClickOutside);
+    }
+
+    private closeAllDropdowns(): void {
+        document.getElementById('symbolPill')?.classList.remove('open');
+        document.getElementById('chartTypePill')?.classList.remove('open');
+        document.getElementById('tfMore')?.classList.remove('open');
+    }
+
+    // ================================================================
+    // ACTION BUTTONS
+    // ================================================================
+
+    private setupActionButtons(): void {
+        const resetBtn = document.getElementById('resetChartBtn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                document.dispatchEvent(new CustomEvent('chart-reset-request'));
+            });
+        }
+
+        const downloadBtn = document.getElementById('downloadChartBtn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => {
+                document.dispatchEvent(new CustomEvent('chart-download-request'));
+            });
+        }
+    }
+
+    // ================================================================
+    // PUBLIC UPDATE METHODS
+    // ================================================================
+
+    public updateSymbol(symbol: string): void {
+        this.currentSymbol = symbol;
+        const select = document.getElementById('chartPairsSelect') as HTMLSelectElement;
+        if (select && select.value !== symbol) select.value = symbol;
+        this.updateSymbolPill(symbol);
+    }
+
+    public updateTimeframe(timeframe: string): void {
+        this.currentTimeframe = timeframe;
+        const select = document.getElementById('timeframeSelect') as HTMLSelectElement;
+        if (select && select.value !== timeframe) select.value = timeframe;
+        this.updateTimeframeButtons(timeframe);
+    }
+
+    public updateChartType(chartType: string): void {
+        this.currentChartType = chartType;
+        const select = document.getElementById('chartTypeSelect') as HTMLSelectElement;
+        if (select && select.value !== chartType) select.value = chartType;
+        this.updateChartTypePill(chartType);
+    }
+
+    // ================================================================
+    // DESTROY
+    // ================================================================
+
+    public destroy(): void {
+        document.removeEventListener('click', this.boundClickOutside);
+        document.removeEventListener('click', this.boundIndicatorClose);
+        document.removeEventListener('click', this.boundSymbolModalClose);
+        document.removeEventListener('available-config-received', this.boundAvailableConfig);
+        document.removeEventListener('symbol-search-result',      this.boundSymbolSearchResult);
+        if (this.searchDebounceTimer) clearTimeout(this.searchDebounceTimer);
+        this.isInitialized = false;
+    }
 }
