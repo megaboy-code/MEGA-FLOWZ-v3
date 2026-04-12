@@ -2,6 +2,9 @@
 
 export { Account } from './mega-flowz/account.js';
 export { AutoTradingStatus } from './mega-flowz/auto-trading-status.js';
+export { AvailableConfig } from './mega-flowz/available-config.js';
+export { AvailableItem } from './mega-flowz/available-item.js';
+export { AvailableSymbol } from './mega-flowz/available-symbol.js';
 export { BarUpdate } from './mega-flowz/bar-update.js';
 export { CacheCleared } from './mega-flowz/cache-cleared.js';
 export { Candle } from './mega-flowz/candle.js';
