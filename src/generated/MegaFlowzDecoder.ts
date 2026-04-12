@@ -25,6 +25,9 @@ import {
     Notification,
     JournalData,
     JournalTrade,
+    AvailableConfig,
+    AvailableSymbol,
+    AvailableItem,
     NotificationType,
     Severity,
     Timeframe,
@@ -172,7 +175,28 @@ export interface JournalTradeData {
 
 export interface JournalDataPayload {
     trades: JournalTradeData[];
-    scope:  string;          // "today" | "month"
+    scope:  string;
+}
+
+export interface AvailableSymbolData {
+    name:        string;
+    description: string;
+}
+
+export interface AvailableItemData {
+    key:         string;
+    label:       string;
+    description: string;
+    badge:       string;
+}
+
+export interface AvailableConfigPayload {
+    symbols:            AvailableSymbolData[];
+    timeframes_visible: string[];
+    timeframes_more:    string[];
+    indicators:         AvailableItemData[];
+    strategies:         AvailableItemData[];
+    patterns:           AvailableItemData[];
 }
 
 // ================================================================
@@ -194,6 +218,7 @@ export type DecodedMessage =
     | { type: 'cache_cleared';    data: CacheClearedPayload     }
     | { type: 'pong';             data: PongPayload             }
     | { type: 'journal_data';     data: JournalDataPayload      }
+    | { type: 'available_config'; data: AvailableConfigPayload  }
     | { type: 'unknown' };
 
 // ================================================================
@@ -241,7 +266,6 @@ function extractCandle(c: any): CandleData {
 
 export class MegaFlowzDecoder {
 
-    // ── Decode ArrayBuffer from WebSocket binary frame ──
     static decode(buffer: ArrayBuffer): DecodedMessage {
         try {
             const bytes = new Uint8Array(buffer);
@@ -426,7 +450,7 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Notification — universal rich toast ──
+                // ── Notification ──
                 case MessagePayload.Notification: {
                     const p = msg.payload(
                         new Notification()
@@ -528,7 +552,86 @@ export class MegaFlowzDecoder {
                         type: 'journal_data',
                         data: {
                             trades,
-                            scope: p.scope() ?? 'today'  // ← read scope
+                            scope: p.scope() ?? 'today'
+                        }
+                    };
+                }
+
+                // ── Available config ──
+                case MessagePayload.AvailableConfig: {
+                    const p = msg.payload(
+                        new AvailableConfig()
+                    ) as AvailableConfig;
+
+                    const symbols: AvailableSymbolData[] = [];
+                    for (let i = 0; i < p.symbolsLength(); i++) {
+                        const s = p.symbols(i);
+                        if (!s) continue;
+                        symbols.push({
+                            name:        s.name()        ?? '',
+                            description: s.description() ?? ''
+                        });
+                    }
+
+                    const timeframes_visible: string[] = [];
+                    for (let i = 0; i < p.timeframesVisibleLength(); i++) {
+                        timeframes_visible.push(
+                            p.timeframesVisible(i) ?? ''
+                        );
+                    }
+
+                    const timeframes_more: string[] = [];
+                    for (let i = 0; i < p.timeframesMoreLength(); i++) {
+                        timeframes_more.push(
+                            p.timeframesMore(i) ?? ''
+                        );
+                    }
+
+                    const indicators: AvailableItemData[] = [];
+                    for (let i = 0; i < p.indicatorsLength(); i++) {
+                        const item = p.indicators(i);
+                        if (!item) continue;
+                        indicators.push({
+                            key:         item.key()         ?? '',
+                            label:       item.label()       ?? '',
+                            description: item.description() ?? '',
+                            badge:       item.badge()       ?? ''
+                        });
+                    }
+
+                    const strategies: AvailableItemData[] = [];
+                    for (let i = 0; i < p.strategiesLength(); i++) {
+                        const item = p.strategies(i);
+                        if (!item) continue;
+                        strategies.push({
+                            key:         item.key()         ?? '',
+                            label:       item.label()       ?? '',
+                            description: item.description() ?? '',
+                            badge:       item.badge()       ?? ''
+                        });
+                    }
+
+                    const patterns: AvailableItemData[] = [];
+                    for (let i = 0; i < p.patternsLength(); i++) {
+                        const item = p.patterns(i);
+                        if (!item) continue;
+                        patterns.push({
+                            key:         item.key()         ?? '',
+                            label:       item.label()       ?? '',
+                            description: item.description() ?? '',
+                            badge:       item.badge()       ?? ''
+                        });
+                    }
+
+                    return {
+                        type: 'available_config',
+                        data: {
+                            symbols,
+                            timeframes_visible,
+                            timeframes_more,
+                            indicators,
+                            strategies,
+                            patterns
                         }
                     };
                 }
