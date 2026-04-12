@@ -167,6 +167,7 @@ export class ModuleManager {
             symbol, bid, ask, spread, time, change) =>
         {
             this.watchlistInstance?.updatePrice(symbol, bid, change);
+            this.tradingInstance?.onTick(symbol, bid, ask);
         });
 
         // ── Positions — direct to TradingModule ──
@@ -202,7 +203,6 @@ export class ModuleManager {
         this.connectionManager.onNotification((data: NotificationPayload) => {
             this.handleNotification(data);
 
-            // ── Append closed trade to journal mini panel live ──
             if (data.profit !== undefined && data.profit !== 0 &&
                 data.direction && data.symbol && data.volume)
             {
@@ -282,6 +282,15 @@ export class ModuleManager {
             document.dispatchEvent(new CustomEvent(
                 'auto_trading_status', {
                     detail: { enabled, message }
+                }
+            ));
+        });
+
+        // ── Available config — wire to ChartUI via DOM ──
+        this.connectionManager.onAvailableConfig((config) => {
+            document.dispatchEvent(new CustomEvent(
+                'available-config-received', {
+                    detail: config
                 }
             ));
         });
@@ -510,7 +519,6 @@ export class ModuleManager {
             this.panels.hide();
         });
 
-        // ── Journal month navigate — full journal fires this ──
         document.addEventListener('journal-month-changed', (e: Event) => {
             const { year, month } = (e as CustomEvent).detail;
             if (year && month !== undefined) {
@@ -518,7 +526,6 @@ export class ModuleManager {
             }
         });
 
-        // ── Journal refresh — disabled (🐛 known issue) ──
         document.addEventListener('journal-refresh', () => {
             // 🐛 Refresh temporarily disabled — scope mismatch under investigation
         });
