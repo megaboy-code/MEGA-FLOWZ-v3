@@ -25,8 +25,17 @@ export class DrawingPersistence {
         return `chart_drawings_${this.currentSymbol()}_${this.currentTimeframe()}`;
     }
 
+    // ✅ Shared key for allTF tools — per symbol, not per TF
+    private get ALL_STORAGE_KEY(): string {
+        return `chart_drawings_${this.currentSymbol()}_ALL`;
+    }
+
     public storageKeyFor(symbol: string, timeframe: string): string {
         return `chart_drawings_${symbol}_${timeframe}`;
+    }
+
+    public allStorageKeyFor(symbol: string): string {
+        return `chart_drawings_${symbol}_ALL`;
     }
 
     // ==================== VISIBILITY RESOLVER ====================
@@ -99,31 +108,44 @@ export class DrawingPersistence {
         try {
             const allDrawings = this.exportDrawings();
             const tools       = JSON.parse(allDrawings);
+            if (!Array.isArray(tools)) return;
 
-            const persistable = Array.isArray(tools)
-                ? tools
-                    .filter((t: any) => !NON_PERSISTENT_TOOLS.has(t.toolType))
-                    .filter((t: any) => t.points && t.points.length > 0)
-                    .filter((t: any) => {
-                        const meta = this._metaMap.get(t.id);
-                        return !meta?.deleted;
-                    })
-                    .map((t: any) => ({
+            const allTFTools:  any[] = [];
+            const perTFTools:  any[] = [];
+
+            tools
+                .filter((t: any) => !NON_PERSISTENT_TOOLS.has(t.toolType))
+                .filter((t: any) => t.points && t.points.length > 0)
+                .forEach((t: any) => {
+                    const meta = this._metaMap.get(t.id) ?? {
+                        timeframe: this.currentTimeframe(),
+                        symbol:    this.currentSymbol(),
+                        allTF:     true,
+                        deleted:   false
+                    };
+
+                    if (meta.deleted) return;
+
+                    const entry = {
                         ...t,
-                        // ✅ Always save visible:true — shouldToolBeVisible
-                        // resolves correct visibility on load
                         options: { ...t.options, visible: true },
-                        _meta: this._metaMap.get(t.id) ?? {
-                            timeframe: this.currentTimeframe(),
-                            symbol:    this.currentSymbol(),
-                            allTF:     true,
-                            deleted:   false
-                        }
-                    }))
-                : [];
+                        _meta:   meta
+                    };
 
+                    if (meta.allTF) {
+                        allTFTools.push(entry);
+                    } else {
+                        perTFTools.push(entry);
+                    }
+                });
+
+            // ✅ allTF tools → ALL key
+            localStorage.setItem(this.ALL_STORAGE_KEY, JSON.stringify(allTFTools));
+
+            // ✅ per-TF tools → TF key (or custom key if provided)
             const key = storageKey ?? this.STORAGE_KEY;
-            localStorage.setItem(key, JSON.stringify(persistable));
+            localStorage.setItem(key, JSON.stringify(perTFTools));
+
         } catch (error) {
             console.error('❌ Failed to save drawings:', error);
         }
@@ -137,34 +159,46 @@ export class DrawingPersistence {
         try {
             const allDrawings = this.exportDrawings();
             const tools       = JSON.parse(allDrawings);
+            if (!Array.isArray(tools)) return;
 
-            const deletedIds: string[] = [];
+            const deletedIds:  string[] = [];
+            const allTFTools:  any[] = [];
+            const perTFTools:  any[] = [];
 
-            const persistable = Array.isArray(tools)
-                ? tools
-                    .filter((t: any) => !NON_PERSISTENT_TOOLS.has(t.toolType))
-                    .filter((t: any) => t.points && t.points.length > 0)
-                    .map((t: any) => ({
+            tools
+                .filter((t: any) => !NON_PERSISTENT_TOOLS.has(t.toolType))
+                .filter((t: any) => t.points && t.points.length > 0)
+                .forEach((t: any) => {
+                    const meta = this._metaMap.get(t.id) ?? {
+                        timeframe: this.currentTimeframe(),
+                        symbol:    this.currentSymbol(),
+                        allTF:     true,
+                        deleted:   false
+                    };
+
+                    if (meta.deleted) {
+                        deletedIds.push(t.id);
+                        return;
+                    }
+
+                    const entry = {
                         ...t,
                         options: { ...t.options, visible: true },
-                        _meta: this._metaMap.get(t.id) ?? {
-                            timeframe: this.currentTimeframe(),
-                            symbol:    this.currentSymbol(),
-                            allTF:     true,
-                            deleted:   false
-                        }
-                    }))
-                    .filter((t: any) => {
-                        if (t._meta.deleted) {
-                            deletedIds.push(t.id);
-                            return false;
-                        }
-                        return true;
-                    })
-                : [];
+                        _meta:   meta
+                    };
 
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(persistable));
+                    if (meta.allTF) {
+                        allTFTools.push(entry);
+                    } else {
+                        perTFTools.push(entry);
+                    }
+                });
 
+            // ✅ Save split
+            localStorage.setItem(this.ALL_STORAGE_KEY, JSON.stringify(allTFTools));
+            localStorage.setItem(this.STORAGE_KEY,     JSON.stringify(perTFTools));
+
+            // ✅ Ghost deleted tools from engine
             if (deletedIds.length > 0 && typeof lt.removeLineToolsById === 'function') {
                 lt.removeLineToolsById(deletedIds);
             }
@@ -183,66 +217,76 @@ export class DrawingPersistence {
         const lt = this.lineTools();
         if (!lt || !this.isInitialized()) return;
         try {
-            const saved = localStorage.getItem(this.STORAGE_KEY);
+            // ✅ Load both ALL key and TF key
+            const savedAll = localStorage.getItem(this.ALL_STORAGE_KEY);
+            const savedTF  = localStorage.getItem(this.STORAGE_KEY);
 
-            if (saved && saved !== '[]') {
-                const tools = JSON.parse(saved);
+            const allTFTools = savedAll && savedAll !== '[]' ? JSON.parse(savedAll) : [];
+            const perTFTools = savedTF  && savedTF  !== '[]' ? JSON.parse(savedTF)  : [];
 
-                if (Array.isArray(tools) && tools.length > 0) {
-                    const groupsNeeded = new Set<string>();
-                    tools.forEach((tool: any) => {
-                        if (NON_PERSISTENT_TOOLS.has(tool.toolType)) return;
-                        if (tool._meta?.deleted) return;
-                        const group = TOOL_GROUP_MAP[tool.toolType];
-                        if (group) groupsNeeded.add(group);
-                    });
+            // ✅ Merge both sets
+            const tools = [
+                ...(Array.isArray(allTFTools) ? allTFTools : []),
+                ...(Array.isArray(perTFTools) ? perTFTools : [])
+            ];
 
-                    await Promise.all(
-                        Array.from(groupsNeeded).map(g => loadAndRegisterGroup(g))
-                    );
-                }
-
-                const persistable = Array.isArray(tools)
-                    ? tools.filter((t: any) =>
-                        !NON_PERSISTENT_TOOLS.has(t.toolType) &&
-                        !t._meta?.deleted
-                    )
-                    : [];
-
-                if (persistable.length > 0) {
-                    persistable.forEach((t: any) => {
-                        if (t._meta && t.id) {
-                            // ✅ Never overwrite deleted:true with saved deleted:false
-                            const existingMeta = this._metaMap.get(t.id);
-                            if (existingMeta?.deleted) return;
-                            this._metaMap.set(t.id, t._meta);
-                        }
-                    });
-
-                    // ✅ Use shouldToolBeVisible — correct visibility at import time
-                    // No post-patch applyTFVisibility needed
-                    const cleanTools = persistable
-                        .filter((t: any) => {
-                            const meta = this._metaMap.get(t.id);
-                            return !meta?.deleted;
-                        })
-                        .map(({ _meta, ...rest }: any) => ({
-                            ...rest,
-                            options: {
-                                ...rest.options,
-                                visible: this.shouldToolBeVisible(rest.id, this.currentTimeframe())
-                            }
-                        }));
-
-                    if (cleanTools.length > 0) {
-                        this.importDrawings(JSON.stringify(cleanTools));
-                    }
-                }
-
-                console.log(`✅ Drawings restored for ${this.currentSymbol()} ${this.currentTimeframe()}`);
-            } else {
+            if (tools.length === 0) {
                 console.log(`📋 No drawings for ${this.currentSymbol()} ${this.currentTimeframe()}`);
+                return;
             }
+
+            // ✅ Load required tool groups
+            const groupsNeeded = new Set<string>();
+            tools.forEach((tool: any) => {
+                if (NON_PERSISTENT_TOOLS.has(tool.toolType)) return;
+                if (tool._meta?.deleted) return;
+                const group = TOOL_GROUP_MAP[tool.toolType];
+                if (group) groupsNeeded.add(group);
+            });
+
+            await Promise.all(
+                Array.from(groupsNeeded).map(g => loadAndRegisterGroup(g))
+            );
+
+            // ✅ Filter deleted
+            const persistable = tools.filter((t: any) =>
+                !NON_PERSISTENT_TOOLS.has(t.toolType) &&
+                !t._meta?.deleted
+            );
+
+            if (persistable.length === 0) {
+                console.log(`📋 No drawings for ${this.currentSymbol()} ${this.currentTimeframe()}`);
+                return;
+            }
+
+            // ✅ Inject meta — never overwrite deleted:true
+            persistable.forEach((t: any) => {
+                if (t._meta && t.id) {
+                    const existingMeta = this._metaMap.get(t.id);
+                    if (existingMeta?.deleted) return;
+                    this._metaMap.set(t.id, t._meta);
+                }
+            });
+
+            // ✅ Build clean tools with correct visibility from shouldToolBeVisible
+            const cleanTools = persistable
+                .filter((t: any) => {
+                    const meta = this._metaMap.get(t.id);
+                    return !meta?.deleted;
+                })
+                .map(({ _meta, ...rest }: any) => ({
+                    ...rest,
+                    options: {
+                        ...rest.options,
+                        visible: this.shouldToolBeVisible(rest.id, this.currentTimeframe())
+                    }
+                }));
+
+            if (cleanTools.length > 0) {
+                this.importDrawings(JSON.stringify(cleanTools));
+            }
+
+            console.log(`✅ Drawings restored for ${this.currentSymbol()} ${this.currentTimeframe()}`);
 
         } catch (error) {
             console.error('❌ Failed to load drawings:', error);
@@ -253,12 +297,25 @@ export class DrawingPersistence {
 
     public removeToolFromStorage(toolId: string): void {
         try {
-            const saved = localStorage.getItem(this.STORAGE_KEY);
-            if (!saved) return;
-            const tools    = JSON.parse(saved);
-            if (!Array.isArray(tools)) return;
-            const filtered = tools.filter((t: any) => t.id !== toolId);
-            localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filtered));
+            const meta = this._metaMap.get(toolId);
+
+            if (meta?.allTF) {
+                // ✅ allTF tool — remove from ALL key only
+                const saved = localStorage.getItem(this.ALL_STORAGE_KEY);
+                if (!saved) return;
+                const tools    = JSON.parse(saved);
+                if (!Array.isArray(tools)) return;
+                const filtered = tools.filter((t: any) => t.id !== toolId);
+                localStorage.setItem(this.ALL_STORAGE_KEY, JSON.stringify(filtered));
+            } else {
+                // ✅ per-TF tool — remove from TF key only
+                const saved = localStorage.getItem(this.STORAGE_KEY);
+                if (!saved) return;
+                const tools    = JSON.parse(saved);
+                if (!Array.isArray(tools)) return;
+                const filtered = tools.filter((t: any) => t.id !== toolId);
+                localStorage.setItem(this.STORAGE_KEY, JSON.stringify(filtered));
+            }
         } catch (error) {
             console.error('❌ Failed to remove tool from storage:', error);
         }
@@ -295,6 +352,7 @@ export class DrawingPersistence {
     public clearSavedDrawings(): void {
         try {
             localStorage.removeItem(this.STORAGE_KEY);
+            localStorage.removeItem(this.ALL_STORAGE_KEY);
         } catch (error) {
             console.error('❌ Failed to clear saved drawings:', error);
         }
