@@ -2,10 +2,10 @@
 // 📊 CHART LEGEND - Orchestrator
 // ================================================================
 
-import { MainLegend } from './main-legend';
-import { ItemsLegend } from './items-legend';
+import { MainLegend }        from './main-legend';
+import { ItemsLegend }       from './items-legend';
 import { LegendPaneManager } from './pane-manager';
-import { removeElement, formatVolume } from './utils';
+import { removeElement, formatVolume, setConfigSymbols } from './utils';
 import { LegendItem, LegendItemValue, LegendUpdateData, ConnectionStatus } from '../chart-types';
 
 export class ChartLegend {
@@ -84,6 +84,12 @@ export class ChartLegend {
     private setupEventListeners(): void {
         this.abortController = new AbortController();
         const { signal } = this.abortController;
+
+        // ── Backend config — populate symbol description map ──
+        document.addEventListener('available-config-received', (e: Event) => {
+            const config = (e as CustomEvent).detail;
+            if (config?.symbols) setConfigSymbols(config.symbols);
+        }, { signal });
 
         document.addEventListener('legend-item-settings', (e: Event) => {
             const { id, item } = (e as CustomEvent).detail;
