@@ -113,13 +113,12 @@ export class ChartDrawingModule {
     );
 
     this.tfManager = new DrawingTFManager(
-    () => this.lineTools,
-    () => this.isInitialized,
-    this.persistence,
-    () => this.arrows.removeTradeArrows(),
-    () => this._currentTimeframe  
-);
-
+      () => this.lineTools,
+      () => this.isInitialized,
+      this.persistence,
+      () => this.arrows.removeTradeArrows(),
+      () => this._currentTimeframe
+    );
 
     this.arrows = new DrawingTradeArrows(
       () => this.lineTools,
@@ -166,6 +165,9 @@ export class ChartDrawingModule {
         (g) => this.loadAndRegisterGroup(g),
         TOOL_GROUP_MAP
       );
+
+      // ✅ Enforce visibility after initial load
+      this.tfManager.applyTFVisibility(this._currentTimeframe);
 
       console.log('✅ Drawing module initialized');
       return true;
@@ -533,6 +535,9 @@ export class ChartDrawingModule {
         TOOL_GROUP_MAP
       );
 
+      // ✅ Fix flicker — enforce visibility after import
+      this.tfManager.applyTFVisibility(this._currentTimeframe);
+
       console.log(`📐 Drawings restored for ${this._currentSymbol} ${this._currentTimeframe}`);
       document.dispatchEvent(new CustomEvent('chart-drawings-ready'));
 
@@ -569,15 +574,11 @@ export class ChartDrawingModule {
   public clearAllDrawings(): void {
     if (!this.lineTools || !this.isInitialized) return;
     try {
-      // ✅ Remove all tools from engine
       if (typeof this.lineTools.removeAllLineTools === 'function') {
         this.lineTools.removeAllLineTools();
       }
 
       this.persistence.clearMeta();
-
-      // ✅ Delegate storage clear to persistence
-      // clearSavedDrawings removes only current symbol tools
       this.persistence.clearSavedDrawings();
 
       console.log(`🗑️ Drawings cleared for ${this._currentSymbol}`);
@@ -685,7 +686,6 @@ export class ChartDrawingModule {
           if (Array.isArray(parsed) && parsed.length > 0) {
             if (parsed[0].options?.locked) return;
 
-            // ✅ Hide immediately — no detach
             this.lineTools.applyLineToolOptions({
               id:       toolId,
               toolType: parsed[0].toolType,
@@ -695,10 +695,7 @@ export class ChartDrawingModule {
         }
       }
 
-      // ✅ Mark deleted in metaMap
       this.persistence.deleteMeta(toolId);
-
-      // ✅ Remove from global storage immediately — single key, single operation
       this.persistence.removeToolFromStorage(toolId);
 
       console.log(`🗑️ Tool ${toolId} deleted`);
@@ -930,6 +927,9 @@ export class ChartDrawingModule {
           }
         } catch (e) {}
       }
+
+      // ✅ Enforce visibility after series swap
+      this.tfManager.applyTFVisibility(this._currentTimeframe);
     }
   }
 
@@ -966,10 +966,8 @@ export class ChartDrawingModule {
   public destroy(): void {
     console.log('🧹 Destroying drawing module...');
 
-    // ✅ purgeAndSave — clean global storage + remove deleted ghosts from engine
     this.persistence.purgeAndSave();
 
-    // ✅ Remove all tools from engine on destroy — safe here
     if (this.lineTools && typeof this.lineTools.removeAllLineTools === 'function') {
       try { this.lineTools.removeAllLineTools(); } catch (error) {}
     }
