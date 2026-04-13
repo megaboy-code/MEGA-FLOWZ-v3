@@ -3,18 +3,7 @@
 // ================================================================
 
 import { DrawingPersistence, ToolMeta } from './drawing-persistence';
-
-export const TF_INTERVALS: Record<string, number> = {
-    M1:  60,
-    M5:  300,
-    M15: 900,
-    M30: 1800,
-    H1:  3600,
-    H4:  14400,
-    D1:  86400,
-    W1:  604800,
-    MN:  2592000
-};
+import { TF_INTERVALS }                 from './drawing-constants';
 
 export class DrawingTFManager {
     constructor(
@@ -130,7 +119,7 @@ export class DrawingTFManager {
         return points.map(point => ({
             ...point,
             timestamp: point.timestamp
-                ? Math.round(point.timestamp / interval) * interval
+                ? Math.floor(point.timestamp / interval) * interval
                 : point.timestamp
         }));
     }
