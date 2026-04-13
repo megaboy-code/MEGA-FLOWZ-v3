@@ -3,7 +3,6 @@
 // ================================================================
 
 import { DrawingPersistence, ToolMeta } from './drawing-persistence';
-import { TF_INTERVALS }                 from './drawing-constants';
 
 export class DrawingTFManager {
     constructor(
@@ -63,7 +62,7 @@ export class DrawingTFManager {
 
     // ==================== VISIBILITY ====================
 
-    // ✅ Now uses persistence.shouldToolBeVisible — single source of truth
+    // ✅ Fix 2 — removed early return guard so visibility always applies
     public applyTFVisibility(newTimeframe: string): void {
         const lt = this.lineTools();
         if (!lt || !this.isInitialized()) return;
@@ -81,28 +80,12 @@ export class DrawingTFManager {
                     newTimeframe
                 );
 
-                // ✅ Only apply if visibility needs to change
-                if (tool.options?.visible === visible) return;
-
+                // ✅ Always apply — no early return guard
                 lt.applyLineToolOptions({
                     id:       tool.id,
                     toolType: tool.toolType,
                     options:  { ...tool.options, visible }
                 });
-
-                // ✅ Snap timestamps for allTF tools
-                const meta = this.persistence.getMeta(tool.id);
-                if (meta?.allTF && !meta.deleted && tool.points?.length > 0) {
-                    const snappedPoints = this.snapPoints(tool.points, newTimeframe);
-                    if (snappedPoints) {
-                        lt.applyLineToolOptions({
-                            id:       tool.id,
-                            toolType: tool.toolType,
-                            options:  { ...tool.options, visible },
-                            points:   snappedPoints
-                        });
-                    }
-                }
             });
 
         } catch (error) {
@@ -110,26 +93,11 @@ export class DrawingTFManager {
         }
     }
 
-    // ==================== SNAP ====================
-
-    public snapPoints(points: any[], timeframe: string): any[] | null {
-        if (!Array.isArray(points) || points.length === 0) return null;
-        const interval = TF_INTERVALS[timeframe];
-        if (!interval) return null;
-
-        return points.map(point => ({
-            ...point,
-            timestamp: point.timestamp
-                ? Math.floor(point.timestamp / interval) * interval
-                : point.timestamp
-        }));
-    }
-
     // ==================== ALL TF TOGGLE ====================
 
     public setToolAllTF(toolId: string, allTF: boolean): void {
         this.persistence.setAllTF(toolId, allTF);
-        // ✅ Apply visibility immediately to current TF — no flicker on toggle
+        // ✅ Apply visibility immediately after toggle
         this.applyTFVisibility(this.currentTimeframe());
         console.log(`📐 Tool ${toolId} allTF set to ${allTF}`);
     }
