@@ -2,6 +2,16 @@
 // 🔧 LEGEND UTILS - Display formatting helpers
 // ================================================================
 
+// ── Runtime symbol map — populated from backend config ──
+let configSymbolMap: Record<string, string> = {};
+
+export function setConfigSymbols(symbols: { name: string; description: string }[]): void {
+    configSymbolMap = {};
+    symbols.forEach(s => {
+        configSymbolMap[s.name] = s.description;
+    });
+}
+
 export const SYMBOL_NAMES: Record<string, string> = {
     'EURUSD': 'Euro / US Dollar',
     'GBPUSD': 'British Pound / US Dollar',
@@ -19,9 +29,10 @@ export const SYMBOL_NAMES: Record<string, string> = {
 
 /**
  * Get full display name for a symbol
+ * Priority: backend config → hardcoded map → raw symbol
  */
 export function getSymbolName(symbol: string): string {
-    return SYMBOL_NAMES[symbol] || symbol;
+    return configSymbolMap[symbol] || SYMBOL_NAMES[symbol] || symbol;
 }
 
 /**
