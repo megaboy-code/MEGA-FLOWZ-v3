@@ -15,11 +15,20 @@ const MAJOR_FOREX_PAIRS = [
 
 const INDICES = ['US30', 'SPX', 'NAS', 'DJI', 'DAX', 'FTSE', 'NIKKEI', 'JPN', 'CAC', 'HSI'];
 
+// ── Strip broker suffixes e.g. ETHUSDm → ETHUSD, EURUSD.m → EURUSD ──
+function stripBrokerSuffix(symbol: string): string {
+    return symbol
+        .toUpperCase()
+        .replace('/', '')
+        .replace(/\.[A-Z0-9]+$/, '')  // strip .suffix
+        .replace(/[MC]$/, '');         // strip trailing M or C
+}
+
 // ==================== PRECISION ====================
 
 export function getDecimalPrecision(symbol: string): number {
     if (!symbol) return 5;
-    const sym = symbol.toUpperCase().replace('/', '');
+    const sym = stripBrokerSuffix(symbol);
 
     const isCrypto = CRYPTO_SYMBOLS.some(crypto => sym.includes(crypto));
 
@@ -41,7 +50,7 @@ export function getDecimalPrecision(symbol: string): number {
 
 export function getPipSize(symbol: string): number {
     if (!symbol) return 0.0001;
-    const sym = symbol.toUpperCase().replace('/', '');
+    const sym = stripBrokerSuffix(symbol);
 
     const isCrypto = CRYPTO_SYMBOLS.some(crypto => sym.includes(crypto));
 
@@ -51,15 +60,14 @@ export function getPipSize(symbol: string): number {
     if (sym.includes('JPY'))                             return 0.01;
     if (INDICES.some(idx => sym.includes(idx)))          return 1;
 
-    return 0.0001; // standard forex
+    return 0.0001;
 }
 
 // ==================== PIP VALUE ====================
-// Dollar value per pip per standard lot
 
 export function getPipValue(symbol: string): number {
     if (!symbol) return 10;
-    const sym = symbol.toUpperCase().replace('/', '');
+    const sym = stripBrokerSuffix(symbol);
 
     const isCrypto = CRYPTO_SYMBOLS.some(crypto => sym.includes(crypto));
 
@@ -68,15 +76,14 @@ export function getPipValue(symbol: string): number {
     if (sym.includes('XAG') || sym.includes('SILVER'))  return 5;
     if (INDICES.some(idx => sym.includes(idx)))          return 1;
 
-    return 10; // standard forex
+    return 10;
 }
 
 // ==================== CONTRACT SIZE ====================
-// Units per 1 standard lot
 
 export function getContractSize(symbol: string): number {
     if (!symbol) return 100_000;
-    const sym = symbol.toUpperCase().replace('/', '');
+    const sym = stripBrokerSuffix(symbol);
 
     const isCrypto = CRYPTO_SYMBOLS.some(crypto => sym.includes(crypto));
 
@@ -85,7 +92,7 @@ export function getContractSize(symbol: string): number {
     if (sym.includes('XAG') || sym.includes('SILVER'))  return 5_000;
     if (INDICES.some(idx => sym.includes(idx)))          return 1;
 
-    return 100_000; // standard forex
+    return 100_000;
 }
 
 // ==================== FORMAT ====================
