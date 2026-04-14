@@ -11,7 +11,7 @@
             <span>Trading Control</span>
         </div>
         <button class="panel-menu-btn" id="panelMenuBtn">
-            <i class="fas fa-ellipsis"></i>
+            <i class="fas fa-ellipsis-vertical"></i>
         </button>
     </div>
 
@@ -204,37 +204,15 @@
         </div>
     </div>
 
-    <!-- QUICK ACTIONS -->
-    <div class="panel-section">
-        <div class="section-title">
-            <div class="section-title-left">
-                <i class="fas fa-bolt"></i> Quick Actions
-            </div>
-        </div>
-        <div class="action-row">
-            <button class="action-btn danger" id="closeAllBtn">
-                <i class="fas fa-times-circle"></i> Close All
-            </button>
-            <button class="action-btn" id="hedgeBtn">
-                <i class="fas fa-shield-alt"></i> Hedge
-            </button>
-            <button class="action-btn" id="reverseBtn">
-                <i class="fas fa-arrows-rotate"></i> Reverse
-            </button>
-        </div>
-    </div>
-
-    <!-- OPEN POSITIONS -->
-    <div class="panel-section">
-        <button class="positions-btn" id="openPositionsBtn">
-            <div class="positions-btn-left">
-                <i class="fas fa-table-list"></i>
-                <span>Open Positions</span>
-            </div>
-            <div class="positions-btn-right">
-                <span class="positions-count" id="positionsCount">0</span>
-                <i class="fas fa-chevron-right"></i>
-            </div>
+    <!-- FOOTER: OPEN POSITIONS + CLOSE ALL -->
+    <div class="panel-footer">
+        <button class="positions-btn-footer" id="openPositionsBtn">
+            <i class="fas fa-table-list"></i>
+            <span>Open Positions</span>
+            <span class="positions-count" id="positionsCount">0</span>
+        </button>
+        <button class="action-btn danger" id="closeAllBtn">
+            <i class="fas fa-times-circle"></i> Close All
         </button>
     </div>
 
