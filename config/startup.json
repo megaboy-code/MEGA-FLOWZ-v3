@@ -51,13 +51,39 @@
       "commission": 0,
       "open_time": 1776045167,
       "close_time": 1776045167
+    },
+    {
+      "ticket": 2105279147,
+      "symbol": "XAUUSDm",
+      "type": 0,
+      "volume": 0.01,
+      "open_price": 4708.73,
+      "close_price": 4708.73,
+      "profit": -1.92,
+      "swap": 0,
+      "commission": 0,
+      "open_time": 1776082914,
+      "close_time": 1776082914
+    },
+    {
+      "ticket": 2105320472,
+      "symbol": "XAUUSDm",
+      "type": 1,
+      "volume": 0.01,
+      "open_price": 4710.65,
+      "close_price": 4710.65,
+      "profit": -1.94,
+      "swap": 0,
+      "commission": 0,
+      "open_time": 1776083265,
+      "close_time": 1776083265
     }
   ],
   "account": {
-    "balance": 479.77,
-    "equity": 479.77,
+    "balance": 475.91,
+    "equity": 475.91,
     "margin": 0,
-    "free_margin": 479.77,
+    "free_margin": 475.91,
     "margin_level": 0,
     "leverage": 2000
   }
