@@ -200,6 +200,50 @@ This means deleted tools remain as invisible ghosts in the engine during the ses
 
 -----
 
+## Engine-Level Performance Fixes (base-line-tool.ts)
+
+Two critical fixes exist inside the core engine’s `BaseLineTool` class. These are not in your application code — they are in `lightweight-charts-line-tools-core/src/model/base-line-tool.ts`. If you ever upgrade the core package, verify these fixes are still present.
+
+### Fix 1 — Skip `updateAllViews()` When Hidden
+
+```ts
+public updateAllViews(): void {
+    // ✅ Fix 1 — Skip updateAllViews() when hidden
+    if (this._options?.visible === false) return;
+    ...
+}
+```
+
+**Why this matters:**
+
+Every frame, the engine calls `updateAllViews()` on every registered tool — including soft-deleted invisible ghosts. Without this guard, hidden tools still run their full view update cycle (pane views, price axis labels, time axis labels, stacking manager) on every render frame. With 15+ strategy tools and deleted user tools accumulating as ghosts, this becomes significant per-frame overhead.
+
+This fix makes hidden tools cost nothing per frame.
+
+### Fix 2 — Skip Hit-Test When Hidden
+
+```ts
+public hitTest(x: number, y: number): PrimitiveHoveredItem | null {
+    // ✅ Fix 2 — Skip hit-test when hidden
+    if (this._options?.visible === false) return null;
+    ...
+}
+```
+
+**Why this matters:**
+
+On every mouse move, the engine runs hit-testing against every registered tool to determine hover state and cursor style. Without this guard, invisible ghost tools still run their full geometric hit-test calculations on every `mousemove` event — including complex polygon intersection math for shapes like Rectangle, Circle, and FibRetracement.
+
+This fix makes hidden tools invisible to the interaction system entirely.
+
+### Why Both Fixes Are Needed Together
+
+The soft-delete strategy (keeping tools as invisible ghosts to avoid the `detachPrimitive()` performance bug) only works efficiently because of these two guards. Without them, accumulating ghost tools would cause exactly the kind of performance degradation we were trying to avoid by not detaching.
+
+**Do not remove these fixes. Do not upgrade the core package without verifying they are still present.**
+
+-----
+
 ## Chart Type Switch (Candlestick ↔ Line)
 
 When chart type changes, the series is replaced. This requires destroying and recreating the `lineTools` plugin:
