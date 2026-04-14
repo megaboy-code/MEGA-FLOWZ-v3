@@ -1,5 +1,5 @@
 // ================================================================
-// ⚙️ TRADING SETTINGS - Preferences modal logic
+// ⚙️ TRADING SETTINGS - Preferences logic
 // ================================================================
 
 export interface TradingSettingsData {
@@ -52,10 +52,9 @@ export class TradingSettings {
 
     // ── Bound listeners ──
     private boundMenuBtn:      EventListener | null = null;
-    private boundClose:        EventListener | null = null;
+    private boundOutsideClick: EventListener | null = null;
     private boundSave:         EventListener | null = null;
     private boundCancel:       EventListener | null = null;
-    private boundBackdrop:     EventListener | null = null;
     private boundTrailing:     EventListener | null = null;
     private boundMethod:       EventListener | null = null;
     private boundTpLimit:      EventListener | null = null;
@@ -68,7 +67,7 @@ export class TradingSettings {
     public initialize(): void {
         this.loadSettings();
         this.setupMenuButton();
-        this.setupModalControls();
+        this.setupDropdownControls();
         this.setupSliders();
         this.setupTrailingControls();
         this.setupLimitInputs();
@@ -81,13 +80,11 @@ export class TradingSettings {
 
     public open(): void {
         this.populateUI();
-        document.getElementById('tradingPrefsModal')?.classList.remove('hidden');
-        document.getElementById('tradingPrefsBackdrop')?.classList.remove('hidden');
+        document.getElementById('tradingPrefsDrop')?.classList.add('show');
     }
 
     public close(): void {
-        document.getElementById('tradingPrefsModal')?.classList.add('hidden');
-        document.getElementById('tradingPrefsBackdrop')?.classList.add('hidden');
+        document.getElementById('tradingPrefsDrop')?.classList.remove('show');
     }
 
     // ================================================================
@@ -95,40 +92,41 @@ export class TradingSettings {
     // ================================================================
 
     private setupMenuButton(): void {
-        const btn = document.getElementById('panelMenuBtn');
-        if (!btn) return;
-        this.boundMenuBtn = () => this.open();
+        const btn  = document.getElementById('panelMenuBtn');
+        const drop = document.getElementById('tradingPrefsDrop');
+        if (!btn || !drop) return;
+
+        this.boundMenuBtn = (e) => {
+            (e as Event).stopPropagation();
+            drop.classList.toggle('show');
+            if (drop.classList.contains('show')) this.populateUI();
+        };
         btn.addEventListener('click', this.boundMenuBtn);
+
+        this.boundOutsideClick = () => drop.classList.remove('show');
+        document.addEventListener('click', this.boundOutsideClick);
     }
 
     // ================================================================
-    // SETUP MODAL CONTROLS
+    // SETUP DROPDOWN CONTROLS
     // ================================================================
 
-    private setupModalControls(): void {
-        const closeBtn   = document.getElementById('tradingPrefsClose');
-        const saveBtn    = document.getElementById('tradingPrefsSave');
-        const cancelBtn  = document.getElementById('tradingPrefsCancel');
-        const backdrop   = document.getElementById('tradingPrefsBackdrop');
+    private setupDropdownControls(): void {
+        const saveBtn   = document.getElementById('tradingPrefsSave');
+        const cancelBtn = document.getElementById('tradingPrefsCancel');
+        const drop      = document.getElementById('tradingPrefsDrop');
 
-        if (closeBtn) {
-            this.boundClose = () => this.close();
-            closeBtn.addEventListener('click', this.boundClose);
-        }
-
-        if (cancelBtn) {
-            this.boundCancel = () => this.close();
-            cancelBtn.addEventListener('click', this.boundCancel);
-        }
+        // Stop clicks inside dropdown from closing it
+        drop?.addEventListener('click', (e) => e.stopPropagation());
 
         if (saveBtn) {
             this.boundSave = () => this.saveSettings();
             saveBtn.addEventListener('click', this.boundSave);
         }
 
-        if (backdrop) {
-            this.boundBackdrop = () => this.close();
-            backdrop.addEventListener('click', this.boundBackdrop);
+        if (cancelBtn) {
+            this.boundCancel = () => this.close();
+            cancelBtn.addEventListener('click', this.boundCancel);
         }
     }
 
@@ -203,10 +201,10 @@ export class TradingSettings {
     // ================================================================
 
     private setupLimitInputs(): void {
-        const tpLimit   = document.getElementById('tpTpMaxLimit')    as HTMLInputElement;
-        const slLimit   = document.getElementById('tpSlMaxLimit')    as HTMLInputElement;
-        const tpSlider  = document.getElementById('tpDefaultTpSlider') as HTMLInputElement;
-        const slSlider  = document.getElementById('tpDefaultSlSlider') as HTMLInputElement;
+        const tpLimit   = document.getElementById('tpTpMaxLimit')       as HTMLInputElement;
+        const slLimit   = document.getElementById('tpSlMaxLimit')       as HTMLInputElement;
+        const tpSlider  = document.getElementById('tpDefaultTpSlider')  as HTMLInputElement;
+        const slSlider  = document.getElementById('tpDefaultSlSlider')  as HTMLInputElement;
         const tpDisplay = document.getElementById('tpDefaultTpValue');
         const slDisplay = document.getElementById('tpDefaultSlValue');
 
@@ -346,24 +344,25 @@ export class TradingSettings {
     // ================================================================
 
     public destroy(): void {
-        const btn      = document.getElementById('panelMenuBtn');
-        const closeBtn = document.getElementById('tradingPrefsClose');
-        const saveBtn  = document.getElementById('tradingPrefsSave');
+        const btn     = document.getElementById('panelMenuBtn');
+        const drop    = document.getElementById('tradingPrefsDrop');
+        const saveBtn = document.getElementById('tradingPrefsSave');
         const cancelBtn = document.getElementById('tradingPrefsCancel');
-        const backdrop = document.getElementById('tradingPrefsBackdrop');
-        const trailing = document.getElementById('tpTrailingEnabled');
-        const method   = document.getElementById('tpTrailingMethod');
-        const tpLimit  = document.getElementById('tpTpMaxLimit');
-        const slLimit  = document.getElementById('tpSlMaxLimit');
+        const trailing  = document.getElementById('tpTrailingEnabled');
+        const method    = document.getElementById('tpTrailingMethod');
+        const tpLimit   = document.getElementById('tpTpMaxLimit');
+        const slLimit   = document.getElementById('tpSlMaxLimit');
 
-        if (this.boundMenuBtn  && btn)      btn.removeEventListener('click',   this.boundMenuBtn);
-        if (this.boundClose    && closeBtn) closeBtn.removeEventListener('click',  this.boundClose);
-        if (this.boundSave     && saveBtn)  saveBtn.removeEventListener('click',   this.boundSave);
-        if (this.boundCancel   && cancelBtn) cancelBtn.removeEventListener('click', this.boundCancel);
-        if (this.boundBackdrop && backdrop) backdrop.removeEventListener('click',  this.boundBackdrop);
-        if (this.boundTrailing && trailing) trailing.removeEventListener('change', this.boundTrailing);
-        if (this.boundMethod   && method)   method.removeEventListener('change',   this.boundMethod);
-        if (this.boundTpLimit  && tpLimit)  tpLimit.removeEventListener('change',  this.boundTpLimit);
-        if (this.boundSlLimit  && slLimit)  slLimit.removeEventListener('change',  this.boundSlLimit);
+        if (this.boundMenuBtn    && btn)      btn.removeEventListener('click',   this.boundMenuBtn);
+        if (this.boundOutsideClick)           document.removeEventListener('click', this.boundOutsideClick);
+        if (this.boundSave       && saveBtn)  saveBtn.removeEventListener('click',  this.boundSave);
+        if (this.boundCancel     && cancelBtn) cancelBtn.removeEventListener('click', this.boundCancel);
+        if (this.boundTrailing   && trailing) trailing.removeEventListener('change', this.boundTrailing);
+        if (this.boundMethod     && method)   method.removeEventListener('change',   this.boundMethod);
+        if (this.boundTpLimit    && tpLimit)  tpLimit.removeEventListener('change',  this.boundTpLimit);
+        if (this.boundSlLimit    && slLimit)  slLimit.removeEventListener('change',  this.boundSlLimit);
+
+        // Stop dropdown clicks from propagating
+        drop?.removeEventListener('click', (e) => e.stopPropagation());
     }
 }
