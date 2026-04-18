@@ -43,7 +43,7 @@ interface ActiveIndicator {
     timeframe:  string;
     lines:      Map<string, IndicatorLine>;
     isStrategy: boolean;
-    active:     boolean; // false = hidden, series reusable
+    active:     boolean;
 }
 
 export interface IndicatorUpdatePayload {
@@ -66,7 +66,6 @@ export class IndicatorManager {
     private mainChart:     any    = null;
     private currentSymbol: string = '';
 
-    // ── All indicators/strategies ever created — never destroyed ──
     private pool: Map<string, ActiveIndicator> = new Map();
 
     private abortController: AbortController | null = null;
@@ -103,9 +102,6 @@ export class IndicatorManager {
 
         if (!existing) {
             this.createIndicator(id, data);
-        } else if (!existing.active) {
-            // ── Wake from pool ──
-            this.wakeIndicator(existing, data);
         } else {
             this.updateIndicator(existing, data, isInitial);
         }
@@ -193,50 +189,8 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // WAKE — series exists in pool but was hidden
-    // Restore data and show
-    // ================================================================
-    private wakeIndicator(
-        indicator: ActiveIndicator,
-        data:      IndicatorUpdatePayload
-    ): void {
-        const precision = getDecimalPrecision(data.symbol);
-
-        data.lines.forEach(line => {
-            const activeLine = indicator.lines.get(line.name);
-            if (!activeLine) return;
-
-            const chartData = line.timestamps
-                .map((t, i) => ({ time: t, value: line.values[i] }))
-                .filter(p => !isNaN(p.value));
-
-            try {
-                activeLine.series.setData(chartData as any);
-                activeLine.series.applyOptions({ visible: true });
-                activeLine.visible = true;
-            } catch (e) {}
-        });
-
-        indicator.active = true;
-
-        // ── Update legend values ──
-        const legendValues = data.lines.map(line => {
-            const activeLine = indicator.lines.get(line.name);
-            const lastVal    = line.values[line.values.length - 1] ?? 0;
-            return {
-                label: line.name,
-                value: lastVal.toFixed(precision),
-                color: activeLine?.color ?? LINE_COLORS[0]
-            };
-        });
-
-        document.dispatchEvent(new CustomEvent('indicator-value-update', {
-            detail: { id: indicator.id, values: legendValues }
-        }));
-    }
-
-    // ================================================================
-    // UPDATE — indicator is active, update series data
+    // UPDATE — handles both initial burst and live single point
+    // Also handles strategy wake — series gets new data directly
     // ================================================================
     private updateIndicator(
         indicator: ActiveIndicator,
@@ -262,6 +216,8 @@ export class IndicatorManager {
                         .filter(p => !isNaN(p.value));
                     if (chartData.length > 0) {
                         activeLine.series.setData(chartData as any);
+                        activeLine.series.applyOptions({ visible: true });
+                        activeLine.visible = true;
                     }
                 } else {
                     const t = line.timestamps[0];
@@ -280,6 +236,8 @@ export class IndicatorManager {
             });
         });
 
+        indicator.active = true;
+
         if (legendValues.length > 0) {
             document.dispatchEvent(new CustomEvent('indicator-value-update', {
                 detail: { id: indicator.id, values: legendValues }
@@ -288,64 +246,69 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // HIDE — clear data + hide series, keep in pool
-    // Used on TF change and symbol change
+    // CLEAR SERIES DATA — used for strategy TF switch
+    // Clears data but keeps series in pool, legend stays
     // ================================================================
-    private hideIndicator(indicator: ActiveIndicator): void {
+    private clearSeriesData(indicator: ActiveIndicator): void {
         indicator.lines.forEach(line => {
             try {
                 line.series.setData([]);
-                line.series.applyOptions({ visible: false });
-                line.visible = false;
             } catch (e) {}
         });
         indicator.active = false;
     }
 
     // ================================================================
-    // REMOVE — explicit user removal
-    // Hides series + removes from legend
-    // Series stays in pool for potential reuse
+    // ON STRATEGY TF CHANGE
+    // Strategies — clear series data, legend stays
+    // Indicators — nothing, backend sends new data with chart data
+    // ================================================================
+    public onTimeframeChange(): void {
+        this.pool.forEach(indicator => {
+            if (!indicator.isStrategy) return;
+            this.clearSeriesData(indicator);
+
+            document.dispatchEvent(new CustomEvent('indicator-tf-inactive', {
+                detail: {
+                    id:         indicator.id,
+                    deployedTF: indicator.timeframe
+                }
+            }));
+        });
+    }
+
+    // ================================================================
+    // ON SYMBOL CHANGE — clear everything including pool
+    // ================================================================
+    public onSymbolChange(): void {
+        this.pool.forEach(indicator => {
+            this.clearSeriesData(indicator);
+        });
+        this.pool.clear();
+    }
+
+    public clearAll(): void {
+        this.onSymbolChange();
+    }
+
+    // ================================================================
+    // REMOVE — user clicks remove on legend
+    // Clears series data, keeps in pool for reuse
+    // Dispatches indicator-removed so backend unsubscribes
     // ================================================================
     public removeIndicator(id: string): void {
         const indicator = this.pool.get(id);
         if (!indicator) return;
 
-        this.hideIndicator(indicator);
-        this.pool.delete(id);
-    }
+        this.clearSeriesData(indicator);
 
-    // ================================================================
-    // ON TF CHANGE
-    // Indicators — hide series, backend will resend on new subscribe
-    // Strategies — hide series only, legend stays showing deployed TF
-    // ================================================================
-    public onTimeframeChange(): void {
-        this.pool.forEach(indicator => {
-            if (!indicator.active) return;
-            this.hideIndicator(indicator);
-
-            if (indicator.isStrategy) {
-                // ── Legend stays — dispatch status update ──
-                document.dispatchEvent(new CustomEvent('indicator-tf-inactive', {
-                    detail: {
-                        id:         indicator.id,
-                        deployedTF: indicator.timeframe
-                    }
-                }));
+        document.dispatchEvent(new CustomEvent('indicator-removed', {
+            detail: {
+                key:       indicator.key,
+                symbol:    indicator.symbol,
+                timeframe: indicator.timeframe
             }
-        });
-    }
-
-    // ================================================================
-    // ON SYMBOL CHANGE
-    // Everything hides — legend clears too
-    // ================================================================
-    public onSymbolChange(): void {
-        this.pool.forEach(indicator => {
-            this.hideIndicator(indicator);
-        });
-        this.pool.clear();
+        }));
     }
 
     // ================================================================
@@ -353,7 +316,7 @@ export class IndicatorManager {
     // ================================================================
     public toggleVisibility(id: string): void {
         const indicator = this.pool.get(id);
-        if (!indicator || !indicator.active) return;
+        if (!indicator) return;
 
         indicator.lines.forEach(line => {
             line.visible = !line.visible;
