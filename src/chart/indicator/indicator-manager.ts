@@ -46,6 +46,23 @@ interface ActiveIndicator {
     active:     boolean;
 }
 
+// ── Indicator params from AvailableConfig ──
+interface IndicatorParams {
+    period:        number;
+    fast_period:   number;
+    slow_period:   number;
+    signal_period: number;
+    k_period:      number;
+    d_period:      number;
+    slowing:       number;
+    deviation:     number;
+    overbought:    number;
+    oversold:      number;
+    volume:        number;
+    price_type:    string;
+    is_strategy:   boolean;
+}
+
 export interface IndicatorUpdatePayload {
     key:       string;
     label:     string;
@@ -66,7 +83,12 @@ export class IndicatorManager {
     private mainChart:     any    = null;
     private currentSymbol: string = '';
 
-    private pool: Map<string, ActiveIndicator> = new Map();
+    private pool:      Map<string, ActiveIndicator> = new Map();
+    private legendIds: Set<string>                  = new Set();
+
+    // ── Params map — keyed by indicator key e.g. "EMA" ──
+    // Populated from available-config-received DOM event
+    private paramsMap: Map<string, IndicatorParams> = new Map();
 
     private abortController: AbortController | null = null;
 
@@ -82,9 +104,65 @@ export class IndicatorManager {
         this.abortController = new AbortController();
         const { signal } = this.abortController;
 
+        // ── Listen for indicator settings changes ──
         document.addEventListener('indicator-settings-changed', (e: Event) => {
             const { indicatorId, lines } = (e as CustomEvent).detail;
             if (indicatorId && lines) this.updateLines(indicatorId, lines);
+        }, { signal });
+
+        // ── Listen for period change — resubscribe with new period ──
+        document.addEventListener('indicator-period-changed', (e: Event) => {
+            const { indicatorId, periodOverrides } = (e as CustomEvent).detail;
+            if (!indicatorId || !periodOverrides) return;
+
+            const indicator = this.pool.get(indicatorId);
+            if (!indicator) return;
+
+            // ── Use first non-zero period override value ──
+            const period = Object.values(periodOverrides as Record<string, number>)
+                .find(v => v > 0) ?? 0;
+
+            if (period === 0) return;
+
+            document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
+                detail: {
+                    key:       indicator.key,
+                    symbol:    indicator.symbol,
+                    timeframe: indicator.timeframe,
+                    period
+                }
+            }));
+        }, { signal });
+
+        // ── Listen for available config — store params map ──
+        document.addEventListener('available-config-received', (e: Event) => {
+            const config = (e as CustomEvent).detail;
+            if (!config) return;
+
+            const allItems = [
+                ...(config.indicators || []),
+                ...(config.strategies || []),
+                ...(config.patterns   || [])
+            ];
+
+            allItems.forEach((item: any) => {
+                if (!item.key) return;
+                this.paramsMap.set(item.key, {
+                    period:        item.period        ?? 0,
+                    fast_period:   item.fast_period   ?? 0,
+                    slow_period:   item.slow_period   ?? 0,
+                    signal_period: item.signal_period ?? 0,
+                    k_period:      item.k_period      ?? 0,
+                    d_period:      item.d_period      ?? 0,
+                    slowing:       item.slowing       ?? 0,
+                    deviation:     item.deviation     ?? 0.0,
+                    overbought:    item.overbought    ?? 0,
+                    oversold:      item.oversold      ?? 0,
+                    volume:        item.volume        ?? 0.0,
+                    price_type:    item.price_type    ?? 'close',
+                    is_strategy:   item.is_strategy   ?? false
+                });
+            });
         }, { signal });
     }
 
@@ -109,6 +187,7 @@ export class IndicatorManager {
 
     // ================================================================
     // CREATE — first time this id is seen
+    // If legend item already exists — update values only, no duplicate
     // ================================================================
     private createIndicator(
         id:   string,
@@ -116,7 +195,10 @@ export class IndicatorManager {
     ): void {
         const precision  = getDecimalPrecision(data.symbol);
         const minMove    = 1 / Math.pow(10, precision);
-        const isStrategy = data.lines.length > 1;
+
+        // ── Use is_strategy from params — lines count is unreliable ──
+        const params     = this.paramsMap.get(data.key) ?? null;
+        const isStrategy = params?.is_strategy ?? data.lines.length > 1;
 
         const indicator: ActiveIndicator = {
             id,
@@ -150,7 +232,7 @@ export class IndicatorManager {
 
                 const chartData = line.timestamps
                     .map((t, i) => ({ time: t, value: line.values[i] }))
-                    .filter(p => !isNaN(p.value));
+                    .filter(p => !isNaN(p.value) && p.value !== 0);
 
                 if (chartData.length > 0) {
                     series.setData(chartData as any);
@@ -166,7 +248,7 @@ export class IndicatorManager {
 
                 const lastVal = line.values[line.values.length - 1] ?? 0;
                 legendValues.push({
-                    label: line.name,
+                    label: isStrategy ? line.name : '',
                     value: lastVal.toFixed(precision),
                     color
                 });
@@ -176,21 +258,29 @@ export class IndicatorManager {
 
         this.pool.set(id, indicator);
 
-        document.dispatchEvent(new CustomEvent('indicator-added', {
-            detail: {
-                id,
-                name:   data.label,
-                color:  legendValues[0]?.color ?? LINE_COLORS[0],
-                icon:   isStrategy ? 'fa-robot' : undefined,
-                pane:   null,
-                values: legendValues
-            }
-        }));
+        // ── Legend item already exists — update values only ──
+        if (this.legendIds.has(data.key)) {
+            document.dispatchEvent(new CustomEvent('indicator-value-update', {
+                detail: { id, values: legendValues }
+            }));
+        } else {
+            this.legendIds.add(data.key);
+            document.dispatchEvent(new CustomEvent('indicator-added', {
+                detail: {
+                    id,
+                    name:     data.label,
+                    color:    legendValues[0]?.color ?? LINE_COLORS[0],
+                    icon:     isStrategy ? 'fa-robot' : undefined,
+                    pane:     null,
+                    values:   legendValues,
+                    settings: params ? { ...params } : {}
+                }
+            }));
+        }
     }
 
     // ================================================================
     // UPDATE — handles both initial burst and live single point
-    // Also handles strategy wake — series gets new data directly
     // ================================================================
     private updateIndicator(
         indicator: ActiveIndicator,
@@ -213,16 +303,14 @@ export class IndicatorManager {
                 if (isInitial) {
                     const chartData = line.timestamps
                         .map((t, i) => ({ time: t, value: line.values[i] }))
-                        .filter(p => !isNaN(p.value));
+                        .filter(p => !isNaN(p.value) && p.value !== 0);
                     if (chartData.length > 0) {
                         activeLine.series.setData(chartData as any);
-                        activeLine.series.applyOptions({ visible: true });
-                        activeLine.visible = true;
                     }
                 } else {
                     const t = line.timestamps[0];
                     const v = line.values[0];
-                    if (!isNaN(v)) {
+                    if (!isNaN(v) && v !== 0) {
                         activeLine.series.update({ time: t, value: v } as any);
                     }
                 }
@@ -246,8 +334,7 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // CLEAR SERIES DATA — used for strategy TF switch
-    // Clears data but keeps series in pool, legend stays
+    // CLEAR SERIES DATA — setData([]) only, no hide, no remove
     // ================================================================
     private clearSeriesData(indicator: ActiveIndicator): void {
         indicator.lines.forEach(line => {
@@ -259,32 +346,51 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // ON STRATEGY TF CHANGE
-    // Strategies — clear series data, legend stays
-    // Indicators — nothing, backend sends new data with chart data
+    // ON TIMEFRAME CHANGE
+    // Indicators — clear data, delete from pool, dispatch resubscribe
+    //              legend stays — no X was clicked
+    // Strategies  — clear data only, pool entry stays
+    //              legend stays showing deployed TF
     // ================================================================
     public onTimeframeChange(): void {
-        this.pool.forEach(indicator => {
-            if (!indicator.isStrategy) return;
-            this.clearSeriesData(indicator);
+        const toDelete:      string[] = [];
+        const toResubscribe: Array<{ key: string; symbol: string }> = [];
 
-            document.dispatchEvent(new CustomEvent('indicator-tf-inactive', {
-                detail: {
-                    id:         indicator.id,
-                    deployedTF: indicator.timeframe
-                }
+        this.pool.forEach((indicator, id) => {
+            if (indicator.isStrategy) {
+                this.clearSeriesData(indicator);
+                document.dispatchEvent(new CustomEvent('indicator-tf-inactive', {
+                    detail: { id, deployedTF: indicator.timeframe }
+                }));
+            } else {
+                this.clearSeriesData(indicator);
+                toResubscribe.push({
+                    key:    indicator.key,
+                    symbol: indicator.symbol
+                });
+                toDelete.push(id);
+                // ── No legend remove — user did not click X ──
+            }
+        });
+
+        toDelete.forEach(id => this.pool.delete(id));
+
+        toResubscribe.forEach(({ key, symbol }) => {
+            document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
+                detail: { key, symbol }
             }));
         });
     }
 
     // ================================================================
-    // ON SYMBOL CHANGE — clear everything including pool
+    // ON SYMBOL CHANGE — clear everything including legend tracker
     // ================================================================
     public onSymbolChange(): void {
         this.pool.forEach(indicator => {
             this.clearSeriesData(indicator);
         });
         this.pool.clear();
+        this.legendIds.clear();
     }
 
     public clearAll(): void {
@@ -292,8 +398,8 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // REMOVE — user clicks remove on legend
-    // Clears series data, keeps in pool for reuse
+    // REMOVE — user clicks X on legend
+    // Clears series data, removes from pool and legend tracker
     // Dispatches indicator-removed so backend unsubscribes
     // ================================================================
     public removeIndicator(id: string): void {
@@ -301,6 +407,8 @@ export class IndicatorManager {
         if (!indicator) return;
 
         this.clearSeriesData(indicator);
+        this.pool.delete(id);
+        this.legendIds.delete(indicator.key);
 
         document.dispatchEvent(new CustomEvent('indicator-removed', {
             detail: {
@@ -369,6 +477,8 @@ export class IndicatorManager {
         }
 
         this.pool.clear();
+        this.legendIds.clear();
+        this.paramsMap.clear();
         this.chart     = null;
         this.mainChart = null;
     }

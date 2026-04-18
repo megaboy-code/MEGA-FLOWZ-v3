@@ -3,6 +3,7 @@
 // Backend drives config — frontend owns color and line width only
 // One modal for both indicators and strategies
 // Lines built from LegendItem.values — one row per line
+// Period override — dispatches resubscribe with new period
 // ================================================================
 
 import { LegendItem } from '../chart-types';
@@ -13,11 +14,25 @@ interface LineSettings {
     lineWidth: number;
 }
 
+// ── Period field labels ──
+const PERIOD_LABELS: Record<string, string> = {
+    period:        'Period',
+    fast_period:   'Fast Period',
+    slow_period:   'Slow Period',
+    signal_period: 'Signal Period',
+    k_period:      'K Period',
+    d_period:      'D Period',
+    slowing:       'Slowing',
+};
+
 export class IndicatorSettingsModal {
     private modal:        HTMLElement | null = null;
     private item:         LegendItem;
     private lineSettings: LineSettings[] = [];
     private isStrategy:   boolean;
+
+    // ── Period overrides — only fields with value > 0 from settings ──
+    private periodInputs: Record<string, HTMLInputElement> = {};
 
     // ==================== DRAGGING ====================
     private isDragging:  boolean = false;
@@ -78,6 +93,10 @@ export class IndicatorSettingsModal {
         // ── Name label ──
         body.appendChild(this.createNameLabel());
 
+        // ── Period inputs — from item.settings, only non-zero fields ──
+        const periodsEl = this.createPeriodInputs();
+        if (periodsEl) body.appendChild(periodsEl);
+
         // ── One color + line width row per line ──
         this.lineSettings.forEach((line, index) => {
             body.appendChild(this.createLineRow(line, index));
@@ -126,6 +145,73 @@ export class IndicatorSettingsModal {
         label.appendChild(name);
 
         return label;
+    }
+
+    // ==================== PERIOD INPUTS ====================
+
+    private createPeriodInputs(): HTMLElement | null {
+        const settings = this.item.settings as Record<string, any> | undefined;
+        if (!settings) return null;
+
+        const fields = Object.keys(PERIOD_LABELS).filter(
+            k => typeof settings[k] === 'number' && settings[k] > 0
+        );
+
+        if (fields.length === 0) return null;
+
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = `margin-bottom: 4px;`;
+
+        fields.forEach(field => {
+            const row = document.createElement('div');
+            row.style.cssText = `
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 7px 0;
+                border-bottom: 1px solid var(--border-light);
+                gap: 8px;
+            `;
+
+            const label       = document.createElement('span');
+            label.style.cssText = `
+                font-size: var(--text-lg);
+                color: var(--text-secondary);
+                font-weight: 500;
+                flex: 1;
+            `;
+            label.textContent = PERIOD_LABELS[field];
+
+            const input   = document.createElement('input');
+            input.type    = 'number';
+            input.value   = String(settings[field]);
+            input.min     = '1';
+            input.max     = '999';
+            input.step    = '1';
+            input.style.cssText = `
+                width: 64px;
+                padding: 4px 6px;
+                background: var(--bg-base);
+                border: 1px solid var(--border);
+                border-radius: var(--radius-xs);
+                color: var(--text-primary);
+                font-size: var(--text-lg);
+                font-family: var(--text-mono);
+                text-align: center;
+                outline: none;
+                transition: border-color 0.15s ease;
+            `;
+            input.addEventListener('focus', () => input.style.borderColor = `var(--accent-info)`);
+            input.addEventListener('blur',  () => input.style.borderColor = `var(--border)`);
+
+            this.periodInputs[field] = input;
+
+            row.appendChild(label);
+            row.appendChild(input);
+            wrapper.appendChild(row);
+        });
+
+        return wrapper;
     }
 
     // ==================== LINE ROW ====================
@@ -411,6 +497,7 @@ export class IndicatorSettingsModal {
     // ==================== APPLY ====================
 
     private applySettings(): void {
+        // ── Line color + width ──
         const lines: Record<string, { color: string; lineWidth: number }> = {};
         this.lineSettings.forEach(line => {
             lines[line.name] = {
@@ -425,6 +512,27 @@ export class IndicatorSettingsModal {
                 lines
             }
         }));
+
+        // ── Period override — only if any period input exists ──
+        const periodOverrides: Record<string, number> = {};
+        let hasPeriodChange = false;
+
+        Object.entries(this.periodInputs).forEach(([field, input]) => {
+            const val = parseInt(input.value);
+            if (val > 0) {
+                periodOverrides[field] = val;
+                hasPeriodChange = true;
+            }
+        });
+
+        if (hasPeriodChange) {
+            document.dispatchEvent(new CustomEvent('indicator-period-changed', {
+                detail: {
+                    indicatorId:     this.item.id,
+                    periodOverrides
+                }
+            }));
+        }
     }
 
     // ==================== DRAGGING ====================
