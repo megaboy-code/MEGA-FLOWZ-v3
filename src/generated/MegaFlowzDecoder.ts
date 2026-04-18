@@ -31,7 +31,9 @@ import {
     NotificationType,
     Severity,
     Timeframe,
-    PositionType
+    PositionType,
+    IndicatorUpdate,
+    IndicatorLine
 } from './mega-flowz';
 
 // ================================================================
@@ -199,26 +201,43 @@ export interface AvailableConfigPayload {
     patterns:           AvailableItemData[];
 }
 
+// ── Indicator line — parallel arrays ──
+export interface IndicatorLineData {
+    name:       string;
+    timestamps: number[];
+    values:     number[];
+}
+
+// ── Indicator update payload ──
+export interface IndicatorUpdatePayload {
+    key:       string;
+    label:     string;
+    symbol:    string;
+    timeframe: string;
+    lines:     IndicatorLineData[];
+}
+
 // ================================================================
 // DISCRIMINATED UNION — single return type
 // ================================================================
 
 export type DecodedMessage =
-    | { type: 'initial';          data: InitialPayload          }
-    | { type: 'bar_update';       data: BarUpdatePayload        }
-    | { type: 'price_update';     data: PriceUpdatePayload      }
-    | { type: 'watchlist_update'; data: WatchlistUpdatePayload  }
-    | { type: 'positions_update'; data: PositionsUpdatePayload  }
-    | { type: 'connection_status';data: ConnectionStatusPayload }
-    | { type: 'trade_executed';   data: TradeExecutedPayload    }
-    | { type: 'position_modified';data: PositionModifiedPayload }
-    | { type: 'notification';     data: NotificationPayload     }
-    | { type: 'error';            data: ErrorPayload            }
-    | { type: 'auto_trading';     data: AutoTradingPayload      }
-    | { type: 'cache_cleared';    data: CacheClearedPayload     }
-    | { type: 'pong';             data: PongPayload             }
-    | { type: 'journal_data';     data: JournalDataPayload      }
-    | { type: 'available_config'; data: AvailableConfigPayload  }
+    | { type: 'initial';           data: InitialPayload          }
+    | { type: 'bar_update';        data: BarUpdatePayload        }
+    | { type: 'price_update';      data: PriceUpdatePayload      }
+    | { type: 'watchlist_update';  data: WatchlistUpdatePayload  }
+    | { type: 'positions_update';  data: PositionsUpdatePayload  }
+    | { type: 'connection_status'; data: ConnectionStatusPayload }
+    | { type: 'trade_executed';    data: TradeExecutedPayload    }
+    | { type: 'position_modified'; data: PositionModifiedPayload }
+    | { type: 'notification';      data: NotificationPayload     }
+    | { type: 'error';             data: ErrorPayload            }
+    | { type: 'auto_trading';      data: AutoTradingPayload      }
+    | { type: 'cache_cleared';     data: CacheClearedPayload     }
+    | { type: 'pong';              data: PongPayload             }
+    | { type: 'journal_data';      data: JournalDataPayload      }
+    | { type: 'available_config';  data: AvailableConfigPayload  }
+    | { type: 'indicator_update';  data: IndicatorUpdatePayload  }
     | { type: 'unknown' };
 
 // ================================================================
@@ -632,6 +651,48 @@ export class MegaFlowzDecoder {
                             indicators,
                             strategies,
                             patterns
+                        }
+                    };
+                }
+
+                // ── Indicator update ──
+                case MessagePayload.IndicatorUpdate: {
+                    const p = msg.payload(
+                        new IndicatorUpdate()
+                    ) as IndicatorUpdate;
+
+                    const lines: IndicatorLineData[] = [];
+                    for (let i = 0; i < p.linesLength(); i++) {
+                        const line = p.lines(i);
+                        if (!line) continue;
+
+                        const timestamps: number[] = [];
+                        for (let j = 0; j < line.timestampsLength(); j++) {
+                            timestamps.push(
+                                parseInt(line.timestamps(j).toString(), 10)
+                            );
+                        }
+
+                        const values: number[] = [];
+                        for (let j = 0; j < line.valuesLength(); j++) {
+                            values.push(line.values(j));
+                        }
+
+                        lines.push({
+                            name: line.name() ?? '',
+                            timestamps,
+                            values
+                        });
+                    }
+
+                    return {
+                        type: 'indicator_update',
+                        data: {
+                            key:       p.key()       ?? '',
+                            label:     p.label()     ?? '',
+                            symbol:    p.symbol()    ?? '',
+                            timeframe: tfToString(p.timeframe()),
+                            lines
                         }
                     };
                 }
