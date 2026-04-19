@@ -57,7 +57,6 @@ const categoryMap: Record<string, string[]> = {
     top_movers:  ['XAUUSD', 'BTCUSD', 'XRPUSD', 'NAS100', 'TSLA', 'AAPL'],
 };
 
-// ── Strip broker suffixes for icon lookup e.g. ETHUSDm → ETHUSD ──
 function stripBrokerSuffix(symbol: string): string {
     return symbol
         .toUpperCase()
@@ -67,7 +66,7 @@ function stripBrokerSuffix(symbol: string): string {
 }
 
 // ================================================================
-// LOCAL CONFIG INTERFACES — no imports from generated files
+// LOCAL CONFIG INTERFACES
 // ================================================================
 
 interface ConfigSymbol {
@@ -118,23 +117,18 @@ export class ChartUI {
     private currentTimeframe: string;
     private currentChartType: string;
 
-    // ── Config received from backend ──
     private config: AvailableConfig | null = null;
 
-    // ── Search debounce ──
     private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     private lastSearchQuery:     string = '';
 
-    // ── Active category ──
     private activeCategory: string = 'favorites';
 
-    // ── Bound listeners ──
     private boundClickOutside:     (e: Event) => void;
     private boundIndicatorClose:   (e: Event) => void;
     private boundSymbolModalClose: (e: Event) => void;
     private boundAvailableConfig:  (e: Event) => void;
 
-    // ── Active indicator category ──
     private activeIndCat: string = 'favorites';
 
     constructor(
@@ -165,15 +159,13 @@ export class ChartUI {
         this.setupClickOutside();
         this.setupIndicatorLeftNav();
 
-        // ── Listen for config from backend ──
         document.addEventListener('available-config-received', this.boundAvailableConfig);
 
         this.isInitialized = true;
     }
 
     // ================================================================
-    // AVAILABLE CONFIG — merge incoming into existing config
-    // Two pushes arrive: chart config first, symbols after MT5 connects
+    // AVAILABLE CONFIG
     // ================================================================
 
     private handleAvailableConfig(e: Event): void {
@@ -194,7 +186,7 @@ export class ChartUI {
         if (incoming.symbols?.length)            this.config.symbols            = incoming.symbols;
         if (incoming.timeframes_visible?.length) this.config.timeframes_visible = incoming.timeframes_visible;
         if (incoming.timeframes_more?.length)    this.config.timeframes_more    = incoming.timeframes_more;
-        
+
         if (incoming.indicators?.length) {
             this.config.indicators = incoming.indicators.map(i => ({
                 key:           i.key,
@@ -217,7 +209,7 @@ export class ChartUI {
                 price_type:    i.price_type    ?? 'close'
             }));
         }
-        
+
         if (incoming.strategies?.length) {
             this.config.strategies = incoming.strategies.map(i => ({
                 key:           i.key,
@@ -240,7 +232,7 @@ export class ChartUI {
                 price_type:    i.price_type    ?? 'close'
             }));
         }
-        
+
         if (incoming.patterns?.length) {
             this.config.patterns = incoming.patterns.map(i => ({
                 key:           i.key,
@@ -271,7 +263,24 @@ export class ChartUI {
     }
 
     // ================================================================
-    // RENDER TIMEFRAMES — inject from config
+    // GET CONFIG BY KEY — called by chart-core for settings modal
+    // Searches indicators, strategies, patterns by key
+    // ================================================================
+    public getConfigByKey(key: string): Record<string, any> | null {
+        if (!this.config) return null;
+
+        const allItems = [
+            ...this.config.indicators,
+            ...this.config.strategies,
+            ...this.config.patterns
+        ];
+
+        const found = allItems.find(i => i.key === key);
+        return found ? { ...found } : null;
+    }
+
+    // ================================================================
+    // RENDER TIMEFRAMES
     // ================================================================
 
     private renderTimeframes(): void {
@@ -312,7 +321,7 @@ export class ChartUI {
     }
 
     // ================================================================
-    // RENDER SYMBOL ROWS — inject from config
+    // RENDER SYMBOL ROWS
     // ================================================================
 
     private renderSymbolRows(): void {
@@ -383,7 +392,7 @@ export class ChartUI {
     }
 
     // ================================================================
-    // RENDER INDICATOR ROWS — inject from config
+    // RENDER INDICATOR ROWS
     // ================================================================
 
     private renderIndicatorRows(): void {
@@ -591,7 +600,6 @@ export class ChartUI {
             });
         }
 
-        // ── Search — local only, no backend requests ──
         if (searchInput) {
             searchInput.addEventListener('input', (e: Event) => {
                 const query = (e.target as HTMLInputElement).value;
@@ -632,7 +640,6 @@ export class ChartUI {
         }
     }
 
-    // ── Local search only — no backend requests ──
     private handleSymbolSearch(query: string): void {
         const trimmed = query.trim();
 
@@ -671,7 +678,6 @@ export class ChartUI {
         const overlay = document.getElementById('symbolModalOverlay');
         if (overlay) overlay.classList.remove('open');
 
-        // ── Reset search ──
         const searchInput = document.getElementById('symbolSearchInput') as HTMLInputElement;
         if (searchInput) searchInput.value = '';
         const emptySearch = document.getElementById('symbolEmptySearch');
@@ -690,7 +696,7 @@ export class ChartUI {
     }
 
     // ================================================================
-    // CATEGORY FILTER — frontend only
+    // CATEGORY FILTER
     // ================================================================
 
     private filterByCategory(cat: string): void {
