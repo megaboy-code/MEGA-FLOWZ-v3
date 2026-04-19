@@ -86,8 +86,6 @@ export class IndicatorManager {
     private pool:      Map<string, ActiveIndicator> = new Map();
     private legendIds: Set<string>                  = new Set();
 
-    // ── Params map — keyed by indicator key e.g. "EMA" ──
-    // Populated from available-config-received DOM event
     private paramsMap: Map<string, IndicatorParams> = new Map();
 
     private abortController: AbortController | null = null;
@@ -104,13 +102,11 @@ export class IndicatorManager {
         this.abortController = new AbortController();
         const { signal } = this.abortController;
 
-        // ── Listen for indicator settings changes ──
         document.addEventListener('indicator-settings-changed', (e: Event) => {
             const { indicatorId, lines } = (e as CustomEvent).detail;
             if (indicatorId && lines) this.updateLines(indicatorId, lines);
         }, { signal });
 
-        // ── Listen for period change — resubscribe with new period ──
         document.addEventListener('indicator-period-changed', (e: Event) => {
             const { indicatorId, periodOverrides } = (e as CustomEvent).detail;
             if (!indicatorId || !periodOverrides) return;
@@ -123,7 +119,6 @@ export class IndicatorManager {
 
             if (period === 0) return;
 
-            // ── Unsub old first ──
             document.dispatchEvent(new CustomEvent('indicator-removed', {
                 detail: {
                     key:       indicator.key,
@@ -142,7 +137,6 @@ export class IndicatorManager {
             }));
         }, { signal });
 
-        // ── Listen for available config — store params map ──
         document.addEventListener('available-config-received', (e: Event) => {
             const config = (e as CustomEvent).detail;
             if (!config) return;
@@ -195,7 +189,7 @@ export class IndicatorManager {
 
     // ================================================================
     // CREATE — first time this id is seen
-    // If legend item already exists — update values only, no duplicate
+    // If legendIds already has key — update values only, no duplicate
     // ================================================================
     private createIndicator(
         id:   string,
@@ -265,7 +259,7 @@ export class IndicatorManager {
 
         this.pool.set(id, indicator);
 
-        // ── Legend item already exists — update values only ──
+        // ── legendIds has key — TF change, update values only, no new legend item ──
         if (this.legendIds.has(data.key)) {
             document.dispatchEvent(new CustomEvent('indicator-value-update', {
                 detail: { id, values: legendValues }
@@ -354,8 +348,8 @@ export class IndicatorManager {
 
     // ================================================================
     // ON TIMEFRAME CHANGE
-    // Indicators — unsub old TF from backend, delete from pool
-    //              delete from legendIds so createIndicator fires indicator-added
+    // Indicators — unsub old TF, clear series, delete from pool
+    //              legendIds NOT cleared — prevents duplicate legend item
     //              resubscribe on new TF
     // Strategies  — clear data only, pool entry stays
     // ================================================================
@@ -370,7 +364,6 @@ export class IndicatorManager {
                     detail: { id, deployedTF: indicator.timeframe }
                 }));
             } else {
-                // ── Unsub old TF from backend ──
                 document.dispatchEvent(new CustomEvent('indicator-removed', {
                     detail: {
                         key:       indicator.key,
@@ -386,7 +379,7 @@ export class IndicatorManager {
                     timeframe: newTimeframe
                 });
                 toDelete.push(id);
-                this.legendIds.delete(indicator.key);
+                // ── legendIds NOT cleared — prevents duplicate legend on TF change ──
             }
         });
 
