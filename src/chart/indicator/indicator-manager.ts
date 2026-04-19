@@ -66,7 +66,8 @@ export class IndicatorManager {
     private mainChart:     any    = null;
     private currentSymbol: string = '';
 
-    private pool: Map<string, ActiveIndicator> = new Map();
+    private pool:      Map<string, ActiveIndicator> = new Map();
+    private legendIds: Set<string>                  = new Set();
 
     private abortController: AbortController | null = null;
 
@@ -109,6 +110,7 @@ export class IndicatorManager {
 
     // ================================================================
     // CREATE — first time this id is seen
+    // If legend item already exists — update values only, no duplicate
     // ================================================================
     private createIndicator(
         id:   string,
@@ -176,16 +178,24 @@ export class IndicatorManager {
 
         this.pool.set(id, indicator);
 
-        document.dispatchEvent(new CustomEvent('indicator-added', {
-            detail: {
-                id,
-                name:   data.label,
-                color:  legendValues[0]?.color ?? LINE_COLORS[0],
-                icon:   isStrategy ? 'fa-robot' : undefined,
-                pane:   null,
-                values: legendValues
-            }
-        }));
+        // ── Legend item already exists — update values only ──
+        if (this.legendIds.has(data.key)) {
+            document.dispatchEvent(new CustomEvent('indicator-value-update', {
+                detail: { id, values: legendValues }
+            }));
+        } else {
+            this.legendIds.add(data.key);
+            document.dispatchEvent(new CustomEvent('indicator-added', {
+                detail: {
+                    id,
+                    name:   data.label,
+                    color:  legendValues[0]?.color ?? LINE_COLORS[0],
+                    icon:   isStrategy ? 'fa-robot' : undefined,
+                    pane:   null,
+                    values: legendValues
+                }
+            }));
+        }
     }
 
     // ================================================================
@@ -256,8 +266,8 @@ export class IndicatorManager {
 
     // ================================================================
     // ON TIMEFRAME CHANGE
-    // Indicators — clear data, collect keys, delete from pool,
-    //              remove legend, dispatch resubscribe for new TF
+    // Indicators — clear data, delete from pool, dispatch resubscribe
+    //              legend stays — no X was clicked
     // Strategies  — clear data only, pool entry stays
     //              legend stays showing deployed TF
     // ================================================================
@@ -278,15 +288,12 @@ export class IndicatorManager {
                     symbol: indicator.symbol
                 });
                 toDelete.push(id);
-                document.dispatchEvent(new CustomEvent('legend-item-remove', {
-                    detail: { id }
-                }));
+                // ── No legend remove — user did not click X ──
             }
         });
 
         toDelete.forEach(id => this.pool.delete(id));
 
-        // ── After cleanup — dispatch resubscribe for each indicator ──
         toResubscribe.forEach(({ key, symbol }) => {
             document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
                 detail: { key, symbol }
@@ -295,13 +302,14 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // ON SYMBOL CHANGE — clear everything including pool
+    // ON SYMBOL CHANGE — clear everything including legend tracker
     // ================================================================
     public onSymbolChange(): void {
         this.pool.forEach(indicator => {
             this.clearSeriesData(indicator);
         });
         this.pool.clear();
+        this.legendIds.clear();
     }
 
     public clearAll(): void {
@@ -309,8 +317,8 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // REMOVE — user clicks remove on legend
-    // Clears series data, keeps in pool for reuse
+    // REMOVE — user clicks X on legend
+    // Clears series data, removes from pool and legend tracker
     // Dispatches indicator-removed so backend unsubscribes
     // ================================================================
     public removeIndicator(id: string): void {
@@ -319,6 +327,7 @@ export class IndicatorManager {
 
         this.clearSeriesData(indicator);
         this.pool.delete(id);
+        this.legendIds.delete(indicator.key);
 
         document.dispatchEvent(new CustomEvent('indicator-removed', {
             detail: {
@@ -387,6 +396,7 @@ export class IndicatorManager {
         }
 
         this.pool.clear();
+        this.legendIds.clear();
         this.chart     = null;
         this.mainChart = null;
     }
