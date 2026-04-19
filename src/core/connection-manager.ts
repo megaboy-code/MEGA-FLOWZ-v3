@@ -164,12 +164,10 @@ export class ConnectionManager {
     public clearCache(): void                  { this.sendCommand('CLEAR_CACHE'); }
     public getJournalToday(): void             { this.sendCommand('GET_JOURNAL_TODAY'); }
 
-    // ── Journal month — C++ calculates timestamps ──
     public getJournalMonth(year: number, month: number): void {
         this.sendCommand(`GET_JOURNAL_MONTH_${year}_${month}`);
     }
 
-    // ── Symbol search ──
     public searchSymbols(query: string): void {
         this.sendCommand(`SEARCH_SYMBOLS_${query.toUpperCase()}`);
     }
@@ -179,10 +177,14 @@ export class ConnectionManager {
     public subscribeIndicator(
         key:       string,
         symbol:    string,
-        timeframe: string
+        timeframe: string,
+        period:    number = 0
     ): void {
-        const tf = this.normalizeTimeframe(timeframe);
-        this.sendCommand(`INDICATOR_SUB_${key}_${symbol}_${tf}`);
+        const tf  = this.normalizeTimeframe(timeframe);
+        const cmd = period > 0
+            ? `INDICATOR_SUB_${key}_${symbol}_${tf}_${period}`
+            : `INDICATOR_SUB_${key}_${symbol}_${tf}`;
+        this.sendCommand(cmd);
     }
 
     public unsubscribeIndicator(
