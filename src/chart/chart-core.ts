@@ -583,13 +583,19 @@ export class ChartModule {
             }
         }, { signal });
 
-        // ── Settings — fetch live item from legend store ──
-        // item in event detail may be stale — legend store has latest settings
+        // ── Settings — fetch live item from legend store + fresh config from chart-ui ──
         document.addEventListener('legend-item-settings', (e: Event) => {
             const { id } = (e as CustomEvent).detail;
             if (!id) return;
+
             const item = this.chartLegend?.getItem(id);
             if (!item) return;
+
+            // ── Get fresh config from chart-ui by key ──
+            const key    = id.split('_')[0];
+            const config = this.chartUI?.getConfigByKey(key);
+            if (config) item.settings = config;
+
             import('./ui/indicator-settings-modal').then(
                 ({ IndicatorSettingsModal }) => {
                     new IndicatorSettingsModal(item).open();
