@@ -83,21 +83,15 @@ export class ChartLegend {
         this.abortController = new AbortController();
         const { signal } = this.abortController;
 
-        // ── Backend config — populate symbol description map ──
         document.addEventListener('available-config-received', (e: Event) => {
             const config = (e as CustomEvent).detail;
             if (config?.symbols) setConfigSymbols(config.symbols);
         }, { signal });
 
-        // ── Remove item from legend only
-        // chart-core handles series + backend unsubscribe via its own listener
         document.addEventListener('legend-item-remove', (e: Event) => {
             const { id } = (e as CustomEvent).detail;
             this.removeItem(id);
         }, { signal });
-
-        // ── Settings and toggle handled directly by chart-core
-        // No re-dispatch needed here
     }
 
     // ==================== PUBLIC API ====================
@@ -177,6 +171,11 @@ export class ChartLegend {
 
     public hasItem(id: string): boolean {
         return this.itemsLegend.hasItem(id);
+    }
+
+    // ── Returns live item from store — used by settings modal ──
+    public getItem(id: string): LegendItem | undefined {
+        return this.itemsLegend.getItem(id);
     }
 
     public async createPaneLegend(pane: any): Promise<void> {
