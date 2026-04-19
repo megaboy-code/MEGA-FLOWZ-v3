@@ -48,8 +48,214 @@ badge(optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
+type():string|null
+type(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+type(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+isStrategy():boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+  return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
+}
+
+mutate_is_strategy(value:boolean):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 14);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt8(this.bb_pos + offset, +value);
+  return true;
+}
+
+period():number {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_period(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 16);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+fastPeriod():number {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_fast_period(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 18);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+slowPeriod():number {
+  const offset = this.bb!.__offset(this.bb_pos, 20);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_slow_period(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 20);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+signalPeriod():number {
+  const offset = this.bb!.__offset(this.bb_pos, 22);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_signal_period(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 22);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+kPeriod():number {
+  const offset = this.bb!.__offset(this.bb_pos, 24);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_k_period(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 24);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+dPeriod():number {
+  const offset = this.bb!.__offset(this.bb_pos, 26);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_d_period(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 26);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+slowing():number {
+  const offset = this.bb!.__offset(this.bb_pos, 28);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_slowing(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 28);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+deviation():number {
+  const offset = this.bb!.__offset(this.bb_pos, 30);
+  return offset ? this.bb!.readFloat64(this.bb_pos + offset) : 0.0;
+}
+
+mutate_deviation(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 30);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeFloat64(this.bb_pos + offset, value);
+  return true;
+}
+
+overbought():number {
+  const offset = this.bb!.__offset(this.bb_pos, 32);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_overbought(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 32);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+oversold():number {
+  const offset = this.bb!.__offset(this.bb_pos, 34);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
+}
+
+mutate_oversold(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 34);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeInt32(this.bb_pos + offset, value);
+  return true;
+}
+
+volume():number {
+  const offset = this.bb!.__offset(this.bb_pos, 36);
+  return offset ? this.bb!.readFloat64(this.bb_pos + offset) : 0.0;
+}
+
+mutate_volume(value:number):boolean {
+  const offset = this.bb!.__offset(this.bb_pos, 36);
+
+  if (offset === 0) {
+    return false;
+  }
+
+  this.bb!.writeFloat64(this.bb_pos + offset, value);
+  return true;
+}
+
+priceType():string|null
+priceType(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+priceType(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 38);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
 static startAvailableItem(builder:flatbuffers.Builder) {
-  builder.startObject(4);
+  builder.startObject(18);
 }
 
 static addKey(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset) {
@@ -68,17 +274,87 @@ static addBadge(builder:flatbuffers.Builder, badgeOffset:flatbuffers.Offset) {
   builder.addFieldOffset(3, badgeOffset, 0);
 }
 
+static addType(builder:flatbuffers.Builder, typeOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(4, typeOffset, 0);
+}
+
+static addIsStrategy(builder:flatbuffers.Builder, isStrategy:boolean) {
+  builder.addFieldInt8(5, +isStrategy, +false);
+}
+
+static addPeriod(builder:flatbuffers.Builder, period:number) {
+  builder.addFieldInt32(6, period, 0);
+}
+
+static addFastPeriod(builder:flatbuffers.Builder, fastPeriod:number) {
+  builder.addFieldInt32(7, fastPeriod, 0);
+}
+
+static addSlowPeriod(builder:flatbuffers.Builder, slowPeriod:number) {
+  builder.addFieldInt32(8, slowPeriod, 0);
+}
+
+static addSignalPeriod(builder:flatbuffers.Builder, signalPeriod:number) {
+  builder.addFieldInt32(9, signalPeriod, 0);
+}
+
+static addKPeriod(builder:flatbuffers.Builder, kPeriod:number) {
+  builder.addFieldInt32(10, kPeriod, 0);
+}
+
+static addDPeriod(builder:flatbuffers.Builder, dPeriod:number) {
+  builder.addFieldInt32(11, dPeriod, 0);
+}
+
+static addSlowing(builder:flatbuffers.Builder, slowing:number) {
+  builder.addFieldInt32(12, slowing, 0);
+}
+
+static addDeviation(builder:flatbuffers.Builder, deviation:number) {
+  builder.addFieldFloat64(13, deviation, 0.0);
+}
+
+static addOverbought(builder:flatbuffers.Builder, overbought:number) {
+  builder.addFieldInt32(14, overbought, 0);
+}
+
+static addOversold(builder:flatbuffers.Builder, oversold:number) {
+  builder.addFieldInt32(15, oversold, 0);
+}
+
+static addVolume(builder:flatbuffers.Builder, volume:number) {
+  builder.addFieldFloat64(16, volume, 0.0);
+}
+
+static addPriceType(builder:flatbuffers.Builder, priceTypeOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(17, priceTypeOffset, 0);
+}
+
 static endAvailableItem(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createAvailableItem(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset, labelOffset:flatbuffers.Offset, descriptionOffset:flatbuffers.Offset, badgeOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createAvailableItem(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset, labelOffset:flatbuffers.Offset, descriptionOffset:flatbuffers.Offset, badgeOffset:flatbuffers.Offset, typeOffset:flatbuffers.Offset, isStrategy:boolean, period:number, fastPeriod:number, slowPeriod:number, signalPeriod:number, kPeriod:number, dPeriod:number, slowing:number, deviation:number, overbought:number, oversold:number, volume:number, priceTypeOffset:flatbuffers.Offset):flatbuffers.Offset {
   AvailableItem.startAvailableItem(builder);
   AvailableItem.addKey(builder, keyOffset);
   AvailableItem.addLabel(builder, labelOffset);
   AvailableItem.addDescription(builder, descriptionOffset);
   AvailableItem.addBadge(builder, badgeOffset);
+  AvailableItem.addType(builder, typeOffset);
+  AvailableItem.addIsStrategy(builder, isStrategy);
+  AvailableItem.addPeriod(builder, period);
+  AvailableItem.addFastPeriod(builder, fastPeriod);
+  AvailableItem.addSlowPeriod(builder, slowPeriod);
+  AvailableItem.addSignalPeriod(builder, signalPeriod);
+  AvailableItem.addKPeriod(builder, kPeriod);
+  AvailableItem.addDPeriod(builder, dPeriod);
+  AvailableItem.addSlowing(builder, slowing);
+  AvailableItem.addDeviation(builder, deviation);
+  AvailableItem.addOverbought(builder, overbought);
+  AvailableItem.addOversold(builder, oversold);
+  AvailableItem.addVolume(builder, volume);
+  AvailableItem.addPriceType(builder, priceTypeOffset);
   return AvailableItem.endAvailableItem(builder);
 }
 }

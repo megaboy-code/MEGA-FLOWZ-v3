@@ -10,6 +10,8 @@ export { CacheCleared } from './mega-flowz/cache-cleared.js';
 export { Candle } from './mega-flowz/candle.js';
 export { ConnectionStatus } from './mega-flowz/connection-status.js';
 export { ErrorMsg } from './mega-flowz/error-msg.js';
+export { IndicatorLine } from './mega-flowz/indicator-line.js';
+export { IndicatorUpdate } from './mega-flowz/indicator-update.js';
 export { InitialData } from './mega-flowz/initial-data.js';
 export { JournalData } from './mega-flowz/journal-data.js';
 export { JournalTrade } from './mega-flowz/journal-trade.js';
