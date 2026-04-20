@@ -11,6 +11,7 @@ export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'er
 // ==================== LEGEND ====================
 
 export interface LegendItemValue {
+    key?:   string; // backend line name — 'ema' | 'fast' | 'slow'
     label?: string;
     value:  string;
     color:  string;
@@ -91,7 +92,6 @@ export interface ChartColors {
 }
 
 // ==================== SYSTEM / DARK THEME ====================
-// ✅ Merged — system and dark are the same
 
 export const DEFAULT_CHART_COLORS: ChartColors = {
     background:  '#0b111b',
@@ -113,7 +113,6 @@ export const DEFAULT_CHART_COLORS: ChartColors = {
 export const DARK_CHART_COLORS: ChartColors = DEFAULT_CHART_COLORS;
 
 // ==================== LIGHT THEME ====================
-// ✅ Clean cool white — no warm tones
 
 export const LIGHT_CHART_COLORS: ChartColors = {
     background:  '#f8f9fc',
