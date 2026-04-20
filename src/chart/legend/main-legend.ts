@@ -43,7 +43,7 @@ export class MainLegend {
             user-select: none;
         `;
 
-        // ── Full symbol name ──
+        // ── Symbol ──
         this.nameEl = document.createElement('span');
         this.nameEl.style.cssText = `
             color: var(--text-primary);
@@ -63,12 +63,12 @@ export class MainLegend {
 
         const sep2 = this.makeSep();
 
-        // ── Connection dot — outer solid + inner solid layered ──
+        // ── Connection dot — large outer solid + inner thick solid ──
         const dotWrapper = document.createElement('div');
         dotWrapper.style.cssText = `
             position: relative;
-            width: 10px;
-            height: 10px;
+            width: 12px;
+            height: 12px;
             flex-shrink: 0;
             display: flex;
             align-items: center;
@@ -78,18 +78,18 @@ export class MainLegend {
         this.dotOuterEl = document.createElement('div');
         this.dotOuterEl.style.cssText = `
             position: absolute;
-            width: 10px;
-            height: 10px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             background: #ef4444;
-            opacity: 0.35;
+            opacity: 0.3;
         `;
 
         this.dotInnerEl = document.createElement('div');
         this.dotInnerEl.style.cssText = `
             position: relative;
-            width: 5px;
-            height: 5px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             background: #ef4444;
         `;
@@ -110,7 +110,7 @@ export class MainLegend {
         this.ohlcEls.l = ohlcL.val;
         this.ohlcEls.c = ohlcC.val;
 
-        // ── Assemble: symbol · tf · dot · O H L C ──
+        // ── Assemble ──
         this.container.appendChild(this.nameEl);
         this.container.appendChild(sep1);
         this.container.appendChild(this.timeframeEl);
@@ -187,11 +187,8 @@ export class MainLegend {
         l: number | null,
         c: number | null
     ): void {
-        // ✅ If all null — crosshair left, keep last known values
         if (o === null && h === null && l === null && c === null) return;
-
         const fmt = (v: number | null) => v !== null ? formatPrice(v, this.precision) : '--';
-
         if (this.ohlcEls.o) this.ohlcEls.o.textContent = fmt(o);
         if (this.ohlcEls.h) this.ohlcEls.h.textContent = fmt(h);
         if (this.ohlcEls.l) this.ohlcEls.l.textContent = fmt(l);
