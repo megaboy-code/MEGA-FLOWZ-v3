@@ -134,7 +134,7 @@ export class ChartLegend {
             this.collapsed = false;
             if (this.mainItemContainer) this.mainItemContainer.style.display = 'flex';
             const svg = this.caretEl.querySelector('svg') as SVGElement;
-            if (svg) (svg as HTMLElement).style.transform = 'rotate(0deg)';
+            if (svg) (svg as unknown as HTMLElement).style.transform = 'rotate(0deg)';
             const count = this.caretEl.querySelector('[data-role="caret-count"]') as HTMLElement;
             if (count) count.style.display = 'none';
         }
