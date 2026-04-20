@@ -76,6 +76,21 @@ export class ItemsLegend {
         return Array.from(this.items.values());
     }
 
+    // ── Remap both maps to new id after TF change ──
+    public updateItemId(oldId: string, newId: string): void {
+        const item = this.items.get(oldId);
+        const el   = this.elements.get(oldId);
+        if (!item || !el) return;
+
+        item.id           = newId;
+        el.dataset.itemId = newId;
+
+        this.items.delete(oldId);
+        this.elements.delete(oldId);
+        this.items.set(newId, item);
+        this.elements.set(newId, el);
+    }
+
     public clear(): void {
         this.elements.forEach(el => removeElement(el));
         this.elements.clear();
@@ -214,7 +229,6 @@ export class ItemsLegend {
         const eyeBtn      = this.createActionIcon('fa-eye',   item.color);
         const removeBtn   = this.createActionIcon('fa-times', 'var(--accent-sell)');
 
-        // ── Pass triggerRect so modal positions next to gear icon ──
         settingsBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
