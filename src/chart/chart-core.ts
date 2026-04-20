@@ -350,7 +350,7 @@ export class ChartModule {
         this.visibilityMap.clear();
 
         this.indicatorManager?.setSymbol(symbol);
-        this.indicatorManager?.clearAll();
+        this.indicatorManager?.onSymbolChange(symbol);
 
         if (this.chartLegend) {
             this.chartLegend.update({
