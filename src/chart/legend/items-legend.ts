@@ -56,6 +56,12 @@ export class ItemsLegend {
         const item = this.items.get(id);
         if (!item) return;
         item.settings = { ...item.settings, ...settings };
+
+        // ✅ Sync dot color if color changed in settings
+        if (settings.color) {
+            item.color = settings.color;
+            this.syncDotColor(id, settings.color);
+        }
     }
 
     public setVisible(id: string, visible: boolean): void {
@@ -95,6 +101,17 @@ export class ItemsLegend {
         this.elements.forEach(el => removeElement(el));
         this.elements.clear();
         this.items.clear();
+    }
+
+    // ==================== COLOR SYNC ====================
+
+    private syncDotColor(id: string, color: string): void {
+        const el = this.elements.get(id);
+        if (!el) return;
+        const dotEl = el.querySelector('[data-role="dot"]') as HTMLElement;
+        if (dotEl) dotEl.style.backgroundColor = color;
+        const iconEl = el.querySelector('[data-role="icon"]') as HTMLElement;
+        if (iconEl) iconEl.style.color = color;
     }
 
     // ==================== ELEMENT CREATION ====================
@@ -144,6 +161,7 @@ export class ItemsLegend {
         if (item.icon) {
             const i = document.createElement('i');
             i.className = `fas ${item.icon}`;
+            i.dataset.role = 'icon';
             i.style.cssText = `
                 font-size: 9px;
                 color: ${item.color};
@@ -224,7 +242,7 @@ export class ItemsLegend {
         `;
 
         const settingsBtn = this.createActionIcon('fa-cog',   'var(--text-muted)');
-        const eyeBtn      = this.createActionIcon('fa-eye',   item.color);
+        const eyeBtn      = this.createActionIcon('fa-eye',   'var(--text-muted)');
         const removeBtn   = this.createActionIcon('fa-times', 'var(--accent-sell)');
 
         settingsBtn.addEventListener('click', (e) => {
@@ -277,15 +295,6 @@ export class ItemsLegend {
     private updateElement(id: string, item: LegendItem): void {
         const el = this.elements.get(id);
         if (!el) return;
-
-        // ✅ Sync dot color with item.color
-        const dotEl = el.querySelector('[data-role="dot"]') as HTMLElement;
-        if (dotEl) dotEl.style.backgroundColor = item.color;
-
-        // ✅ Sync icon color with item.color
-        const iconEl = el.querySelector('i.fas:not([data-action])') as HTMLElement;
-        if (iconEl) iconEl.style.color = item.color;
-
         const oldValuesEl = el.querySelector('[data-role="values"]') as HTMLElement;
         if (!oldValuesEl) return;
         oldValuesEl.replaceWith(this.createValuesEl(item.values));
