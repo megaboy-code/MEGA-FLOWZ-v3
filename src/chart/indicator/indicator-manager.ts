@@ -28,13 +28,13 @@ const LINE_COLORS = [
 // TYPES
 // ================================================================
 interface IndicatorLine {
-    name:                  string;
-    series:                ISeriesApi<SeriesType>;
-    color:                 string;
-    width:                 number;
-    visible:               boolean;
-    priceLineVisible:      boolean;
-    lastValueVisible:      boolean;
+    name:                   string;
+    series:                 ISeriesApi<SeriesType>;
+    color:                  string;
+    width:                  number;
+    visible:                boolean;
+    priceLineVisible:       boolean;
+    lastValueVisible:       boolean;
     crosshairMarkerVisible: boolean;
 }
 
@@ -49,7 +49,6 @@ interface ActiveIndicator {
     active:     boolean;
 }
 
-// ── Indicator params from AvailableConfig ──
 interface IndicatorParams {
     period:        number;
     fast_period:   number;
@@ -83,10 +82,10 @@ export interface IndicatorUpdatePayload {
 // SAVED LINE SETTINGS — persisted across TF changes
 // ================================================================
 interface SavedLineSettings {
-    color:                 string;
-    width:                 number;
-    priceLineVisible:      boolean;
-    lastValueVisible:      boolean;
+    color:                  string;
+    width:                  number;
+    priceLineVisible:       boolean;
+    lastValueVisible:       boolean;
     crosshairMarkerVisible: boolean;
 }
 
@@ -104,7 +103,6 @@ export class IndicatorManager {
     private paramsMap: Map<string, IndicatorParams> = new Map();
 
     // ── Persisted line settings — key = indicator key (e.g. 'EMA') ──
-    // Survives TF changes — color/width/options restored on createIndicator
     private savedSettings: Map<string, Map<string, SavedLineSettings>> = new Map();
 
     private abortController: AbortController | null = null;
@@ -189,8 +187,7 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // GET PERIOD LABEL — shows period value instead of backend line name
-    // EMA → '21', fast → '9', slow → '21'
+    // GET PERIOD LABEL
     // ================================================================
     private getPeriodLabel(key: string, lineName: string): string {
         const params = this.paramsMap.get(key);
@@ -210,7 +207,7 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // ON INDICATOR UPDATE — direct call from ModuleManager hot path
+    // ON INDICATOR UPDATE
     // ================================================================
     public onIndicatorUpdate(data: IndicatorUpdatePayload): void {
         if (!this.chart) return;
@@ -228,7 +225,6 @@ export class IndicatorManager {
 
     // ================================================================
     // CREATE — first time this id is seen
-    // Restores saved settings if available (TF change scenario)
     // Saves defaults into savedSettings so modal always has values
     // ================================================================
     private createIndicator(
@@ -266,16 +262,14 @@ export class IndicatorManager {
         }> = [];
 
         data.lines.forEach((line, index) => {
-            // ── Restore saved or use defaults ──
-            const saved = keySaved.get(line.name);
-            const color                = saved?.color                 ?? LINE_COLORS[index % LINE_COLORS.length];
-            const width                = saved?.width                 ?? 1;
-            const priceLineVisible     = saved?.priceLineVisible      ?? false;
-            const lastValueVisible     = saved?.lastValueVisible      ?? true;
+            const saved                  = keySaved.get(line.name);
+            const color                  = saved?.color                  ?? LINE_COLORS[index % LINE_COLORS.length];
+            const width                  = saved?.width                  ?? 1;
+            const priceLineVisible       = saved?.priceLineVisible       ?? false;
+            const lastValueVisible       = saved?.lastValueVisible       ?? true;
             const crosshairMarkerVisible = saved?.crosshairMarkerVisible ?? true;
 
-            // ── Always persist to savedSettings — even defaults ──
-            // This ensures modal always has values to seed from
+            // ── Persist defaults if no saved entry exists yet ──
             if (!saved) {
                 keySaved.set(line.name, {
                     color,
@@ -305,11 +299,11 @@ export class IndicatorManager {
                 }
 
                 indicator.lines.set(line.name, {
-                    name:                  line.name,
+                    name:                   line.name,
                     series,
                     color,
                     width,
-                    visible:               true,
+                    visible:                true,
                     priceLineVisible,
                     lastValueVisible,
                     crosshairMarkerVisible
@@ -328,13 +322,6 @@ export class IndicatorManager {
         this.pool.set(id, indicator);
 
         if (this.legendIds.has(data.key)) {
-            // ── TF change — update legend item id then update values ──
-            document.dispatchEvent(new CustomEvent('indicator-id-updated', {
-                detail: {
-                    oldId: this.getLegendIdForKey(data.key),
-                    newId: id
-                }
-            }));
             document.dispatchEvent(new CustomEvent('indicator-value-update', {
                 detail: { id, values: legendValues }
             }));
@@ -355,24 +342,14 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // GET LEGEND ID FOR KEY — finds current pool id for a given key
-    // ================================================================
-    private getLegendIdForKey(key: string): string {
-        for (const [id, indicator] of this.pool) {
-            if (indicator.key === key) return id;
-        }
-        return '';
-    }
-
-    // ================================================================
-    // UPDATE — handles both initial burst and live single point
+    // UPDATE
     // ================================================================
     private updateIndicator(
         indicator: ActiveIndicator,
         data:      IndicatorUpdatePayload,
         isInitial: boolean
     ): void {
-        const precision    = getDecimalPrecision(data.symbol);
+        const precision = getDecimalPrecision(data.symbol);
         const legendValues: Array<{
             key:   string;
             label: string;
@@ -424,9 +401,7 @@ export class IndicatorManager {
     // ================================================================
     private clearSeriesData(indicator: ActiveIndicator): void {
         indicator.lines.forEach(line => {
-            try {
-                line.series.setData([]);
-            } catch (e) {}
+            try { line.series.setData([]); } catch (e) {}
         });
         indicator.active = false;
     }
@@ -477,6 +452,11 @@ export class IndicatorManager {
             indicator.active    = false;
             this.pool.set(newId, indicator);
 
+            // ── Update legend item id immediately ──
+            document.dispatchEvent(new CustomEvent('indicator-id-updated', {
+                detail: { oldId, newId }
+            }));
+
             document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
                 detail: { key, symbol, timeframe: newTimeframe }
             }));
@@ -487,20 +467,16 @@ export class IndicatorManager {
     // ON SYMBOL CHANGE
     // ================================================================
     public onSymbolChange(): void {
-        this.pool.forEach(indicator => {
-            this.clearSeriesData(indicator);
-        });
+        this.pool.forEach(indicator => { this.clearSeriesData(indicator); });
         this.pool.clear();
         this.legendIds.clear();
         this.savedSettings.clear();
     }
 
-    public clearAll(): void {
-        this.onSymbolChange();
-    }
+    public clearAll(): void { this.onSymbolChange(); }
 
     // ================================================================
-    // REMOVE — user clicks X on legend
+    // REMOVE
     // ================================================================
     public removeIndicator(id: string): void {
         const indicator = this.pool.get(id);
@@ -529,14 +505,12 @@ export class IndicatorManager {
 
         indicator.lines.forEach(line => {
             line.visible = !line.visible;
-            try {
-                line.series.applyOptions({ visible: line.visible });
-            } catch (e) {}
+            try { line.series.applyOptions({ visible: line.visible }); } catch (e) {}
         });
     }
 
     // ================================================================
-    // UPDATE LINES — color + lineWidth + display options per line
+    // UPDATE LINES
     // ================================================================
     private updateLines(
         id:    string,
@@ -571,10 +545,10 @@ export class IndicatorManager {
             try { line.series.applyOptions(apply); } catch (e) {}
 
             keySaved.set(name, {
-                color:                 line.color,
-                width:                 line.width,
-                priceLineVisible:      line.priceLineVisible,
-                lastValueVisible:      line.lastValueVisible,
+                color:                  line.color,
+                width:                  line.width,
+                priceLineVisible:       line.priceLineVisible,
+                lastValueVisible:       line.lastValueVisible,
                 crosshairMarkerVisible: line.crosshairMarkerVisible
             });
         });
