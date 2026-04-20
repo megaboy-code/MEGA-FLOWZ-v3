@@ -1,4 +1,3 @@
-
 // ================================================================
 // 📊 ITEMS LEGEND - Generic display for indicators, strategies, volume
 // ================================================================
@@ -43,7 +42,6 @@ export class ItemsLegend {
         this.updateElement(id, item);
     }
 
-    // ✅ Update legend name when period changes
     public updateName(id: string, name: string): void {
         const item = this.items.get(id);
         if (!item) return;
@@ -54,7 +52,6 @@ export class ItemsLegend {
         if (nameEl) nameEl.textContent = name;
     }
 
-    // ✅ Update settings stored in legend item
     public updateSettings(id: string, settings: Record<string, any>): void {
         const item = this.items.get(id);
         if (!item) return;
@@ -217,10 +214,12 @@ export class ItemsLegend {
         const eyeBtn      = this.createActionIcon('fa-eye',   item.color);
         const removeBtn   = this.createActionIcon('fa-times', 'var(--accent-sell)');
 
+        // ── Pass triggerRect so modal positions next to gear icon ──
         settingsBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
             document.dispatchEvent(new CustomEvent('legend-item-settings', {
-                detail: { id: item.id, item }
+                detail: { id: item.id, item, triggerRect: rect }
             }));
         });
 
