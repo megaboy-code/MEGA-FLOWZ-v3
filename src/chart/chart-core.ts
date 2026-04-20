@@ -583,7 +583,11 @@ export class ChartModule {
             }
         }, { signal });
 
-        // ── Settings — fetch live item from legend store + fresh config from chart-ui ──
+        document.addEventListener('indicator-id-updated', (e: Event) => {
+            const { oldId, newId } = (e as CustomEvent).detail;
+            if (oldId && newId) this.chartLegend?.updateItemId(oldId, newId);
+        }, { signal });
+
         document.addEventListener('legend-item-settings', (e: Event) => {
             const { id, triggerRect } = (e as CustomEvent).detail;
             if (!id) return;
@@ -593,7 +597,15 @@ export class ChartModule {
 
             const key    = id.split('_')[0];
             const config = this.chartUI?.getConfigByKey(key);
-            if (config) item.settings = config;
+            if (config) item.settings = { ...config };
+
+            // ── Attach saved line settings so modal seeds correctly ──
+            const saved = this.indicatorManager?.getSavedSettings(key);
+            if (saved) {
+                const savedLines: Record<string, any> = {};
+                saved.forEach((v, k) => { savedLines[k] = v; });
+                item.settings = { ...item.settings, savedLines };
+            }
 
             import('./ui/indicator-settings-modal').then(
                 ({ IndicatorSettingsModal }) => {
