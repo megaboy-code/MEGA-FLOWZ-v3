@@ -57,7 +57,7 @@ export const cryptoLogoMap: Record<string, string> = {
 // ================================================================
 
 export const metalIconMap: Record<string, { icon: string; color: string; bg: string; border: string }> = {
-    'xau': { icon: 'fas fa-coins',    color: '#FFD700', bg: 'rgba(255,215,0,0.15)',   border: 'rgba(255,215,0,0.4)'   },
+    'xau': { icon: 'fas fa-coins', color: '#D4A017', bg: 'rgba(212,160,23,0.15)', border: 'rgba(212,160,23,0.4)' },
     'xag': { icon: 'fas fa-coins',    color: '#C0C0C0', bg: 'rgba(192,192,192,0.15)', border: 'rgba(192,192,192,0.4)' },
     'oil': { icon: 'fas fa-oil-well', color: '#8B6914', bg: 'rgba(139,105,20,0.15)',  border: 'rgba(139,105,20,0.4)'  },
 };
