@@ -12,6 +12,8 @@ import {
 
 import { NotificationPayload } from '../generated/MegaFlowzDecoder';
 
+const TPSL_DEFAULT_PIPS = 20;
+
 export class NotificationModule {
     private notifications: ToastNotification[] = [];
     private unreadCount: number = 0;
@@ -26,20 +28,24 @@ export class NotificationModule {
         console.log("🔔 Notification Module Initialized");
         this.sounds = {
             success: this.createSound(800, 1000),
-            error: this.createSound(400, 600, 0.2),
+            error:   this.createSound(400, 600, 0.2),
             warning: this.createSound(600, 800, 0.15),
-            info: this.createSound(500, 700, 0.1)
+            info:    this.createSound(500, 700, 0.1)
         };
     }
 
-    // ==================== UI INJECTION ====================
+    // ================================================================
+    // UI INJECTION
+    // ================================================================
 
     public setUI(ui: INotificationUI): void {
         this.ui = ui;
         console.log('✅ NotificationUI injected into NotificationModule');
     }
 
-    // ==================== INITIALIZATION ====================
+    // ================================================================
+    // INITIALIZATION
+    // ================================================================
 
     public initialize(): void {
         console.log("🔄 Initializing Notification Module...");
@@ -60,7 +66,9 @@ export class NotificationModule {
         console.log("✅ Notification Module Ready");
     }
 
-    // ==================== TOAST CONTAINER ====================
+    // ================================================================
+    // TOAST CONTAINER
+    // ================================================================
 
     private setupToastContainer(): void {
         this.toastContainer = document.getElementById('notificationToastContainer');
@@ -75,7 +83,9 @@ export class NotificationModule {
         console.log('✅ Toast container ready');
     }
 
-    // ==================== SOUND TOGGLE ====================
+    // ================================================================
+    // SOUND TOGGLE
+    // ================================================================
 
     private setupSoundToggle(): void {
         const soundToggle = document.getElementById('notificationSoundToggle');
@@ -100,14 +110,12 @@ export class NotificationModule {
                 soundToggle.classList.remove('active');
                 icon?.classList.replace('fa-volume-high', 'fa-volume-xmark');
             }
-
-            console.log(`🔔 Sound ${this.audioEnabled ? 'enabled' : 'disabled'}`);
         });
-
-        console.log('✅ Sound toggle ready');
     }
 
-    // ==================== MARK ALL READ ====================
+    // ================================================================
+    // MARK ALL READ
+    // ================================================================
 
     private setupMarkAllRead(): void {
         const btn = document.getElementById('markAllRead');
@@ -115,7 +123,9 @@ export class NotificationModule {
         btn.addEventListener('click', () => this.markAllAsRead());
     }
 
-    // ==================== FLATBUFFER NOTIFICATION HANDLER ====================
+    // ================================================================
+    // FLATBUFFER NOTIFICATION HANDLER
+    // ================================================================
 
     public notify(data: NotificationPayload): void {
         const severityMap: Record<number, 'success' | 'error' | 'warning' | 'info'> = {
@@ -125,36 +135,35 @@ export class NotificationModule {
             3: 'info'
         };
 
-        const type = severityMap[data.severity as number] ?? 'info';
-        const directionStr = data.direction;
+        const type          = severityMap[data.severity as number] ?? 'info';
+        const directionStr  = data.direction ?? '';
+        const isBuy         = directionStr === 'BUY';
+        const isSell        = directionStr === 'SELL';
+        const isTrade       = (isBuy || isSell) && !!data.symbol;
 
-        let detailLine = '';
-        if (data.symbol) {
-            detailLine = `${directionStr} ${data.volume?.toFixed(2)}L ${data.symbol} @ ${data.price?.toFixed(5)}`;
-            if (data.open_price && data.open_price > 0) {
-                detailLine += ` | open ${data.open_price?.toFixed(5)}`;
-            }
-        }
-
-        let pnlLine = '';
-        if (data.profit !== undefined && data.profit !== 0) {
-            const isProfit = data.profit > 0;
-            const sign = isProfit ? '+' : '-';
-            const cls = isProfit ? 'profit' : 'loss';
-            pnlLine = `<span class="toast-pnl ${cls}">${sign}$${Math.abs(data.profit).toFixed(2)} USD</span>`;
-        }
-
-        const message = [detailLine, pnlLine].filter(Boolean).join('<br>');
+        // ── Build structured data object instead of plain string ──
+        const structuredData: Record<string, any> = {
+            _rich: true,
+            direction: directionStr,
+            symbol:    data.symbol    ?? '',
+            volume:    data.volume    ?? null,
+            price:     data.price     ?? null,
+            openPrice: data.open_price && data.open_price > 0 ? data.open_price : null,
+            profit:    data.profit    ?? null,
+            isTrade,
+        };
 
         this.show(
-            message || data.message || '',
+            JSON.stringify(structuredData),
             type,
             5000,
             { title: data.title || this.getDefaultTitle(type) }
         );
     }
 
-    // ==================== NOTIFICATION CREATION ====================
+    // ================================================================
+    // NOTIFICATION CREATION
+    // ================================================================
 
     public show(
         message: string,
@@ -166,25 +175,22 @@ export class NotificationModule {
         const now = Date.now();
         const isDuplicate = this.notifications.some(n =>
             n.message === message &&
-            n.type === type &&
+            n.type    === type &&
             (now - n.timestamp) < 2000
         );
 
-        if (isDuplicate) {
-            console.log(`🔔 Duplicate notification blocked: ${message}`);
-            return '';
-        }
+        if (isDuplicate) return '';
 
         const notification: ToastNotification = {
-            id: Date.now() + Math.random().toString(36).substr(2, 9),
+            id:         Date.now() + Math.random().toString(36).substr(2, 9),
             type,
             message,
-            title: options.title || this.getDefaultTitle(type),
-            timestamp: Date.now(),
-            read: false,
+            title:      options.title || this.getDefaultTitle(type),
+            timestamp:  Date.now(),
+            read:       false,
             persistent: options.persistent || false,
-            action: options.action || null,
-            data: options.data || {}
+            action:     options.action     || null,
+            data:       options.data       || {}
         };
 
         this.notifications.unshift(notification);
@@ -208,71 +214,222 @@ export class NotificationModule {
 
         this.saveNotifications();
 
-        console.log(`🔔 ${type.toUpperCase()}: ${message}`);
-
         return notification.id;
     }
 
-    // ==================== TOAST ====================
+    // ================================================================
+    // PARSE RICH DATA
+    // ================================================================
+
+    private parseMessage(message: string): Record<string, any> | null {
+        try {
+            const parsed = JSON.parse(message);
+            if (parsed._rich) return parsed;
+        } catch {}
+        return null;
+    }
+
+    // ================================================================
+    // BUILD TOAST HTML
+    // ================================================================
+
+    private buildToastBodyHTML(notification: ToastNotification): string {
+        const rich = this.parseMessage(notification.message);
+
+        // ── Rich trade data ──
+        if (rich && rich.isTrade) {
+            const isBuy     = rich.direction === 'BUY';
+            const dirClass  = isBuy ? 'buy' : 'sell';
+            const dirIcon   = isBuy ? 'fa-arrow-up' : 'fa-arrow-down';
+            const hasProfit = rich.profit !== null && rich.profit !== undefined;
+            const isProfit  = hasProfit && rich.profit >= 0;
+            const pnlClass  = isProfit ? 'profit' : 'loss';
+            const pnlSign   = isProfit ? '+' : '-';
+            const pnlAbs    = hasProfit ? Math.abs(rich.profit).toFixed(2) : '0.00';
+
+            const isClose   = notification.title === 'Position Closed' || notification.title === 'Trade Closed';
+            const isOpen    = notification.title === 'Trade Executed';
+
+            let detailHTML = '';
+
+            if (isOpen) {
+                detailHTML = `
+                    <div class="toast-detail-row">
+                        <div class="toast-detail-item">
+                            <span class="toast-detail-label">Entry</span>
+                            <span class="toast-detail-value">${rich.price?.toFixed(rich.symbol?.includes('JPY') ? 3 : 5) ?? '—'}</span>
+                        </div>
+                        ${rich.openPrice ? `
+                        <div class="toast-detail-divider"></div>
+                        <div class="toast-detail-item">
+                            <span class="toast-detail-label">Open</span>
+                            <span class="toast-detail-value">${rich.openPrice.toFixed(rich.symbol?.includes('JPY') ? 3 : 5)}</span>
+                        </div>` : ''}
+                    </div>
+                `;
+            }
+
+            if (isClose && rich.openPrice) {
+                detailHTML = `
+                    <div class="toast-detail-row">
+                        <div class="toast-detail-item">
+                            <span class="toast-detail-label">Entry</span>
+                            <span class="toast-detail-value">${rich.openPrice.toFixed(rich.symbol?.includes('JPY') ? 3 : 5)}</span>
+                        </div>
+                        <div class="toast-detail-divider"></div>
+                        <div class="toast-detail-item">
+                            <span class="toast-detail-label">Close</span>
+                            <span class="toast-detail-value">${rich.price?.toFixed(rich.symbol?.includes('JPY') ? 3 : 5) ?? '—'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const pnlHTML = hasProfit ? `
+                <div class="toast-pnl-row">
+                    <span class="toast-pnl-label">P / L</span>
+                    <span class="toast-pnl-value ${pnlClass}">${pnlSign}$${pnlAbs}</span>
+                </div>
+            ` : '';
+
+            const actionsHTML = isOpen ? `
+                <div class="toast-actions">
+                    <button class="toast-btn primary" onclick="void(0)">
+                        <i class="fas fa-table-list"></i> View Position
+                    </button>
+                    <button class="toast-btn ghost toast-dismiss-btn">Dismiss</button>
+                </div>
+            ` : isClose ? `
+                <div class="toast-actions">
+                    <button class="toast-btn primary" onclick="void(0)">
+                        <i class="fas fa-book"></i> Add to Journal
+                    </button>
+                    <button class="toast-btn ghost toast-dismiss-btn">Dismiss</button>
+                </div>
+            ` : '';
+
+            return `
+                <div class="toast-trade-row">
+                    <span class="dir-badge ${dirClass}">
+                        <i class="fas ${dirIcon}"></i> ${rich.direction}
+                    </span>
+                    <span class="toast-symbol">${rich.symbol}</span>
+                    <span class="toast-volume">${rich.volume?.toFixed(2) ?? '—'} Lots</span>
+                </div>
+                ${detailHTML}
+                ${pnlHTML}
+                ${actionsHTML}
+            `;
+        }
+
+        // ── Plain message fallback ──
+        return `<div class="toast-message">${notification.message}</div>`;
+    }
+
+    // ================================================================
+    // BUILD NOTIFICATION LIST ITEM HTML
+    // ================================================================
+
+    private buildNotifItemHTML(notification: ToastNotification): string {
+        const rich      = this.parseMessage(notification.message);
+        const timeAgo   = this.formatTimeAgo(notification.timestamp);
+        const readClass = notification.read ? 'read' : 'unread';
+        const icon      = this.getIcon(notification.type);
+        const iconClass = this.getIconClass(notification);
+
+        let bodyHTML = '';
+
+        if (rich && rich.isTrade) {
+            const isBuy    = rich.direction === 'BUY';
+            const dirClass = isBuy ? 'buy' : 'sell';
+            const dirIcon  = isBuy ? 'fa-arrow-up' : 'fa-arrow-down';
+
+            const hasProfit = rich.profit !== null && rich.profit !== undefined;
+            const isProfit  = hasProfit && rich.profit >= 0;
+            const pnlClass  = isProfit ? 'profit' : 'loss';
+            const pnlSign   = isProfit ? '+' : '-';
+            const pnlAbs    = hasProfit ? Math.abs(rich.profit).toFixed(2) : '0.00';
+            const decimals  = rich.symbol?.includes('JPY') ? 3 : 5;
+
+            const isClose = notification.title === 'Position Closed' || notification.title === 'Trade Closed';
+
+            const detailLine = isClose && rich.openPrice
+                ? `Entry <span>${rich.openPrice.toFixed(decimals)}</span> → Close <span>${rich.price?.toFixed(decimals) ?? '—'}</span>`
+                : `@ <span>${rich.price?.toFixed(decimals) ?? '—'}</span>`;
+
+            const pnlHTML = hasProfit ? `
+                <div class="notif-pnl-row">
+                    <span class="notif-pnl-value ${pnlClass}">${pnlSign}$${pnlAbs}</span>
+                </div>
+            ` : '';
+
+            bodyHTML = `
+                <div class="notif-trade-row">
+                    <span class="dir-badge ${dirClass}">
+                        <i class="fas ${dirIcon}"></i> ${rich.direction}
+                    </span>
+                    <span class="notif-symbol">${rich.symbol}</span>
+                    <span class="notif-volume">${rich.volume?.toFixed(2) ?? '—'} Lots</span>
+                </div>
+                <div class="notif-detail-line">${detailLine}</div>
+                ${pnlHTML}
+            `;
+        } else {
+            bodyHTML = `<div class="notif-detail-line">${notification.message}</div>`;
+        }
+
+        return `
+            <div class="notification-item ${notification.type} ${readClass}" data-id="${notification.id}">
+                <div class="notif-icon ${iconClass}">
+                    <i class="fas fa-${icon}"></i>
+                </div>
+                <div class="notification-content">
+                    <div class="notification-item-top">
+                        <div class="notification-title">${this.escapeHtml(notification.title)}</div>
+                        <div class="notification-time">${timeAgo}</div>
+                    </div>
+                    ${bodyHTML}
+                </div>
+                <div class="notification-actions">
+                    <button class="notification-mark-read" data-id="${notification.id}" title="Mark read">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button class="notification-dismiss" data-id="${notification.id}" title="Dismiss">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // ================================================================
+    // SHOW TOAST
+    // ================================================================
 
     private showToast(notification: ToastNotification, duration: number): void {
         if (!this.toastContainer) return;
 
         const toast = document.createElement('div');
         toast.className = `notification-toast ${notification.type}`;
-        toast.id = `toast-${notification.id}`;
+        toast.id        = `toast-${notification.id}`;
 
-        const icon = this.getIcon(notification.type);
-
-        const parts = notification.message.split('<br>');
-        const tradeLine = parts[0] || '';
-        const pnlRaw = parts[1] || '';
-
-        const isBuy = tradeLine.startsWith('BUY');
-        const isSell = tradeLine.startsWith('SELL');
-        const isTradeMsg = isBuy || isSell;
-
-        let directionHTML = '';
-        let tradeBodyHTML = '';
-        let pnlHTML = '';
-
-        if (isTradeMsg) {
-            const dirClass = isBuy ? 'buy' : 'sell';
-            const dirLabel = isBuy ? 'BUY' : 'SELL';
-            const detail = tradeLine.replace(/^(BUY|SELL)\s*/, '');
-
-            directionHTML = `
-                <div class="toast-direction-row">
-                    <span class="toast-dir-badge ${dirClass}">${dirLabel}</span>
-                    <span class="toast-trade-line">${detail}</span>
-                </div>
-            `;
-
-            if (pnlRaw) {
-                pnlHTML = `<div class="toast-pnl-row">${pnlRaw}</div>`;
-            }
-        } else {
-            tradeBodyHTML = `<div class="toast-message">${notification.message}</div>`;
-        }
+        const icon     = this.getIcon(notification.type);
+        const subtitle = this.getSubtitle(notification);
+        const bodyHTML = this.buildToastBodyHTML(notification);
 
         toast.innerHTML = `
             <div class="toast-header">
                 <div class="toast-icon"><i class="fas fa-${icon}"></i></div>
-                <div class="toast-title">${notification.title}</div>
-                ${notification.action
-                    ? `<button class="toast-action-btn" data-notification-id="${notification.id}">
-                           <i class="fas fa-bolt"></i>
-                       </button>`
-                    : ''}
+                <div class="toast-header-text">
+                    <div class="toast-title">${notification.title}</div>
+                    ${subtitle ? `<div class="toast-subtitle">${subtitle}</div>` : ''}
+                </div>
                 <button class="toast-close-btn" data-notification-id="${notification.id}">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="toast-body">
-                ${directionHTML}
-                ${tradeBodyHTML}
-                ${pnlHTML}
-                <div class="toast-time">Just now</div>
+                ${bodyHTML}
             </div>
             <div class="toast-progress">
                 <div class="toast-progress-fill"></div>
@@ -289,28 +446,39 @@ export class NotificationModule {
             this.activeToastTimeouts.set(notification.id, timeoutId);
         }
 
-        toast.querySelector('.toast-close-btn')?.addEventListener('click', (e: Event) => {
+        toast.querySelector('.toast-close-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.removeToast(notification.id);
         });
 
-        if (notification.action) {
-            toast.querySelector('.toast-action-btn')?.addEventListener('click', (e: Event) => {
-                e.stopPropagation();
-                this.triggerAction(notification);
-                this.removeToast(notification.id);
-            });
-        }
+        toast.querySelector('.toast-dismiss-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.removeToast(notification.id);
+        });
 
         toast.addEventListener('click', (e) => {
             if (
                 !(e.target as Element).closest('.toast-close-btn') &&
-                !(e.target as Element).closest('.toast-action-btn')
+                !(e.target as Element).closest('.toast-dismiss-btn') &&
+                !(e.target as Element).closest('.toast-btn')
             ) {
                 this.ui?.showModal();
                 this.markAsRead(notification.id);
             }
         });
+    }
+
+    private getSubtitle(notification: ToastNotification): string {
+        const rich = this.parseMessage(notification.message);
+        if (!rich) return '';
+
+        if (notification.title === 'Trade Executed')  return 'Market order filled';
+        if (notification.title === 'Position Closed') {
+            const hasProfit = rich.profit !== null && rich.profit !== undefined;
+            if (!hasProfit) return 'Position closed';
+            return rich.profit >= 0 ? 'Take profit hit' : 'Stop loss hit';
+        }
+        return '';
     }
 
     private removeToast(id: string): void {
@@ -336,7 +504,9 @@ export class NotificationModule {
         this.saveNotifications();
     }
 
-    // ==================== NOTIFICATION TYPES ====================
+    // ================================================================
+    // NOTIFICATION TYPES
+    // ================================================================
 
     public success(message: string, options: NotificationOptions = {}): string {
         return this.show(message, 'success', 4000, { title: 'Success', ...options });
@@ -355,30 +525,19 @@ export class NotificationModule {
     }
 
     public tradeExecuted(tradeData: TradeData): string {
-        const direction = tradeData.direction === 'LONG' ? 'BUY' : 'SELL';
-        const dirClass = tradeData.direction === 'LONG' ? 'dir-buy' : 'dir-sell';
+        const isBuy = tradeData.direction === 'LONG';
+        const structuredData = JSON.stringify({
+            _rich:     true,
+            direction: isBuy ? 'BUY' : 'SELL',
+            symbol:    tradeData.symbol,
+            volume:    tradeData.volume,
+            price:     tradeData.entry_price,
+            openPrice: null,
+            profit:    tradeData.pnl ?? null,
+            isTrade:   true,
+        });
 
-        let pnlPart = '';
-        if (tradeData.pnl) {
-            const isProfit = tradeData.pnl >= 0;
-            const sign = isProfit ? '+' : '-';
-            const cls = isProfit ? 'profit' : 'loss';
-            pnlPart = `<br><span class="toast-pnl ${cls}">${sign}$${Math.abs(tradeData.pnl).toFixed(2)} USD</span>`;
-        }
-
-        return this.show(
-            `<span class="${dirClass}">${direction}</span> ${tradeData.symbol} ${tradeData.volume}L @ ${tradeData.entry_price}${pnlPart}`,
-            'success',
-            5000,
-            {
-                title: 'Trade Executed',
-                action: {
-                    label: 'View',
-                    callback: () => this.openTradeDetails(tradeData)
-                },
-                data: { trade: tradeData }
-            }
-        );
+        return this.show(structuredData, 'success', 5000, { title: 'Trade Executed' });
     }
 
     public priceAlert(alertData: AlertData): string {
@@ -387,12 +546,12 @@ export class NotificationModule {
             'warning',
             6000,
             {
-                title: 'Price Alert Triggered',
-                persistent: true,
-                sound: true,
+                title:               'Price Alert Triggered',
+                persistent:          true,
+                sound:               true,
                 browserNotification: true,
                 action: {
-                    label: 'View Chart',
+                    label:    'View Chart',
                     callback: () => this.openChart(alertData.symbol)
                 }
             }
@@ -407,11 +566,13 @@ export class NotificationModule {
         return this.show(message, type, 5000, {
             title,
             persistent: type === 'error',
-            sound: type === 'error'
+            sound:      type === 'error'
         });
     }
 
-    // ==================== NOTIFICATION MANAGEMENT ====================
+    // ================================================================
+    // NOTIFICATION MANAGEMENT
+    // ================================================================
 
     public markAsRead(id: string): void {
         const notification = this.notifications.find(n => n.id === id);
@@ -439,7 +600,7 @@ export class NotificationModule {
         this.activeToastTimeouts.clear();
 
         this.notifications = [];
-        this.unreadCount = 0;
+        this.unreadCount   = 0;
         this.ui?.updateBadgeCount(0);
         this.updateNotificationList();
         this.saveNotifications();
@@ -466,15 +627,12 @@ export class NotificationModule {
         this.saveNotifications();
     }
 
-    public getUnread(): ToastNotification[] {
-        return this.notifications.filter(n => !n.read);
-    }
+    public getUnread():              ToastNotification[] { return this.notifications.filter(n => !n.read); }
+    public getRecent(count = 10):   ToastNotification[] { return this.notifications.slice(0, count); }
 
-    public getRecent(count: number = 10): ToastNotification[] {
-        return this.notifications.slice(0, count);
-    }
-
-    // ==================== UI UPDATES ====================
+    // ================================================================
+    // UI UPDATES
+    // ================================================================
 
     public updateNotificationList(): void {
         const notificationList = document.getElementById('notificationList');
@@ -482,8 +640,8 @@ export class NotificationModule {
 
         const badge = document.getElementById('notificationBadge');
         if (badge) {
-            badge.textContent = String(this.unreadCount);
-            badge.style.display = this.unreadCount > 0 ? 'inline-flex' : 'none';
+            badge.textContent    = String(this.unreadCount);
+            badge.style.display  = this.unreadCount > 0 ? 'inline-flex' : 'none';
         }
 
         const countEl = document.querySelector('.notification-count');
@@ -499,59 +657,16 @@ export class NotificationModule {
                     </div>
                     <div class="notification-content">
                         <div class="notification-title">No notifications</div>
-                        <div class="notification-text">You're all caught up!</div>
+                        <div class="notif-detail-line">You're all caught up!</div>
                     </div>
                 </div>
             `;
             return;
         }
 
-        let html = '';
-        this.notifications.forEach(notification => {
-            const timeAgo = this.formatTimeAgo(notification.timestamp);
-            const readClass = notification.read ? 'read' : 'unread';
-            const icon = this.getIcon(notification.type);
-
-            let messageHtml = notification.message;
-            
-            // Replace BUY/SELL with styled spans
-            messageHtml = messageHtml.replace(/\b(BUY)\b/g, '<span class="dir-buy">BUY</span>');
-            messageHtml = messageHtml.replace(/\b(SELL)\b/g, '<span class="dir-sell">SELL</span>');
-            
-            // Extract PnL and wrap with profit/loss span
-            const pnlMatch = messageHtml.match(/\+\$[\d.]+ USD|-\$[\d.]+ USD/);
-            if (pnlMatch) {
-                const pnlValue = pnlMatch[0];
-                const isProfit = pnlValue.startsWith('+');
-                messageHtml = messageHtml.replace(pnlValue, `<span class="${isProfit ? 'profit' : 'loss'}">${pnlValue}</span>`);
-            }
-            
-            // Handle line breaks
-            const displayHtml = messageHtml.replace(/<br>/g, '<br>');
-
-            html += `
-                <div class="notification-item ${notification.type} ${readClass}" data-id="${notification.id}">
-                    <div class="notif-icon ${notification.type}">
-                        <i class="fas fa-${icon}"></i>
-                    </div>
-                    <div class="notification-content">
-                        <div class="notification-title">${this.escapeHtml(notification.title)}</div>
-                        <div class="notification-text">${displayHtml}</div>
-                        <div class="notification-time">${timeAgo}</div>
-                    </div>
-                    <div class="notification-actions">
-                        <button class="notification-mark-read" data-id="${notification.id}" title="Mark read">
-                            <i class="fas fa-check"></i>
-                        </button>
-                        <button class="notification-dismiss" data-id="${notification.id}" title="Dismiss">
-                            <i class="fas fa-times"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        });
-
-        notificationList.innerHTML = html;
+        notificationList.innerHTML = this.notifications
+            .map(n => this.buildNotifItemHTML(n))
+            .join('');
 
         notificationList.querySelectorAll('.notification-mark-read').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -573,10 +688,46 @@ export class NotificationModule {
             item.addEventListener('click', (e) => {
                 if (!(e.target as Element).closest('.notification-actions')) {
                     const id = item.getAttribute('data-id');
-                    if (id) this.showNotificationDetails(id);
+                    if (id) this.markAsRead(id);
                 }
             });
         });
+    }
+
+    public updateBadge(): void {
+        this.ui?.updateBadgeCount(this.unreadCount);
+    }
+
+    // ================================================================
+    // UTILITIES
+    // ================================================================
+
+    private getDefaultTitle(type: string): string {
+        const titles: { [key: string]: string } = {
+            success: 'Success',
+            error:   'Error',
+            warning: 'Warning',
+            info:    'Information'
+        };
+        return titles[type] || 'Notification';
+    }
+
+    private getIcon(type: string): string {
+        const icons: { [key: string]: string } = {
+            success: 'check',
+            error:   'exclamation-circle',
+            warning: 'exclamation-triangle',
+            info:    'info-circle'
+        };
+        return icons[type] || 'info-circle';
+    }
+
+    private getIconClass(notification: ToastNotification): string {
+        const rich = this.parseMessage(notification.message);
+        if (rich?.isTrade) {
+            return rich.direction === 'BUY' ? 'buy' : 'sell';
+        }
+        return notification.type;
     }
 
     private escapeHtml(str: string): string {
@@ -588,50 +739,21 @@ export class NotificationModule {
             .replace(/'/g, '&#39;');
     }
 
-    public updateBadge(): void {
-        this.ui?.updateBadgeCount(this.unreadCount);
-    }
-
-    // ==================== UTILITY METHODS ====================
-
-    private getDefaultTitle(type: string): string {
-        const titles: { [key: string]: string } = {
-            success: 'Success',
-            error: 'Error',
-            warning: 'Warning',
-            info: 'Information'
-        };
-        return titles[type] || 'Notification';
-    }
-
-    private getIcon(type: string): string {
-        const icons: { [key: string]: string } = {
-            success: 'check',
-            error: 'exclamation-circle',
-            warning: 'exclamation-triangle',
-            info: 'info-circle'
-        };
-        return icons[type] || 'info-circle';
-    }
-
     private formatTimeAgo(timestamp: number): string {
-        const now = Date.now();
-        const diff = now - timestamp;
-
-        if (diff < 60000) return 'Just now';
-        if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+        const diff = Date.now() - timestamp;
+        if (diff < 60000)    return 'Just now';
+        if (diff < 3600000)  return `${Math.floor(diff / 60000)}m ago`;
         if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
         if (diff < 604800000) return `${Math.floor(diff / 86400000)}d ago`;
-
         return new Date(timestamp).toLocaleDateString();
     }
 
     private createSound(freqStart: number, freqEnd: number, duration: number = 0.1): () => void {
         return () => {
             try {
-                const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
+                const audioContext  = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const oscillator    = audioContext.createOscillator();
+                const gainNode      = audioContext.createGain();
 
                 oscillator.connect(gainNode);
                 gainNode.connect(audioContext.destination);
@@ -659,7 +781,9 @@ export class NotificationModule {
         localStorage.setItem('notificationSoundEnabled', enabled.toString());
     }
 
-    // ==================== BROWSER NOTIFICATIONS ====================
+    // ================================================================
+    // BROWSER NOTIFICATIONS
+    // ================================================================
 
     private requestNotificationPermission(): void {
         if (!("Notification" in window)) return;
@@ -674,26 +798,33 @@ export class NotificationModule {
         if (!("Notification" in window)) return;
         if (Notification.permission !== "granted") return;
 
-        const browserNotification = new Notification(notification.title, {
-            body: notification.message.replace(/<[^>]*>/g, ''),
-            icon: '/favicon.ico',
-            tag: 'megaflowz-notification',
+        const rich        = this.parseMessage(notification.message);
+        const bodyText    = rich?.isTrade
+            ? `${rich.direction} ${rich.symbol} ${rich.volume?.toFixed(2)}L @ ${rich.price}`
+            : notification.message.replace(/<[^>]*>/g, '');
+
+        const browserNotif = new Notification(notification.title, {
+            body:              bodyText,
+            icon:              '/favicon.ico',
+            tag:               'megaflowz-notification',
             requireInteraction: notification.persistent || false,
-            silent: !this.audioEnabled
+            silent:            !this.audioEnabled
         });
 
-        browserNotification.onclick = () => {
+        browserNotif.onclick = () => {
             window.focus();
             this.ui?.showModal();
             this.markAsRead(notification.id);
         };
 
         if (!notification.persistent) {
-            setTimeout(() => browserNotification.close(), 6000);
+            setTimeout(() => browserNotif.close(), 6000);
         }
     }
 
-    // ==================== ACTION HANDLERS ====================
+    // ================================================================
+    // ACTION HANDLERS
+    // ================================================================
 
     private triggerAction(notification: ToastNotification): void {
         if (notification.action?.callback) {
@@ -715,13 +846,9 @@ export class NotificationModule {
         }
     }
 
-    private showNotificationDetails(id: string): void {
-        const notification = this.notifications.find(n => n.id === id);
-        if (!notification) return;
-        console.log('Notification details:', notification);
-    }
-
-    // ==================== PERSISTENCE ====================
+    // ================================================================
+    // PERSISTENCE
+    // ================================================================
 
     private saveNotifications(): void {
         try {
@@ -747,39 +874,40 @@ export class NotificationModule {
         this.unreadCount = this.notifications.filter(n => !n.read).length;
     }
 
-    // ==================== PUBLIC API ====================
+    // ================================================================
+    // PUBLIC API
+    // ================================================================
 
-    public enableSound(): void { this.toggleSound(true); }
-    public disableSound(): void { this.toggleSound(false); }
+    public enableSound():                    void { this.toggleSound(true); }
+    public disableSound():                   void { this.toggleSound(false); }
     public setMaxNotifications(max: number): void { this.maxNotifications = max; }
 
-    public getStats(): {
-        total: number;
-        unread: number;
-        read: number;
-        types: { [key: string]: number };
-    } {
+    public getStats() {
         return {
-            total: this.notifications.length,
+            total:  this.notifications.length,
             unread: this.unreadCount,
-            read: this.notifications.length - this.unreadCount,
+            read:   this.notifications.length - this.unreadCount,
             types: {
                 success: this.notifications.filter(n => n.type === 'success').length,
-                error: this.notifications.filter(n => n.type === 'error').length,
+                error:   this.notifications.filter(n => n.type === 'error').length,
                 warning: this.notifications.filter(n => n.type === 'warning').length,
-                info: this.notifications.filter(n => n.type === 'info').length
+                info:    this.notifications.filter(n => n.type === 'info').length
             }
         };
     }
 
-    // ==================== UI DELEGATION ====================
+    // ================================================================
+    // UI DELEGATION
+    // ================================================================
 
-    public toggleModal(): void { this.ui?.toggleModal(); }
-    public showModal(): void { this.ui?.showModal(); this.updateNotificationList(); }
-    public hideModal(): void { this.ui?.hideModal(); }
-    public closeAllModals(): void { this.ui?.closeAllModals(); }
+    public toggleModal():     void { this.ui?.toggleModal(); }
+    public showModal():       void { this.ui?.showModal(); this.updateNotificationList(); }
+    public hideModal():       void { this.ui?.hideModal(); }
+    public closeAllModals():  void { this.ui?.closeAllModals(); }
 
-    // ==================== CLEANUP ====================
+    // ================================================================
+    // CLEANUP
+    // ================================================================
 
     public destroy(): void {
         console.log('🧹 Cleaning up Notification Module...');
@@ -797,8 +925,8 @@ export class NotificationModule {
         }
 
         this.notifications = [];
-        this.unreadCount = 0;
-        this.ui = null;
+        this.unreadCount   = 0;
+        this.ui            = null;
 
         console.log('✅ Notification Module cleanup complete');
     }
