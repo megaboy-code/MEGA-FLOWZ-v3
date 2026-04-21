@@ -4,6 +4,8 @@
 // Frontend owns visuals only — flags, icons, badges, categories
 // ================================================================
 
+import { buildFlagStack, applySymbolFlags, stripBrokerSuffix } from '../../core/symbol-icons';
+
 const FAVORITES_KEY        = 'mega_flowz_indicator_favorites';
 const SYMBOL_FAVORITES_KEY = 'mega_flowz_symbol_favorites';
 
@@ -11,41 +13,6 @@ const SYMBOL_FAVORITES_KEY = 'mega_flowz_symbol_favorites';
 // FRONTEND STATIC MAPS — visual decoration only
 // Backend never sees these
 // ================================================================
-
-const symbolIconMap: Record<string, {
-    base:      string;
-    quote:     string;
-    baseType:  'flag' | 'icon';
-    quoteType: 'flag' | 'icon';
-}> = {
-    'EURUSD': { base: 'https://flagcdn.com/w320/eu.png', quote: 'https://flagcdn.com/w320/us.png', baseType: 'flag', quoteType: 'flag' },
-    'GBPUSD': { base: 'https://flagcdn.com/w320/gb.png', quote: 'https://flagcdn.com/w320/us.png', baseType: 'flag', quoteType: 'flag' },
-    'USDJPY': { base: 'https://flagcdn.com/w320/us.png', quote: 'https://flagcdn.com/w320/jp.png', baseType: 'flag', quoteType: 'flag' },
-    'AUDUSD': { base: 'https://flagcdn.com/w320/au.png', quote: 'https://flagcdn.com/w320/us.png', baseType: 'flag', quoteType: 'flag' },
-    'USDCAD': { base: 'https://flagcdn.com/w320/us.png', quote: 'https://flagcdn.com/w320/ca.png', baseType: 'flag', quoteType: 'flag' },
-    'USDCHF': { base: 'https://flagcdn.com/w320/us.png', quote: 'https://flagcdn.com/w320/ch.png', baseType: 'flag', quoteType: 'flag' },
-    'NZDUSD': { base: 'https://flagcdn.com/w320/nz.png', quote: 'https://flagcdn.com/w320/us.png', baseType: 'flag', quoteType: 'flag' },
-    'XAUUSD': { base: 'xau', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
-    'BTCUSD': { base: 'btc', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
-    'ETHUSD': { base: 'eth', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
-    'LTCUSD': { base: 'ltc', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
-    'XRPUSD': { base: 'xrp', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
-    'GBPJPY': { base: 'https://flagcdn.com/w320/gb.png', quote: 'https://flagcdn.com/w320/jp.png', baseType: 'flag', quoteType: 'flag' },
-    'EURJPY': { base: 'https://flagcdn.com/w320/eu.png', quote: 'https://flagcdn.com/w320/jp.png', baseType: 'flag', quoteType: 'flag' },
-    'EURGBP': { base: 'https://flagcdn.com/w320/eu.png', quote: 'https://flagcdn.com/w320/gb.png', baseType: 'flag', quoteType: 'flag' },
-    'XAGUSD': { base: 'xag', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
-    'USOIL':  { base: 'oil', quote: 'https://flagcdn.com/w320/us.png', baseType: 'icon', quoteType: 'flag' },
-};
-
-const iconCircleMap: Record<string, string> = {
-    'btc': '<i class="fab fa-bitcoin"></i>',
-    'eth': '<i class="fab fa-ethereum"></i>',
-    'ltc': '<span>Ł</span>',
-    'xrp': '<span>X</span>',
-    'xau': '<i class="fas fa-coins"></i>',
-    'xag': '<i class="fas fa-coins"></i>',
-    'oil': '<i class="fas fa-oil-well"></i>',
-};
 
 const categoryMap: Record<string, string[]> = {
     majors:      ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD', 'USDCHF', 'NZDUSD'],
@@ -56,14 +23,6 @@ const categoryMap: Record<string, string[]> = {
     most_traded: ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD', 'ETHUSD'],
     top_movers:  ['XAUUSD', 'BTCUSD', 'XRPUSD', 'NAS100', 'TSLA', 'AAPL'],
 };
-
-function stripBrokerSuffix(symbol: string): string {
-    return symbol
-        .toUpperCase()
-        .replace('/', '')
-        .replace(/\.[A-Z0-9]+$/, '')
-        .replace(/[MC]$/, '');
-}
 
 // ================================================================
 // LOCAL CONFIG INTERFACES
@@ -188,29 +147,28 @@ export class ChartUI {
         if (incoming.timeframes_more?.length)    this.config.timeframes_more    = incoming.timeframes_more;
 
         if (incoming.indicators?.length) {
-    this.config.indicators = incoming.indicators.map(i => ({
-        key:           i.key,
-        label:         i.label,
-        description:   i.description,
-        badge:         i.badge,
-        type:          i.type          ?? '',
-        is_strategy:   i.is_strategy   ?? false,
-        period:        i.period        ?? 0,
-        fast_period:   i.fast_period   ?? 0,
-        slow_period:   i.slow_period   ?? 0,
-        signal_period: i.signal_period ?? 0,
-        k_period:      i.k_period      ?? 0,
-        d_period:      i.d_period      ?? 0,
-        slowing:       i.slowing       ?? 0,
-        deviation:     i.deviation     ?? 0.0,
-        overbought:    i.overbought    ?? 0,
-        oversold:      i.oversold      ?? 0,
-        volume:        i.volume        ?? 0.0,
-        price_type:    i.price_type    ?? 'close'
-    }));
-    console.log('first indicator period:', this.config.indicators[0]?.period, 'incoming period:', incoming.indicators[0]?.period);
-}
-
+            this.config.indicators = incoming.indicators.map(i => ({
+                key:           i.key,
+                label:         i.label,
+                description:   i.description,
+                badge:         i.badge,
+                type:          i.type          ?? '',
+                is_strategy:   i.is_strategy   ?? false,
+                period:        i.period        ?? 0,
+                fast_period:   i.fast_period   ?? 0,
+                slow_period:   i.slow_period   ?? 0,
+                signal_period: i.signal_period ?? 0,
+                k_period:      i.k_period      ?? 0,
+                d_period:      i.d_period      ?? 0,
+                slowing:       i.slowing       ?? 0,
+                deviation:     i.deviation     ?? 0.0,
+                overbought:    i.overbought    ?? 0,
+                oversold:      i.oversold      ?? 0,
+                volume:        i.volume        ?? 0.0,
+                price_type:    i.price_type    ?? 'close'
+            }));
+            console.log('first indicator period:', this.config.indicators[0]?.period, 'incoming period:', incoming.indicators[0]?.period);
+        }
 
         if (incoming.strategies?.length) {
             this.config.strategies = incoming.strategies.map(i => ({
@@ -268,6 +226,7 @@ export class ChartUI {
     // GET CONFIG BY KEY — called by chart-core for settings modal
     // Searches indicators, strategies, patterns by key
     // ================================================================
+
     public getConfigByKey(key: string): Record<string, any> | null {
         if (!this.config) return null;
 
@@ -332,8 +291,7 @@ export class ChartUI {
         const modalBody = document.getElementById('symbolModalBody');
         if (!modalBody) return;
 
-        const emptyFav    = document.getElementById('symbolEmptyFavorites');
-        const emptySearch = document.getElementById('symbolEmptySearch');
+        const emptyFav = document.getElementById('symbolEmptyFavorites');
 
         modalBody.querySelectorAll('.symbol-modal-row').forEach(el => el.remove());
 
@@ -355,7 +313,7 @@ export class ChartUI {
 
         if (sym.name === this.currentSymbol) row.classList.add('active');
 
-        const flagStack = this.buildFlagStack(sym.name);
+        const flagStack = buildFlagStack(sym.name);
         const starClass = isStarred ? 'symbol-star-btn active' : 'symbol-star-btn';
 
         row.innerHTML = `
@@ -370,27 +328,6 @@ export class ChartUI {
         `;
 
         return row;
-    }
-
-    private buildFlagStack(symbol: string): string {
-        const lookup = stripBrokerSuffix(symbol);
-        const config = symbolIconMap[lookup];
-
-        if (!config) {
-            return `<div class="symbol-flag-stack">
-                <div class="flag-circle flag-base" style="background:#444"></div>
-            </div>`;
-        }
-
-        const baseHtml = config.baseType === 'flag'
-            ? `<div class="flag-circle flag-base" style="background-image:url('${config.base}')"></div>`
-            : `<div class="flag-circle flag-base icon-circle ${config.base}">${iconCircleMap[config.base] || ''}</div>`;
-
-        const quoteHtml = config.quoteType === 'flag'
-            ? `<div class="flag-circle flag-quote" style="background-image:url('${config.quote}')"></div>`
-            : `<div class="flag-circle flag-quote icon-circle ${config.quote}">${iconCircleMap[config.quote] || ''}</div>`;
-
-        return `<div class="symbol-flag-stack">${baseHtml}${quoteHtml}</div>`;
     }
 
     // ================================================================
@@ -809,30 +746,7 @@ export class ChartUI {
         const baseEl  = document.getElementById('symbolFlagBase');
         const quoteEl = document.getElementById('symbolFlagQuote');
         if (!baseEl || !quoteEl) return;
-
-        const lookup = stripBrokerSuffix(symbol);
-        const config = symbolIconMap[lookup];
-        if (!config) return;
-
-        if (config.baseType === 'flag') {
-            baseEl.className             = 'flag-circle flag-base';
-            baseEl.style.backgroundImage = `url('${config.base}')`;
-            baseEl.innerHTML             = '';
-        } else {
-            baseEl.className             = `flag-circle flag-base icon-circle ${config.base}`;
-            baseEl.style.backgroundImage = '';
-            baseEl.innerHTML             = iconCircleMap[config.base] || '';
-        }
-
-        if (config.quoteType === 'flag') {
-            quoteEl.className             = 'flag-circle flag-quote';
-            quoteEl.style.backgroundImage = `url('${config.quote}')`;
-            quoteEl.innerHTML             = '';
-        } else {
-            quoteEl.className             = `flag-circle flag-quote icon-circle ${config.quote}`;
-            quoteEl.style.backgroundImage = '';
-            quoteEl.innerHTML             = iconCircleMap[config.quote] || '';
-        }
+        applySymbolFlags(baseEl, quoteEl, symbol);
     }
 
     // ================================================================
