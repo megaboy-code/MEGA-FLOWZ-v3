@@ -5,6 +5,8 @@
 // Lines built from LegendItem.values — one row per line
 // Period override — dispatches resubscribe with new period
 // Position — opens near clicked legend item
+// Live preview — color, price line, last value, crosshair marker
+// Apply only  — line width, period
 // ================================================================
 
 import { LegendItem } from '../chart-types';
@@ -20,6 +22,7 @@ interface LineSettings {
 
 const LINE_DISPLAY_NAMES: Record<string, string> = {
     'ema':  'Line',
+    'sma':  'Line',
     'fast': 'Fast Line',
     'slow': 'Slow Line',
     'line': 'Line',
@@ -54,7 +57,6 @@ export class IndicatorSettingsModal {
         this.isStrategy  = item.icon === 'fa-robot';
         this.triggerRect = triggerRect || null;
 
-        // ── savedLines attached by chart-core before opening modal ──
         const savedLines = (item.settings as any)?.savedLines as
             Record<string, {
                 color:                  string;
@@ -64,7 +66,6 @@ export class IndicatorSettingsModal {
                 crosshairMarkerVisible: boolean;
             }> | undefined;
 
-        // ── Build line settings — v.key is backend name, seed from savedLines ──
         this.lineSettings = (item.values || []).map(v => {
             const name  = (v as any).key || v.label || 'ema';
             const saved = savedLines?.[name];
@@ -145,6 +146,31 @@ export class IndicatorSettingsModal {
             document.body.removeChild(this.modal);
         }
         this.modal = null;
+    }
+
+    // ================================================================
+    // LIVE DISPATCH — fires immediately, line width excluded
+    // ================================================================
+    private dispatchLivePreview(): void {
+        const lines: Record<string, {
+            color:                  string;
+            priceLineVisible:       boolean;
+            lastValueVisible:       boolean;
+            crosshairMarkerVisible: boolean;
+        }> = {};
+
+        this.lineSettings.forEach(line => {
+            lines[line.name] = {
+                color:                  line.color,
+                priceLineVisible:       line.priceLineVisible,
+                lastValueVisible:       line.lastValueVisible,
+                crosshairMarkerVisible: line.crosshairMarkerVisible
+            };
+        });
+
+        document.dispatchEvent(new CustomEvent('indicator-settings-changed', {
+            detail: { indicatorId: this.item.id, lines }
+        }));
     }
 
     // ================================================================
@@ -268,7 +294,7 @@ export class IndicatorSettingsModal {
     }
 
     // ================================================================
-    // PERIOD INPUTS
+    // PERIOD INPUTS — apply only
     // ================================================================
     private createPeriodInputs(): HTMLElement | null {
         const settings = this.item.settings as Record<string, any> | undefined;
@@ -336,7 +362,7 @@ export class IndicatorSettingsModal {
     }
 
     // ================================================================
-    // LINE ROW
+    // LINE ROW — color live, width apply only
     // ================================================================
     private createLineRow(line: LineSettings, index: number): HTMLElement {
         const wrapper = document.createElement('div');
@@ -358,6 +384,7 @@ export class IndicatorSettingsModal {
         `;
         label.textContent = LINE_DISPLAY_NAMES[line.name] ?? 'Line';
 
+        // ── Width — apply only ──
         const widthInput   = document.createElement('input');
         widthInput.type    = 'number';
         widthInput.value   = String(line.lineWidth);
@@ -383,6 +410,7 @@ export class IndicatorSettingsModal {
             this.lineSettings[index].lineWidth = parseInt(widthInput.value) || 1;
         });
 
+        // ── Color — live preview ──
         const preview = document.createElement('div');
         preview.style.cssText = `
             width: 32px;
@@ -408,6 +436,8 @@ export class IndicatorSettingsModal {
                         : hex;
                     this.lineSettings[index].color = newColor;
                     preview.style.backgroundColor  = this.toDisplayColor(newColor);
+                    // ── Live preview ──
+                    this.dispatchLivePreview();
                 }
             });
             picker.open(preview);
@@ -420,7 +450,7 @@ export class IndicatorSettingsModal {
     }
 
     // ================================================================
-    // DISPLAY OPTIONS — seeded from lineSettings[0]
+    // DISPLAY OPTIONS — all live
     // ================================================================
     private createDisplayOptions(): HTMLElement {
         const wrapper = document.createElement('div');
@@ -454,7 +484,6 @@ export class IndicatorSettingsModal {
 
             const checkbox   = document.createElement('input');
             checkbox.type    = 'checkbox';
-            // ── Seed from saved settings ──
             checkbox.checked = (first?.[opt.key] as boolean) ?? true;
             checkbox.style.cssText = `
                 width: 16px;
@@ -463,9 +492,11 @@ export class IndicatorSettingsModal {
                 accent-color: var(--accent-info);
             `;
             checkbox.addEventListener('change', () => {
+                // ── Apply to all lines + live dispatch ──
                 this.lineSettings.forEach(line => {
                     (line as any)[opt.key] = checkbox.checked;
                 });
+                this.dispatchLivePreview();
             });
 
             row.appendChild(label);
@@ -548,7 +579,7 @@ export class IndicatorSettingsModal {
     }
 
     // ================================================================
-    // APPLY
+    // APPLY — commits line width + period on button click
     // ================================================================
     private applySettings(): void {
         const lines: Record<string, {
