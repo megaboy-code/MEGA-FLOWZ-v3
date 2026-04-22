@@ -517,6 +517,10 @@ export class ChartDrawingModule {
     }
   }
 
+  // ================================================================
+  // ON DATA READY
+  // ================================================================
+
   public async onDataReady(): Promise<void> {
     if (!this.lineTools || !this.isInitialized) return;
 
@@ -524,9 +528,9 @@ export class ChartDrawingModule {
     if (this._isSwitchingChartType) return;
 
     try {
-      await new Promise<void>(resolve => requestAnimationFrame(() =>
-        requestAnimationFrame(() => resolve())
-      ));
+      // ✅ Wait for scale to have valid range — no fixed frame count
+      // Polls until time scale is fully initialized with new TF data
+      await this.waitForScaleReady();
 
       if (!this.lineTools || !this.isInitialized) return;
 
@@ -535,7 +539,7 @@ export class ChartDrawingModule {
         TOOL_GROUP_MAP
       );
 
-      // ✅ Fix flicker — enforce visibility after import
+      // ✅ Enforce visibility after import
       this.tfManager.applyTFVisibility(this._currentTimeframe);
 
       console.log(`📐 Drawings restored for ${this._currentSymbol} ${this._currentTimeframe}`);
@@ -544,6 +548,26 @@ export class ChartDrawingModule {
     } catch (error) {
       console.error('❌ onDataReady failed:', error);
     }
+  }
+
+  // ✅ Wait for time scale to have a valid visible range
+  // Means chart has rendered new data and scale is stable
+  private waitForScaleReady(): Promise<void> {
+    return new Promise<void>(resolve => {
+      const chart = this.chart;
+      if (!chart) { resolve(); return; }
+
+      const check = () => {
+        const range = chart.timeScale().getVisibleLogicalRange();
+        if (range && range.to > range.from) {
+          resolve();
+        } else {
+          requestAnimationFrame(check);
+        }
+      };
+
+      requestAnimationFrame(check);
+    });
   }
 
   // ================================================================
@@ -686,6 +710,7 @@ export class ChartDrawingModule {
           if (Array.isArray(parsed) && parsed.length > 0) {
             if (parsed[0].options?.locked) return;
 
+            // ✅ Hide immediately — no detach
             this.lineTools.applyLineToolOptions({
               id:       toolId,
               toolType: parsed[0].toolType,
@@ -695,7 +720,10 @@ export class ChartDrawingModule {
         }
       }
 
+      // ✅ Mark deleted in metaMap
       this.persistence.deleteMeta(toolId);
+
+      // ✅ Remove from global storage immediately
       this.persistence.removeToolFromStorage(toolId);
 
       console.log(`🗑️ Tool ${toolId} deleted`);
