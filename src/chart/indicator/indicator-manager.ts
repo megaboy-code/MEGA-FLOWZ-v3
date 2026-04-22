@@ -112,6 +112,9 @@ export class IndicatorManager {
 
     private paramsMap: Map<string, IndicatorParams> = new Map();
 
+    // ── Period overrides — persisted across TF and symbol changes ──
+    private periodOverrides: Map<string, number> = new Map();
+
     // ── Persisted line settings — key = indicator key (e.g. 'EMA') ──
     private savedSettings: Map<string, Map<string, SavedLineSettings>> = new Map();
 
@@ -145,6 +148,9 @@ export class IndicatorManager {
                 .find(v => v > 0) ?? 0;
 
             if (period === 0) return;
+
+            // ── Persist override ──
+            this.periodOverrides.set(indicator.key, period);
 
             document.dispatchEvent(new CustomEvent('indicator-removed', {
                 detail: {
@@ -197,23 +203,38 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // GET PERIOD LABEL
+    // GET PERIOD LABEL — override first, fallback to paramsMap
     // ================================================================
     private getPeriodLabel(key: string, lineName: string): string {
         const params = this.paramsMap.get(key);
         if (!params) return '';
 
         if (lineName === 'ema' || lineName === 'sma' || lineName === 'line') {
-            return params.period > 0 ? String(params.period) : '';
+            const period = this.periodOverrides.get(key) ?? params.period;
+            return period > 0 ? `(${period})` : '';
         }
         if (lineName === 'fast') {
-            return params.fast_period > 0 ? String(params.fast_period) : '';
+            return params.fast_period > 0 ? `(${params.fast_period})` : '';
         }
         if (lineName === 'slow') {
-            return params.slow_period > 0 ? String(params.slow_period) : '';
+            return params.slow_period > 0 ? `(${params.slow_period})` : '';
         }
 
         return '';
+    }
+
+    // ================================================================
+    // GET EFFECTIVE SETTINGS — merges paramsMap with period override
+    // Used when opening settings modal — period shows current override
+    // ================================================================
+    private getEffectiveSettings(key: string): Record<string, any> {
+        const params = this.paramsMap.get(key);
+        if (!params) return {};
+        const override = this.periodOverrides.get(key);
+        return {
+            ...params,
+            period: override ?? params.period
+        };
     }
 
     // ================================================================
@@ -347,7 +368,8 @@ export class IndicatorManager {
                     icon:     isStrategy ? 'fa-robot' : undefined,
                     pane:     null,
                     values:   legendValues,
-                    settings: params ? { ...params } : {}
+                    // ── Effective settings — period reflects override ──
+                    settings: this.getEffectiveSettings(data.key)
                 }
             }));
         }
@@ -468,8 +490,14 @@ export class IndicatorManager {
                 detail: { oldId, newId }
             }));
 
+            // ── Pass period override if exists ──
             document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
-                detail: { key, symbol, timeframe: newTimeframe }
+                detail: {
+                    key,
+                    symbol,
+                    timeframe: newTimeframe,
+                    period:    this.periodOverrides.get(key) ?? 0
+                }
             }));
         });
     }
@@ -539,8 +567,14 @@ export class IndicatorManager {
                 detail: { oldId, newId }
             }));
 
+            // ── Pass period override if exists ──
             document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
-                detail: { key, symbol: newSymbol, timeframe }
+                detail: {
+                    key,
+                    symbol:    newSymbol,
+                    timeframe,
+                    period:    this.periodOverrides.get(key) ?? 0
+                }
             }));
         });
     }
@@ -550,6 +584,7 @@ export class IndicatorManager {
         this.pool.clear();
         this.legendIds.clear();
         this.savedSettings.clear();
+        this.periodOverrides.clear();
     }
 
     // ================================================================
@@ -563,6 +598,7 @@ export class IndicatorManager {
         this.pool.delete(id);
         this.legendIds.delete(indicator.key);
         this.savedSettings.delete(indicator.key);
+        this.periodOverrides.delete(indicator.key);
 
         document.dispatchEvent(new CustomEvent('indicator-removed', {
             detail: {
@@ -670,6 +706,7 @@ export class IndicatorManager {
         this.legendIds.clear();
         this.paramsMap.clear();
         this.savedSettings.clear();
+        this.periodOverrides.clear();
         this.chart     = null;
         this.mainChart = null;
     }
