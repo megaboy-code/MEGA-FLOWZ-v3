@@ -166,6 +166,12 @@ export class ChartLegend {
             const { id, settings } = (e as CustomEvent).detail;
             if (id && settings) this.itemsLegend.updateSettings(id, settings);
         }, { signal });
+
+        // ── Strategy TF inactive — remove legend item only, panel stays ──
+        document.addEventListener('indicator-tf-inactive', (e: Event) => {
+            const { id } = (e as CustomEvent).detail;
+            this.removeItem(id);
+        }, { signal });
     }
 
     // ==================== PUBLIC API ====================
