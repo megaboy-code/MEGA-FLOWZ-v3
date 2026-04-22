@@ -254,8 +254,22 @@ priceType(optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
+symbol():string|null
+symbol(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+symbol(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 40);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
+timeframe():string|null
+timeframe(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+timeframe(optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 42);
+  return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
+}
+
 static startAvailableItem(builder:flatbuffers.Builder) {
-  builder.startObject(18);
+  builder.startObject(20);
 }
 
 static addKey(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset) {
@@ -330,12 +344,20 @@ static addPriceType(builder:flatbuffers.Builder, priceTypeOffset:flatbuffers.Off
   builder.addFieldOffset(17, priceTypeOffset, 0);
 }
 
+static addSymbol(builder:flatbuffers.Builder, symbolOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(18, symbolOffset, 0);
+}
+
+static addTimeframe(builder:flatbuffers.Builder, timeframeOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(19, timeframeOffset, 0);
+}
+
 static endAvailableItem(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createAvailableItem(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset, labelOffset:flatbuffers.Offset, descriptionOffset:flatbuffers.Offset, badgeOffset:flatbuffers.Offset, typeOffset:flatbuffers.Offset, isStrategy:boolean, period:number, fastPeriod:number, slowPeriod:number, signalPeriod:number, kPeriod:number, dPeriod:number, slowing:number, deviation:number, overbought:number, oversold:number, volume:number, priceTypeOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createAvailableItem(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset, labelOffset:flatbuffers.Offset, descriptionOffset:flatbuffers.Offset, badgeOffset:flatbuffers.Offset, typeOffset:flatbuffers.Offset, isStrategy:boolean, period:number, fastPeriod:number, slowPeriod:number, signalPeriod:number, kPeriod:number, dPeriod:number, slowing:number, deviation:number, overbought:number, oversold:number, volume:number, priceTypeOffset:flatbuffers.Offset, symbolOffset:flatbuffers.Offset, timeframeOffset:flatbuffers.Offset):flatbuffers.Offset {
   AvailableItem.startAvailableItem(builder);
   AvailableItem.addKey(builder, keyOffset);
   AvailableItem.addLabel(builder, labelOffset);
@@ -355,6 +377,8 @@ static createAvailableItem(builder:flatbuffers.Builder, keyOffset:flatbuffers.Of
   AvailableItem.addOversold(builder, oversold);
   AvailableItem.addVolume(builder, volume);
   AvailableItem.addPriceType(builder, priceTypeOffset);
+  AvailableItem.addSymbol(builder, symbolOffset);
+  AvailableItem.addTimeframe(builder, timeframeOffset);
   return AvailableItem.endAvailableItem(builder);
 }
 }
