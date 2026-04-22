@@ -1084,7 +1084,7 @@ export class ChartUI {
 
         document.dispatchEvent(new CustomEvent('deploy-strategy', {
             detail: {
-                strategyType: key.toLowerCase(),
+                strategyType: key,
                 symbol:       this.currentSymbol,
                 timeframe:    this.currentTimeframe,
                 params:       {}
