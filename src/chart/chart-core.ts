@@ -597,7 +597,14 @@ export class ChartModule {
 
             const key    = id.split('_')[0];
             const config = this.chartUI?.getConfigByKey(key);
-            if (config) item.settings = { ...config };
+
+            // ── Merge config with existing settings — existing period override wins ──
+            if (config) {
+                item.settings = {
+                    ...config,
+                    ...item.settings
+                };
+            }
 
             // ── Attach saved line settings so modal seeds correctly ──
             const saved = this.indicatorManager?.getSavedSettings(key);
