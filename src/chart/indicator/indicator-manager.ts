@@ -5,10 +5,17 @@
 // Series never removed — hide/show/reuse for performance
 // One series per line in IndicatorUpdate.lines[]
 // Colors and line width owned by frontend
+// Persistence — active subs + period overrides in localStorage
 // ================================================================
 
 import { LineSeries, ISeriesApi, SeriesType } from 'lightweight-charts';
 import { getDecimalPrecision }                from '../chart-utils';
+
+// ================================================================
+// LOCALSTORAGE KEYS
+// ================================================================
+const LS_PERIOD_OVERRIDES = 'indicator_period_overrides';
+const LS_ACTIVE_SUBS      = 'indicator_active_subs';
 
 // ================================================================
 // DEFAULT COLORS — per indicator key, fallback to cycle
@@ -89,6 +96,16 @@ export interface IndicatorUpdatePayload {
 }
 
 // ================================================================
+// ACTIVE SUB — persisted to localStorage
+// ================================================================
+interface ActiveSub {
+    key:       string;
+    symbol:    string;
+    timeframe: string;
+    period:    number;
+}
+
+// ================================================================
 // SAVED LINE SETTINGS — persisted across TF changes
 // ================================================================
 interface SavedLineSettings {
@@ -112,8 +129,11 @@ export class IndicatorManager {
 
     private paramsMap: Map<string, IndicatorParams> = new Map();
 
-    // ── Period overrides — persisted across TF and symbol changes ──
+    // ── Period overrides — persisted to localStorage ──
     private periodOverrides: Map<string, number> = new Map();
+
+    // ── Active subs — persisted to localStorage ──
+    private activeSubs: Map<string, ActiveSub> = new Map();
 
     // ── Persisted line settings — key = indicator key (e.g. 'EMA') ──
     private savedSettings: Map<string, Map<string, SavedLineSettings>> = new Map();
@@ -129,8 +149,48 @@ export class IndicatorManager {
     public setSymbol(symbol: string):    void { this.currentSymbol = symbol; }
 
     public initialize(): void {
+        // ── Restore period overrides from localStorage ──
+        try {
+            const saved = localStorage.getItem(LS_PERIOD_OVERRIDES);
+            if (saved) {
+                const parsed = JSON.parse(saved) as Record<string, number>;
+                Object.entries(parsed).forEach(([key, period]) => {
+                    this.periodOverrides.set(key, period);
+                });
+            }
+        } catch (e) {}
+
+        // ── Restore active subs from localStorage ──
+        try {
+            const saved = localStorage.getItem(LS_ACTIVE_SUBS);
+            if (saved) {
+                const parsed = JSON.parse(saved) as ActiveSub[];
+                parsed.forEach(sub => {
+                    this.activeSubs.set(sub.key, sub);
+                });
+            }
+        } catch (e) {}
+
         this.abortController = new AbortController();
         const { signal } = this.abortController;
+
+        // ── On chart initial data loaded — resubscribe persisted indicators ──
+        document.addEventListener('chart-initial-data-loaded', (e: Event) => {
+            const { symbol, timeframe } = (e as CustomEvent).detail;
+            if (!symbol || !timeframe) return;
+
+            this.activeSubs.forEach(sub => {
+                const period = this.periodOverrides.get(sub.key) ?? sub.period;
+                document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
+                    detail: {
+                        key:      sub.key,
+                        symbol,
+                        timeframe,
+                        period
+                    }
+                }));
+            });
+        }, { signal });
 
         document.addEventListener('indicator-settings-changed', (e: Event) => {
             const { indicatorId, lines } = (e as CustomEvent).detail;
@@ -151,6 +211,22 @@ export class IndicatorManager {
 
             // ── Persist override ──
             this.periodOverrides.set(indicator.key, period);
+            this.persistPeriodOverrides();
+
+            // ── Update active sub period ──
+            const sub = this.activeSubs.get(indicator.key);
+            if (sub) {
+                sub.period = period;
+                this.persistActiveSubs();
+            }
+
+            // ── Update legend item settings so modal seeds correctly ──
+            document.dispatchEvent(new CustomEvent('indicator-settings-update', {
+                detail: {
+                    id:       indicatorId,
+                    settings: this.getEffectiveSettings(indicator.key)
+                }
+            }));
 
             document.dispatchEvent(new CustomEvent('indicator-removed', {
                 detail: {
@@ -203,6 +279,27 @@ export class IndicatorManager {
     }
 
     // ================================================================
+    // PERSIST HELPERS
+    // ================================================================
+    private persistPeriodOverrides(): void {
+        try {
+            localStorage.setItem(
+                LS_PERIOD_OVERRIDES,
+                JSON.stringify(Object.fromEntries(this.periodOverrides))
+            );
+        } catch (e) {}
+    }
+
+    private persistActiveSubs(): void {
+        try {
+            localStorage.setItem(
+                LS_ACTIVE_SUBS,
+                JSON.stringify(Array.from(this.activeSubs.values()))
+            );
+        } catch (e) {}
+    }
+
+    // ================================================================
     // GET PERIOD LABEL — override first, fallback to paramsMap
     // ================================================================
     private getPeriodLabel(key: string, lineName: string): string {
@@ -225,7 +322,6 @@ export class IndicatorManager {
 
     // ================================================================
     // GET EFFECTIVE SETTINGS — merges paramsMap with period override
-    // Used when opening settings modal — period shows current override
     // ================================================================
     private getEffectiveSettings(key: string): Record<string, any> {
         const params = this.paramsMap.get(key);
@@ -293,7 +389,6 @@ export class IndicatorManager {
         data.lines.forEach((line, index) => {
             const saved = keySaved.get(line.name);
 
-            // ── Default color: saved → per-key map → cycle ──
             const color = saved?.color
                 ?? INDICATOR_COLORS[data.key]
                 ?? LINE_COLORS[index % LINE_COLORS.length];
@@ -354,6 +449,18 @@ export class IndicatorManager {
 
         this.pool.set(id, indicator);
 
+        // ── Track active sub — indicators only, not strategies ──
+        if (!isStrategy) {
+            const period = this.periodOverrides.get(data.key) ?? 0;
+            this.activeSubs.set(data.key, {
+                key:       data.key,
+                symbol:    data.symbol,
+                timeframe: data.timeframe,
+                period
+            });
+            this.persistActiveSubs();
+        }
+
         if (this.legendIds.has(data.key)) {
             document.dispatchEvent(new CustomEvent('indicator-value-update', {
                 detail: { id, values: legendValues }
@@ -368,7 +475,6 @@ export class IndicatorManager {
                     icon:     isStrategy ? 'fa-robot' : undefined,
                     pane:     null,
                     values:   legendValues,
-                    // ── Effective settings — period reflects override ──
                     settings: this.getEffectiveSettings(data.key)
                 }
             }));
@@ -486,11 +592,17 @@ export class IndicatorManager {
             indicator.active    = false;
             this.pool.set(newId, indicator);
 
+            // ── Update persisted sub timeframe ──
+            const sub = this.activeSubs.get(key);
+            if (sub) {
+                sub.timeframe = newTimeframe;
+                this.persistActiveSubs();
+            }
+
             document.dispatchEvent(new CustomEvent('indicator-id-updated', {
                 detail: { oldId, newId }
             }));
 
-            // ── Pass period override if exists ──
             document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
                 detail: {
                     key,
@@ -563,11 +675,17 @@ export class IndicatorManager {
             indicator.active = false;
             this.pool.set(newId, indicator);
 
+            // ── Update persisted sub symbol ──
+            const sub = this.activeSubs.get(key);
+            if (sub) {
+                sub.symbol = newSymbol;
+                this.persistActiveSubs();
+            }
+
             document.dispatchEvent(new CustomEvent('indicator-id-updated', {
                 detail: { oldId, newId }
             }));
 
-            // ── Pass period override if exists ──
             document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
                 detail: {
                     key,
@@ -579,16 +697,23 @@ export class IndicatorManager {
         });
     }
 
+    // ================================================================
+    // CLEAR ALL — wipes memory only, localStorage preserved
+    // Called on disconnect — subs survive for refresh/reconnect restore
+    // ================================================================
     public clearAll(): void {
         this.pool.forEach(indicator => { this.clearSeriesData(indicator); });
         this.pool.clear();
         this.legendIds.clear();
         this.savedSettings.clear();
         this.periodOverrides.clear();
+        this.activeSubs.clear();
+        // ── localStorage NOT cleared — preserved for refresh/reconnect ──
     }
 
     // ================================================================
-    // REMOVE
+    // REMOVE — user explicitly removes indicator
+    // Clears localStorage entry for this key
     // ================================================================
     public removeIndicator(id: string): void {
         const indicator = this.pool.get(id);
@@ -599,6 +724,9 @@ export class IndicatorManager {
         this.legendIds.delete(indicator.key);
         this.savedSettings.delete(indicator.key);
         this.periodOverrides.delete(indicator.key);
+        this.activeSubs.delete(indicator.key);
+        this.persistPeriodOverrides();
+        this.persistActiveSubs();
 
         document.dispatchEvent(new CustomEvent('indicator-removed', {
             detail: {
@@ -707,6 +835,8 @@ export class IndicatorManager {
         this.paramsMap.clear();
         this.savedSettings.clear();
         this.periodOverrides.clear();
+        this.activeSubs.clear();
+        // ── localStorage NOT cleared — preserved for refresh/reconnect ──
         this.chart     = null;
         this.mainChart = null;
     }
