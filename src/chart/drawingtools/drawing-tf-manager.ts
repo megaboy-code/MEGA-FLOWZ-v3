@@ -47,12 +47,10 @@ export class DrawingTFManager {
         onTFUpdated(newTimeframe);
         this.removeTradeArrows();
 
-        // ✅ Wait for new TF scale to stabilize before applying visibility
-        await new Promise<void>(resolve => requestAnimationFrame(() =>
-            requestAnimationFrame(() => resolve())
-        ));
-
-        this.applyTFVisibility(newTimeframe);
+        // ✅ Hard remove soft-deleted ghosts after switch
+        // Safe — engine has moved to new TF context, deleted tools
+        // are already visible:false and not in any render cycle
+        this.persistence.purgeDeletedTools();
     }
 
     public async onSymbolChange(
@@ -64,6 +62,11 @@ export class DrawingTFManager {
         this.persistence.saveDrawings();
         onSymUpdated(newSymbol);
         this.removeTradeArrows();
+
+        // ✅ Hard remove soft-deleted ghosts after switch
+        // Safe — engine has moved to new symbol context, deleted tools
+        // are already visible:false and not in any render cycle
+        this.persistence.purgeDeletedTools();
     }
 
     // ==================== VISIBILITY ====================
