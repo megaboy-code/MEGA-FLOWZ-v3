@@ -464,12 +464,14 @@ export class ModuleManager {
             );
         });
 
-        // ── Remove strategy ──
+        // ── Remove strategy — FIXED: use strategyType, symbol, timeframe ──
         document.addEventListener('remove-strategy', (e: Event) => {
-            const { strategyId } = (e as CustomEvent).detail;
-            if (!strategyId) return;
-            this.connectionManager.removeStrategy(strategyId);
-            this.chart?.getIndicatorManager()?.removeIndicator(strategyId);
+            const { strategyType, symbol, timeframe } = (e as CustomEvent).detail;
+            if (!strategyType) return;
+            const sym = symbol    || this.connectionManager.getCurrentSymbol();
+            const tf  = timeframe || this.connectionManager.getCurrentTimeframe();
+            this.connectionManager.removeStrategy(strategyType, sym, tf);
+            this.chart?.getIndicatorManager()?.removeIndicator(strategyType);
             this.updateStrategiesBadge();
         });
 
