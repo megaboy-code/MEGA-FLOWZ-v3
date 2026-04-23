@@ -163,8 +163,6 @@ export class ModuleManager {
         this.connectionManager.onIndicatorUpdate((data) => {
             this.chart?.getIndicatorManager()?.onIndicatorUpdate(data);
 
-            // ── Bug 2 fix: use full id so strategies with same key but different
-            //    symbol/TF don't overwrite each other in the panel ──
             if (data.lines.length > 1) {
                 this.strategiesInstance?.addStrategy({
                     id:        `${data.key}_${data.symbol}_${data.timeframe}`,
@@ -315,7 +313,6 @@ export class ModuleManager {
                 }
             ));
 
-            // ── Populate strategies panel from GET_ACTIVE_STRATEGIES response ──
             if (config.strategies && config.strategies.length > 0) {
                 const instances = config.strategies.filter(
                     (s: AvailableItemData) => s.symbol && s.timeframe
@@ -415,13 +412,11 @@ export class ModuleManager {
         document.addEventListener('timeframe-changed', (e: Event) => {
             const { timeframe } = (e as CustomEvent).detail;
             if (!timeframe) return;
-            // ── Pass new timeframe to indicator manager before setTimeframe ──
             this.chart?.getIndicatorManager()?.onTimeframeChange(timeframe);
             this.connectionManager.setTimeframe(timeframe);
             this.chart?.handleTimeframeChange(timeframe);
         });
 
-        // ── Resubscribe indicator — timeframe comes from event detail ──
         document.addEventListener('resubscribe-indicator', (e: Event) => {
             const { key, symbol, timeframe, period } = (e as CustomEvent).detail;
             if (!key || !symbol) return;
@@ -484,7 +479,6 @@ export class ModuleManager {
             );
         });
 
-        // ── Add indicator — subscribe to backend ──
         document.addEventListener('add-indicator', (e: Event) => {
             const { type } = (e as CustomEvent).detail;
             if (!type || type === 'VOLUME') return;
@@ -495,7 +489,6 @@ export class ModuleManager {
             );
         });
 
-        // ── Deploy strategy — send to backend ──
         document.addEventListener('deploy-strategy', (e: Event) => {
             const { strategyType, symbol, timeframe, params } =
                 (e as CustomEvent).detail;
@@ -514,27 +507,22 @@ export class ModuleManager {
             const sym = symbol    || this.connectionManager.getCurrentSymbol();
             const tf  = timeframe || this.connectionManager.getCurrentTimeframe();
 
-            // ── Remove from backend ──
-            this.connectionManager.removeStrategy(strategyType, sym, tf);
-
-            // ── Remove from chart — full pool id ──
             const fullId = `${strategyType}_${sym}_${tf}`;
+            console.log('🔴 remove-strategy received:', { strategyType, symbol, timeframe });
+            console.log('🔴 fullId built:', fullId);
+
+            this.connectionManager.removeStrategy(strategyType, sym, tf);
             this.chart?.getIndicatorManager()?.removeStrategyFromChart(fullId);
-
-            // ── Remove from strategies panel ──
             this.strategiesInstance?.removeStrategyById(fullId);
-
             this.updateStrategiesBadge();
         });
 
-        // ── Update strategy ──
         document.addEventListener('update-strategy', (e: Event) => {
             const { strategyId, updates } = (e as CustomEvent).detail;
             if (strategyId && updates)
                 this.connectionManager.updateStrategy(strategyId, updates);
         });
 
-        // ── Remove indicator — backend unsubscribe ──
         document.addEventListener('indicator-removed', (e: Event) => {
             const { key, symbol, timeframe } = (e as CustomEvent).detail;
             if (key && symbol && timeframe) {
