@@ -574,8 +574,6 @@ export class IndicatorManager {
 
     // ================================================================
     // ON TIMEFRAME CHANGE
-    // Indicators — unsub old, resub new TF
-    // Strategies — clear chart lines + legend only, backend manages lifecycle
     // ================================================================
     public onTimeframeChange(newTimeframe: string): void {
         const toUpdate: Array<{
@@ -590,11 +588,9 @@ export class IndicatorManager {
 
         this.pool.forEach((indicator, id) => {
             if (indicator.isStrategy) {
-                // ── Strategy: clear lines + hide legend, stay in pool ──
                 this.clearSeriesData(indicator);
                 toHide.push(id);
             } else {
-                // ── Indicator: unsub old TF, resub new TF ──
                 document.dispatchEvent(new CustomEvent('indicator-removed', {
                     detail: {
                         key:       indicator.key,
@@ -615,7 +611,6 @@ export class IndicatorManager {
             }
         });
 
-        // ── Hide strategy legend items — dispatch indicator-tf-inactive ──
         toHide.forEach(id => {
             document.dispatchEvent(new CustomEvent('indicator-tf-inactive', {
                 detail: { id, deployedTF: this.pool.get(id)?.timeframe }
@@ -629,11 +624,9 @@ export class IndicatorManager {
             indicator.active    = false;
             this.pool.set(newId, indicator);
 
-            // ── Update legendIds to new id ──
             this.legendIds.delete(oldId);
             this.legendIds.add(newId);
 
-            // ── Update persisted sub timeframe ──
             const sub = this.activeSubs.get(key);
             if (sub) {
                 sub.timeframe = newTimeframe;
@@ -657,8 +650,6 @@ export class IndicatorManager {
 
     // ================================================================
     // ON SYMBOL CHANGE
-    // Indicators — unsub old, resub new symbol
-    // Strategies — clear chart lines + legend only, backend manages lifecycle
     // ================================================================
     public onSymbolChange(newSymbol: string): void {
         const toUpdate: Array<{
@@ -673,11 +664,9 @@ export class IndicatorManager {
 
         this.pool.forEach((indicator, id) => {
             if (indicator.isStrategy) {
-                // ── Strategy: clear lines + hide legend, stay in pool ──
                 this.clearSeriesData(indicator);
                 toHide.push(id);
             } else {
-                // ── Indicator: unsub old symbol, resub new symbol ──
                 document.dispatchEvent(new CustomEvent('indicator-removed', {
                     detail: {
                         key:       indicator.key,
@@ -698,7 +687,6 @@ export class IndicatorManager {
             }
         });
 
-        // ── Hide strategy legend items only — no pool delete, no backend call ──
         toHide.forEach(id => {
             document.dispatchEvent(new CustomEvent('indicator-tf-inactive', {
                 detail: { id }
@@ -712,11 +700,9 @@ export class IndicatorManager {
             indicator.active = false;
             this.pool.set(newId, indicator);
 
-            // ── Update legendIds to new id ──
             this.legendIds.delete(oldId);
             this.legendIds.add(newId);
 
-            // ── Update persisted sub symbol ──
             const sub = this.activeSubs.get(key);
             if (sub) {
                 sub.symbol = newSymbol;
@@ -739,7 +725,7 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // CLEAR ALL — wipes memory only, localStorage preserved
+    // CLEAR ALL
     // ================================================================
     public clearAll(): void {
         this.pool.forEach(indicator => { this.clearSeriesData(indicator); });
@@ -748,11 +734,10 @@ export class IndicatorManager {
         this.savedSettings.clear();
         this.periodOverrides.clear();
         this.activeSubs.clear();
-        // ── localStorage NOT cleared — preserved for refresh/reconnect ──
     }
 
     // ================================================================
-    // REMOVE — user explicitly removes indicator (calls backend unsubscribe)
+    // REMOVE INDICATOR
     // ================================================================
     public removeIndicator(id: string): void {
         const indicator = this.pool.get(id);
@@ -778,6 +763,7 @@ export class IndicatorManager {
 
     // ================================================================
     // REMOVE STRATEGY FROM CHART — frontend only, no backend call
+    // ── Also dispatches legend-item-remove so legend clears too ──
     // ================================================================
     public removeStrategyFromChart(id: string): void {
         const indicator = this.pool.get(id);
@@ -794,6 +780,11 @@ export class IndicatorManager {
         this.activeSubs.delete(indicator.key);
         this.persistPeriodOverrides();
         this.persistActiveSubs();
+
+        // ── Tell legend to remove item ──
+        document.dispatchEvent(new CustomEvent('legend-item-remove', {
+            detail: { id }
+        }));
     }
 
     // ================================================================
@@ -810,7 +801,7 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // UPDATE LINES — applies color/width/options + dispatches legend update
+    // UPDATE LINES
     // ================================================================
     private updateLines(
         id:    string,
@@ -916,7 +907,6 @@ export class IndicatorManager {
         this.savedSettings.clear();
         this.periodOverrides.clear();
         this.activeSubs.clear();
-        // ── localStorage NOT cleared — preserved for refresh/reconnect ──
         this.chart     = null;
         this.mainChart = null;
     }
