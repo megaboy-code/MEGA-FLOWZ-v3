@@ -661,13 +661,7 @@ export class IndicatorManager {
         this.pool.forEach((indicator, id) => {
             if (indicator.isStrategy) {
                 this.clearSeriesData(indicator);
-                document.dispatchEvent(new CustomEvent('indicator-removed', {
-                    detail: {
-                        key:       indicator.key,
-                        symbol:    indicator.symbol,
-                        timeframe: indicator.timeframe
-                    }
-                }));
+                // ── Strategies: no indicator-removed dispatch — backend manages lifecycle ──
                 document.dispatchEvent(new CustomEvent('legend-item-remove', {
                     detail: { id }
                 }));
