@@ -61,10 +61,13 @@ export class WatchlistModule {
 
         this.bindEvents();
 
-        // ── Listen for backend config ──
+        // ── Only populate from available-config if it contains symbols ──
+        // GET_STARTUP_CONFIG  → has symbols → populate
+        // GET_ACTIVE_STRATEGIES → empty symbols → skip
+        // SEARCH_SYMBOLS_     → matched symbols only → skip
         document.addEventListener('available-config-received', (e: Event) => {
             const config = (e as CustomEvent).detail;
-            if (!config?.symbols) return;
+            if (!config?.symbols || config.symbols.length === 0) return;
 
             this.configSymbols = config.symbols;
             this.loadFromStorage();
@@ -216,7 +219,8 @@ export class WatchlistModule {
     }
 
     // ================================================================
-    // SEARCH — filters configSymbols
+    // SEARCH — filters configSymbols locally first
+    // Falls back to backend SEARCH_SYMBOLS_ if no local results
     // ================================================================
 
     private toggleSearch(): void {
