@@ -11,7 +11,7 @@ export interface ToolMeta {
     symbol:    string;
     allTF:     boolean;
     deleted:   boolean;
-    strategy?: boolean;  // true = backend strategy tool, never persisted
+    strategy?: boolean;
 }
 
 interface StoredTool {
@@ -77,6 +77,9 @@ export class DrawingPersistence {
 
     public shouldToolBeVisible(toolId: string, timeframe: string): boolean {
         const meta = this._metaMap.get(toolId);
+        if (toolId.startsWith('SMC_')) {
+            console.log('👁 SMC visibility check:', { toolId, meta, timeframe });
+        }
         if (!meta)        return true;
         if (meta.deleted) return false;
         if (meta.allTF)   return true;
@@ -119,9 +122,6 @@ export class DrawingPersistence {
         }
     }
 
-    // ✅ Strategy meta injection — marks tool as backend strategy
-    // strategy: true tools are never persisted to localStorage
-    // allTF: false — strategy tools are TF-specific by nature
     public injectStrategyMeta(
         toolId:      string,
         symbol:      string,
@@ -137,9 +137,6 @@ export class DrawingPersistence {
         });
     }
 
-    // ✅ Soft delete all drawing tools belonging to a strategy
-    // Uses regex to match all tools for strategyKey_symbol_timeframe_*
-    // Marks deleted:true in _metaMap — purgeDeletedTools() hard removes on next TF/symbol switch
     public softDeleteStrategyDrawings(
         strategyKey: string,
         symbol:      string,
@@ -162,14 +159,12 @@ export class DrawingPersistence {
             if (matchingTools.length === 0) return;
 
             matchingTools.forEach((tool: any) => {
-                // ✅ Hide immediately — no detach
                 lt.applyLineToolOptions({
                     id:       tool.id,
                     toolType: tool.toolType,
                     options:  { ...tool.options, visible: false }
                 });
 
-                // ✅ Mark deleted in metaMap
                 const meta = this._metaMap.get(tool.id);
                 if (meta) {
                     meta.deleted = true;
@@ -192,7 +187,6 @@ export class DrawingPersistence {
         }
     }
 
-    // ✅ Fix 1 — create meta if missing instead of silently returning
     public setAllTF(toolId: string, allTF: boolean): void {
         let meta = this._metaMap.get(toolId);
         if (!meta) {
@@ -214,9 +208,6 @@ export class DrawingPersistence {
 
     // ==================== PURGE DELETED TOOLS ====================
 
-    // ✅ Hard remove soft-deleted ghosts from engine after TF/symbol switch
-    // Safe to call mid-session — deleted tools are already visible:false
-    // Engine has moved to new context so no render cycle is touching them
     public purgeDeletedTools(): void {
         const lt = this.lineTools();
         if (!lt || !this.isInitialized()) return;
@@ -232,7 +223,6 @@ export class DrawingPersistence {
                 lt.removeLineToolsById(deletedIds);
             }
 
-            // ✅ Clean metaMap — they no longer exist anywhere
             deletedIds.forEach(id => this._metaMap.delete(id));
 
             console.log(`🧹 Purged ${deletedIds.length} deleted tools from engine`);
@@ -266,7 +256,6 @@ export class DrawingPersistence {
                         deleted:   false
                     };
 
-                    // ✅ Never persist strategy tools or deleted tools
                     if (meta.deleted || meta.strategy) {
                         existingMap.delete(t.id);
                         return;
@@ -314,7 +303,6 @@ export class DrawingPersistence {
                         deleted:   false
                     };
 
-                    // ✅ Never persist strategy tools
                     if (meta.strategy) {
                         existingMap.delete(t.id);
                         return;
@@ -371,7 +359,7 @@ export class DrawingPersistence {
             const relevant = allTools.filter((t: StoredTool) => {
                 if (!t._meta)                    return false;
                 if (t._meta.deleted)             return false;
-                if (t._meta.strategy)            return false; // ✅ never load strategy tools from storage
+                if (t._meta.strategy)            return false;
                 if (t._meta.symbol !== symbol)   return false;
                 return t._meta.allTF || t._meta.timeframe === timeframe;
             });
@@ -392,7 +380,6 @@ export class DrawingPersistence {
                 Array.from(groupsNeeded).map(g => loadAndRegisterGroup(g))
             );
 
-            // ✅ Inject meta — never overwrite deleted:true
             relevant.forEach((t: StoredTool) => {
                 if (t._meta && t.id) {
                     const existingMeta = this._metaMap.get(t.id);
@@ -401,7 +388,6 @@ export class DrawingPersistence {
                 }
             });
 
-            // ✅ Resolve visibility correctly on load
             const cleanTools = relevant
                 .filter((t: StoredTool) => {
                     const meta = this._metaMap.get(t.id);
