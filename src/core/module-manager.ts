@@ -36,6 +36,9 @@ export class ModuleManager {
 
     private journalLoading: boolean = false;
 
+    // ✅ Guard — prevent duplicate legend entries on incremental strategy updates
+    private deployedStrategyLegendIds = new Set<string>();
+
     private notifications = Notification;
     private panels        = Panels;
 
@@ -177,13 +180,16 @@ export class ModuleManager {
         });
 
         // ── Strategy drawing update — route to chart drawing module ──
-        // ✅ FIX 1 — async callback + Promise.all to await all createOrUpdateLineTool
-        // ✅ FIX 2 — injectStrategyMeta BEFORE createOrUpdateLineTool so saveDrawings()
+        // ✅ injectStrategyMeta BEFORE createOrUpdateLineTool so saveDrawings()
         // inside the engine sees strategy:true and never persists to localStorage
-        // ✅ FIX 3 — use timestamp key (not time) for points — engine expects timestamp
+        // ✅ symbol + timeframe pulled from drawings[0] — not on top-level payload
         this.connectionManager.onStrategyDrawingUpdate(async (data: StrategyDrawingUpdatePayload) => {
             const drawingModule = this.chart?.getDrawingModule();
             if (!drawingModule) return;
+
+            // ✅ Guard — need at least one drawing to proceed
+            const firstDrawing = data.drawings[0];
+            if (!firstDrawing) return;
 
             await Promise.all(data.drawings.map(async (drawing) => {
                 const points = drawing.points.map(p => ({
@@ -191,7 +197,6 @@ export class ModuleManager {
                     price:     p.price
                 }));
 
-                // ── Map backend fields to engine rectangle structure ──
                 const options = {
                     rectangle: {
                         background: {
@@ -212,8 +217,8 @@ export class ModuleManager {
                     defaultHoverCursor:  'default'
                 };
 
-                // ✅ Inject meta FIRST — saveDrawings() inside createOrUpdateLineTool
-                // will see strategy:true and skip localStorage persistence
+                // ✅ Inject meta FIRST — saveDrawings() will see strategy:true
+                // and skip localStorage persistence
                 drawingModule.injectStrategyMeta(
                     drawing.id,
                     drawing.symbol,
@@ -229,39 +234,43 @@ export class ModuleManager {
                 );
             }));
 
-            // ✅ Re-apply visibility now that all strategy meta is injected
+            // ✅ Re-apply visibility after all tools placed
             drawingModule.refreshVisibility();
 
-            // ── Add strategy to legend once per strategy_key/symbol/timeframe ──
-            // ID format: STRATEGYKEY_SYMBOL_TIMEFRAME — matches chart-core.ts parse logic
-            const legendId = `${data.strategy_key}_${data.symbol}_${data.timeframe}`;
-            document.dispatchEvent(new CustomEvent('indicator-added', {
-                detail: {
-                    id:       legendId,
-                    name:     data.strategy_key,
-                    color:    data.drawings[0]?.color ?? '#00d394',
-                    icon:     'fa-robot',
-                    pane:     null,
-                    values:   [],
-                    settings: {}
-                }
-            }));
+            // ✅ Legend + panel — only once per strategy, guard against
+            // incremental updates firing indicator-added multiple times
+            const legendId = `${data.strategy_key}_${firstDrawing.symbol}_${firstDrawing.timeframe}`;
 
-            // ── Add strategy to strategies panel ──
-            this.strategiesInstance?.addStrategy({
-                id:        legendId,
-                name:      data.strategy_key,
-                symbol:    data.symbol,
-                tf:        data.timeframe,
-                status:    'running',
-                pnl:       null,
-                trades:    0,
-                winrate:   null,
-                volume:    0.01,
-                risk:      1.0,
-                iconColor: 'green'
-            });
-            this.updateStrategiesBadge();
+            if (!this.deployedStrategyLegendIds.has(legendId)) {
+                this.deployedStrategyLegendIds.add(legendId);
+
+                document.dispatchEvent(new CustomEvent('indicator-added', {
+                    detail: {
+                        id:       legendId,
+                        name:     data.strategy_key,
+                        color:    firstDrawing.color ?? '#00d394',
+                        icon:     'fa-robot',
+                        pane:     null,
+                        values:   [],
+                        settings: {}
+                    }
+                }));
+
+                this.strategiesInstance?.addStrategy({
+                    id:        legendId,
+                    name:      data.strategy_key,
+                    symbol:    firstDrawing.symbol,
+                    tf:        firstDrawing.timeframe,
+                    status:    'running',
+                    pnl:       null,
+                    trades:    0,
+                    winrate:   null,
+                    volume:    0.01,
+                    risk:      1.0,
+                    iconColor: 'green'
+                });
+                this.updateStrategiesBadge();
+            }
         });
 
         // ── Watchlist ──
@@ -591,11 +600,19 @@ export class ModuleManager {
 
             const fullId = `${strategyType}_${sym}_${tf}`;
 
+            // ✅ Clear legend guard so strategy can be redeployed later
+            this.deployedStrategyLegendIds.delete(fullId);
+
             this.connectionManager.removeStrategy(strategyType, sym, tf);
             this.chart?.getIndicatorManager()?.removeStrategyFromChart(fullId);
             this.chart?.getDrawingModule()?.removeStrategyDrawings(strategyType, sym, tf);
             this.strategiesInstance?.removeStrategyById(fullId);
             this.updateStrategiesBadge();
+
+            // ✅ Remove legend entry
+            document.dispatchEvent(new CustomEvent('legend-item-remove', {
+                detail: { id: fullId }
+            }));
         });
 
         document.addEventListener('update-strategy', (e: Event) => {
