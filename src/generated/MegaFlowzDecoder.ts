@@ -290,6 +290,7 @@ export interface StrategyDrawingData {
 export interface StrategyDrawingUpdatePayload {
     strategy_key: string;
     drawings:     StrategyDrawingData[];
+    removed_ids:  string[];   // mitigated — soft delete on frontend
 }
 
 // ================================================================
@@ -854,11 +855,19 @@ export class MegaFlowzDecoder {
                         });
                     }
 
+                    // ── removed_ids — mitigated drawings to soft delete ──
+                    const removed_ids: string[] = [];
+                    for (let i = 0; i < p.removedIdsLength(); i++) {
+                        const id = p.removedIds(i);
+                        if (id) removed_ids.push(id);
+                    }
+
                     return {
                         type: 'strategy_drawing_update',
                         data: {
                             strategy_key: p.strategyKey() ?? '',
-                            drawings
+                            drawings,
+                            removed_ids
                         }
                     };
                 }
