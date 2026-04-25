@@ -641,8 +641,6 @@ export class ChartModule {
 
         document.addEventListener('legend-item-remove', async (e: Event) => {
             const { id } = (e as CustomEvent).detail;
-            console.log('🔵 LEGEND REMOVE ID:', id);
-
             if (!id) return;
 
             if (id === 'volume') {
@@ -650,15 +648,20 @@ export class ChartModule {
                 return;
             }
 
+            // ── If item already gone — module-manager dispatched this after removal ──
+            // ── Skip to avoid re-triggering remove-strategy loop ──
             const item = this.chartLegend?.getItem(id);
-            if (item?.icon === 'fa-robot') {
+            if (!item) {
+                this.chartLegend?.removeItem(id);
+                return;
+            }
+
+            if (item.icon === 'fa-robot') {
                 const lastUnderscore       = id.lastIndexOf('_');
                 const secondLastUnderscore = id.lastIndexOf('_', lastUnderscore - 1);
                 const strategyType         = id.substring(0, secondLastUnderscore);
                 const symbol               = id.substring(secondLastUnderscore + 1, lastUnderscore);
                 const timeframe            = id.substring(lastUnderscore + 1);
-
-                console.log('🔵 REMOVE STRATEGY - parsed:', { strategyType, symbol, timeframe });
 
                 document.dispatchEvent(new CustomEvent('remove-strategy', {
                     detail: { strategyType, symbol, timeframe }
