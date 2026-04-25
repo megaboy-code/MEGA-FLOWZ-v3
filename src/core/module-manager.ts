@@ -169,26 +169,25 @@ export class ModuleManager {
 
             indicatorManager.onIndicatorUpdate(data);
 
-            // ── If strategy, add to panel — once per id ──
-            const params = indicatorManager.getParams(data.key);
-            if (params?.is_strategy) {
-                const id = `${data.key}_${data.symbol}_${data.timeframe}`;
-                if (!this.strategiesInstance?.hasStrategy(id)) {
-                    this.strategiesInstance?.addStrategy({
-                        id,
-                        name:      data.label,
-                        symbol:    data.symbol,
-                        tf:        data.timeframe,
-                        status:    'running',
-                        pnl:       null,
-                        trades:    0,
-                        winrate:   null,
-                        volume:    params.volume ?? 0.01,
-                        risk:      1.0,
-                        iconColor: 'green'
-                    });
-                    this.updateStrategiesBadge();
-                }
+            // ── If strategy, add to panel once — read isStrategy from pool ──
+            const id = `${data.key}_${data.symbol}_${data.timeframe}`;
+            if (indicatorManager.isStrategy(id) &&
+                !this.strategiesInstance?.hasStrategy(id))
+            {
+                this.strategiesInstance?.addStrategy({
+                    id,
+                    name:      data.label,
+                    symbol:    data.symbol,
+                    tf:        data.timeframe,
+                    status:    'running',
+                    pnl:       null,
+                    trades:    0,
+                    winrate:   null,
+                    volume:    0.01,
+                    risk:      1.0,
+                    iconColor: 'green'
+                });
+                this.updateStrategiesBadge();
             }
         });
 
@@ -529,8 +528,8 @@ export class ModuleManager {
             // ── Indicator strategy — owns series cleanup ──
             this.chart?.getIndicatorManager()?.removeStrategyFromChart(fullId);
 
-            // ── Legend — always dispatch, idempotent if already removed by chart-core ──
-            document.dispatchEvent(new CustomEvent('legend-item-remove', {
+            // ── Legend — detach only, no cascade into remove-strategy ──
+            document.dispatchEvent(new CustomEvent('legend-item-detach', {
                 detail: { id: fullId }
             }));
 
