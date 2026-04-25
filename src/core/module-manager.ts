@@ -14,10 +14,10 @@ import { EconomicCalendarModule }              from '../calendar/calendar-module
 import { AlertsModule }                        from '../alerts/alerts-module';
 import { JournalMiniModule }                   from '../journal/journal-mini';
 import { StrategiesModule }                    from '../strategies/strategy-module';
+import { StrategyDrawingManager }              from '../chart/drawingtools/strategy-drawing-manager';
 import { OHLCData }                            from '../chart/chart-types';
-import { NotificationPayload, AvailableConfigPayload, AvailableItemData, StrategyDrawingUpdatePayload } from '../generated/MegaFlowzDecoder';
+import { NotificationPayload, AvailableConfigPayload, AvailableItemData } from '../generated/MegaFlowzDecoder';
 import { Severity }                            from '../generated/mega-flowz';
-import { hexToRgba }                           from '../chart/chart-utils';
 
 declare global {
     interface Window {}
@@ -28,16 +28,14 @@ export class ModuleManager {
     private tradingInstance: InstanceType<typeof TradingModuleClass> | null = null;
     private journalInstance: any | null = null;
 
-    private watchlistInstance:   WatchlistModule | null = null;
-    private calendarInstance:    EconomicCalendarModule | null = null;
-    private alertsInstance:      AlertsModule | null = null;
-    private journalMiniInstance: JournalMiniModule | null = null;
-    private strategiesInstance:  StrategiesModule | null = null;
+    private watchlistInstance:      WatchlistModule | null = null;
+    private calendarInstance:       EconomicCalendarModule | null = null;
+    private alertsInstance:         AlertsModule | null = null;
+    private journalMiniInstance:    JournalMiniModule | null = null;
+    private strategiesInstance:     StrategiesModule | null = null;
+    private strategyDrawingManager: StrategyDrawingManager | null = null;
 
     private journalLoading: boolean = false;
-
-    // ✅ Guard — prevent duplicate legend entries on incremental strategy updates
-    private deployedStrategyLegendIds = new Set<string>();
 
     private notifications = Notification;
     private panels        = Panels;
@@ -86,6 +84,13 @@ export class ModuleManager {
 
         const seriesManager = this.chart.getSeriesManager();
         const dataManager   = this.chart.getDataManager();
+
+        // ── Init StrategyDrawingManager after chart ready ──
+        this.strategyDrawingManager = new StrategyDrawingManager(
+            this.chart.getDrawingModule()!,
+            this.strategiesInstance,
+            () => this.updateStrategiesBadge()
+        );
 
         // ── Tick — direct to SeriesManager + TradingModule ──
         this.connectionManager.onTickData((
@@ -157,120 +162,14 @@ export class ModuleManager {
             this.connectionManager.sendCommand('INITIAL_DATA_RECEIVED');
         });
 
-        // ── Indicator update — direct to IndicatorManager + strategy panel sync ──
+        // ── Indicator update — direct to IndicatorManager ──
         this.connectionManager.onIndicatorUpdate((data) => {
             this.chart?.getIndicatorManager()?.onIndicatorUpdate(data);
-
-            if (data.lines.length > 1) {
-                this.strategiesInstance?.addStrategy({
-                    id:        `${data.key}_${data.symbol}_${data.timeframe}`,
-                    name:      data.label,
-                    symbol:    data.symbol,
-                    tf:        data.timeframe,
-                    status:    'running',
-                    pnl:       null,
-                    trades:    0,
-                    winrate:   null,
-                    volume:    0.01,
-                    risk:      1.0,
-                    iconColor: 'green'
-                });
-                this.updateStrategiesBadge();
-            }
         });
 
-        // ── Strategy drawing update — route to chart drawing module ──
-        // ✅ injectStrategyMeta BEFORE createOrUpdateLineTool so saveDrawings()
-        // inside the engine sees strategy:true and never persists to localStorage
-        // ✅ symbol + timeframe pulled from drawings[0] — not on top-level payload
-        this.connectionManager.onStrategyDrawingUpdate(async (data: StrategyDrawingUpdatePayload) => {
-            const drawingModule = this.chart?.getDrawingModule();
-            if (!drawingModule) return;
-
-            // ✅ Guard — need at least one drawing to proceed
-            const firstDrawing = data.drawings[0];
-            if (!firstDrawing) return;
-
-            await Promise.all(data.drawings.map(async (drawing) => {
-                const points = drawing.points.map(p => ({
-                    timestamp: p.timestamp,
-                    price:     p.price
-                }));
-
-                const options = {
-                    rectangle: {
-                        background: {
-                            color: hexToRgba(drawing.color, drawing.fill_opacity)
-                        },
-                        border: {
-                            radius: 0,
-                            width:  drawing.line_width,
-                            style:  0,
-                            color:  hexToRgba(drawing.color, drawing.border_opacity)
-                        },
-                        extend: { left: false, right: false }
-                    },
-                    showPriceAxisLabels: false,
-                    showTimeAxisLabels:  false,
-                    locked:              true,
-                    editable:            false,
-                    defaultHoverCursor:  'default'
-                };
-
-                // ✅ Inject meta FIRST — saveDrawings() will see strategy:true
-                // and skip localStorage persistence
-                drawingModule.injectStrategyMeta(
-                    drawing.id,
-                    drawing.symbol,
-                    drawing.timeframe,
-                    data.strategy_key
-                );
-
-                await drawingModule.createOrUpdateLineTool(
-                    drawing.tool_type,
-                    points,
-                    options,
-                    drawing.id
-                );
-            }));
-
-            // ✅ Re-apply visibility after all tools placed
-            drawingModule.refreshVisibility();
-
-            // ✅ Legend + panel — only once per strategy, guard against
-            // incremental updates firing indicator-added multiple times
-            const legendId = `${data.strategy_key}_${firstDrawing.symbol}_${firstDrawing.timeframe}`;
-
-            if (!this.deployedStrategyLegendIds.has(legendId)) {
-                this.deployedStrategyLegendIds.add(legendId);
-
-                document.dispatchEvent(new CustomEvent('indicator-added', {
-                    detail: {
-                        id:       legendId,
-                        name:     data.strategy_key,
-                        color:    firstDrawing.color ?? '#00d394',
-                        icon:     'fa-robot',
-                        pane:     null,
-                        values:   [],
-                        settings: {}
-                    }
-                }));
-
-                this.strategiesInstance?.addStrategy({
-                    id:        legendId,
-                    name:      data.strategy_key,
-                    symbol:    firstDrawing.symbol,
-                    tf:        firstDrawing.timeframe,
-                    status:    'running',
-                    pnl:       null,
-                    trades:    0,
-                    winrate:   null,
-                    volume:    0.01,
-                    risk:      1.0,
-                    iconColor: 'green'
-                });
-                this.updateStrategiesBadge();
-            }
+        // ── Strategy drawing update — delegate to StrategyDrawingManager ──
+        this.connectionManager.onStrategyDrawingUpdate(async (data) => {
+            await this.strategyDrawingManager?.onData(data);
         });
 
         // ── Watchlist ──
@@ -504,7 +403,9 @@ export class ModuleManager {
         document.addEventListener('timeframe-changed', (e: Event) => {
             const { timeframe } = (e as CustomEvent).detail;
             if (!timeframe) return;
+            const oldTF = this.connectionManager.getCurrentTimeframe();
             this.chart?.getIndicatorManager()?.onTimeframeChange(timeframe);
+            this.strategyDrawingManager?.onTFChange(oldTF, timeframe);
             this.connectionManager.setTimeframe(timeframe);
             this.chart?.handleTimeframeChange(timeframe);
         });
@@ -514,10 +415,7 @@ export class ModuleManager {
             if (!key || !symbol) return;
             const tf = timeframe || this.connectionManager.getCurrentTimeframe();
             this.connectionManager.subscribeIndicator(
-                key,
-                symbol,
-                tf,
-                period ?? 0
+                key, symbol, tf, period ?? 0
             );
         });
 
@@ -600,19 +498,23 @@ export class ModuleManager {
 
             const fullId = `${strategyType}_${sym}_${tf}`;
 
-            // ✅ Clear legend guard so strategy can be redeployed later
-            this.deployedStrategyLegendIds.delete(fullId);
+            // ── Drawing strategy — owns drawing tools cleanup ──
+            this.strategyDrawingManager?.onStrategyRemove(strategyType, sym, tf);
 
-            this.connectionManager.removeStrategy(strategyType, sym, tf);
+            // ── Indicator strategy — owns series cleanup ──
             this.chart?.getIndicatorManager()?.removeStrategyFromChart(fullId);
-            this.chart?.getDrawingModule()?.removeStrategyDrawings(strategyType, sym, tf);
-            this.strategiesInstance?.removeStrategyById(fullId);
-            this.updateStrategiesBadge();
 
-            // ✅ Remove legend entry
+            // ── Legend — always dispatch, idempotent if already removed by chart-core ──
             document.dispatchEvent(new CustomEvent('legend-item-remove', {
                 detail: { id: fullId }
             }));
+
+            // ── Panel ──
+            this.strategiesInstance?.removeStrategyById(fullId);
+            this.updateStrategiesBadge();
+
+            // ── Backend ──
+            this.connectionManager.removeStrategy(strategyType, sym, tf);
         });
 
         document.addEventListener('update-strategy', (e: Event) => {
@@ -801,7 +703,9 @@ export class ModuleManager {
 
     private updateStrategiesBadge(): void {
         const badge = document.getElementById('strategiesBadge');
-        if (badge) badge.textContent = String(this.strategiesInstance?.getCount() ?? 0);
+        if (badge) badge.textContent = String(
+            this.strategiesInstance?.getCount() ?? 0
+        );
     }
 
     // ==================== NOTIFICATION HELPER ====================
