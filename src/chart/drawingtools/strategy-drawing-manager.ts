@@ -11,6 +11,7 @@ interface IDrawingModule {
     createOrUpdateLineTool(type: string, points: any[], options: any, id: string): Promise<void>;
     refreshVisibility(): void;
     removeStrategyDrawings(strategyKey: string, symbol: string, timeframe: string): void;
+    softDeleteDrawingById(id: string): void;
 }
 
 interface IStrategiesModule {
@@ -44,7 +45,6 @@ export class StrategyDrawingManager {
 
     public async onData(data: any): Promise<void> {
         const firstDrawing = data.drawings[0];
-        if (!firstDrawing) return;
 
         await Promise.all(data.drawings.map(async (drawing: any) => {
             const points = drawing.points.map((p: any) => ({
@@ -71,10 +71,18 @@ export class StrategyDrawingManager {
             );
         }));
 
-        // ✅ Re-apply visibility after all tools placed
+        // ── Soft delete removed_ids — hide immediately ──
+        // Hard delete happens on TF switch via purgeDeletedTools()
+        for (const id of data.removed_ids ?? []) {
+            this.drawingModule.softDeleteDrawingById(id);
+        }
+
+        // ✅ Re-apply visibility after all tools placed + removals applied
         this.drawingModule.refreshVisibility();
 
         // ── Legend + panel — only once per strategy per TF ──
+        if (!firstDrawing) return;
+
         const legendId = `${data.strategy_key}_${firstDrawing.symbol}_${firstDrawing.timeframe}`;
 
         if (!this.deployedStrategyLegendIds.has(legendId)) {
