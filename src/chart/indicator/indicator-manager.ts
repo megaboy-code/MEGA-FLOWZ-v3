@@ -149,11 +149,9 @@ export class IndicatorManager {
     private savedSettings: Map<string, Map<string, SavedLineSettings>> = new Map();
 
     // ── Pending setData — keyed by indicator id ──
-    // Buffers series data that arrived before chart-initial-data-loaded
-    // Flushed after chart-initial-data-loaded → own double rAF
     private pendingSetData: Map<string, PendingSetData[]> = new Map();
 
-    // ── Chart ready flag — true after first chart-initial-data-loaded ──
+    // ── Chart ready flag ──
     private chartReady: boolean = false;
 
     private abortController: AbortController | null = null;
@@ -168,7 +166,6 @@ export class IndicatorManager {
     public setTimeframe(timeframe: string):  void { this.currentTimeframe = timeframe; }
 
     public initialize(): void {
-        // ── Restore period overrides from localStorage ──
         try {
             const saved = localStorage.getItem(LS_PERIOD_OVERRIDES);
             if (saved) {
@@ -179,7 +176,6 @@ export class IndicatorManager {
             }
         } catch (e) {}
 
-        // ── Restore active subs from localStorage ──
         try {
             const saved = localStorage.getItem(LS_ACTIVE_SUBS);
             if (saved) {
@@ -193,18 +189,12 @@ export class IndicatorManager {
         this.abortController = new AbortController();
         const { signal } = this.abortController;
 
-        // ── chart-initial-data-loaded — SeriesManager double rAF completed ──
-        // This is the single source of truth gate for all rendering
-        // 1. Resubscribe persisted indicators
-        // 2. Flush any pending setData through own double rAF
         document.addEventListener('chart-initial-data-loaded', (e: Event) => {
             const { symbol, timeframe } = (e as CustomEvent).detail;
             if (!symbol || !timeframe) return;
 
-            // ── Reset chartReady — new candle set incoming ──
             this.chartReady = false;
 
-            // ── Resubscribe persisted indicators ──
             this.activeSubs.forEach(sub => {
                 const period = this.periodOverrides.get(sub.key) ?? sub.period;
                 document.dispatchEvent(new CustomEvent('resubscribe-indicator', {
@@ -217,12 +207,8 @@ export class IndicatorManager {
                 }));
             });
 
-            // ── Flush pending setData through own double rAF ──
-            // SeriesManager double rAF already done — timescale committed
-            // Own double rAF ensures indicator series coordinates also commit
             this.flushPendingSetData();
 
-            // ── Mark chart ready for subsequent indicator arrivals ──
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     this.chartReady = true;
@@ -248,18 +234,15 @@ export class IndicatorManager {
 
             if (period === 0) return;
 
-            // ── Persist override ──
             this.periodOverrides.set(indicator.key, period);
             this.persistPeriodOverrides();
 
-            // ── Update active sub period ──
             const sub = this.activeSubs.get(indicator.key);
             if (sub) {
                 sub.period = period;
                 this.persistActiveSubs();
             }
 
-            // ── Update legend item settings so modal seeds correctly ──
             document.dispatchEvent(new CustomEvent('indicator-settings-update', {
                 detail: {
                     id:       indicatorId,
@@ -339,7 +322,7 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // GET PERIOD LABEL — override first, fallback to paramsMap
+    // GET PERIOD LABEL
     // ================================================================
     private getPeriodLabel(key: string, lineName: string): string {
         const params = this.paramsMap.get(key);
@@ -360,7 +343,7 @@ export class IndicatorManager {
     }
 
     // ================================================================
-    // GET EFFECTIVE SETTINGS — merges paramsMap with period override
+    // GET EFFECTIVE SETTINGS
     // ================================================================
     private getEffectiveSettings(key: string): Record<string, any> {
         const params = this.paramsMap.get(key);
@@ -374,20 +357,16 @@ export class IndicatorManager {
 
     // ================================================================
     // FLUSH PENDING SET DATA
-    // Called after chart-initial-data-loaded (SeriesManager double rAF done)
-    // Runs own double rAF — indicator series coordinates commit cleanly
     // ================================================================
     private flushPendingSetData(): void {
         if (this.pendingSetData.size === 0) return;
 
-        // ── Snapshot and clear pending before rAF ──
         const snapshot = new Map(this.pendingSetData);
         this.pendingSetData.clear();
 
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 snapshot.forEach((entries, id) => {
-                    // ── Guard — indicator may have been removed ──
                     const indicator = this.pool.get(id);
                     if (!indicator) return;
 
@@ -409,7 +388,6 @@ export class IndicatorManager {
     public onIndicatorUpdate(data: IndicatorUpdatePayload): void {
         if (!this.chart) return;
 
-        // ── Drop stale in-flight data from previous TF ──
         if (this.currentTimeframe && data.timeframe !== this.currentTimeframe) return;
 
         const id        = `${data.key}_${data.symbol}_${data.timeframe}`;
@@ -430,7 +408,6 @@ export class IndicatorManager {
         id:   string,
         data: IndicatorUpdatePayload
     ): void {
-        // ── Hard pool guard — block duplicate indicator-added events ──
         if (this.pool.has(id)) return;
 
         const precision  = getDecimalPrecision(data.symbol);
@@ -447,7 +424,7 @@ export class IndicatorManager {
             timeframe: data.timeframe,
             lines:     new Map(),
             isStrategy,
-            active:    false  // ── stays false until setData committed ──
+            active:    false
         };
 
         if (!this.savedSettings.has(data.key)) {
@@ -501,7 +478,6 @@ export class IndicatorManager {
                     .map((t, i) => ({ time: t, value: line.values[i] }))
                     .filter(p => !isNaN(p.value) && p.value !== 0);
 
-                // ── Always buffer — flushed after chart-initial-data-loaded ──
                 pendingEntries.push({ series, chartData });
 
                 indicator.lines.set(line.name, {
@@ -528,17 +504,14 @@ export class IndicatorManager {
 
         this.pool.set(id, indicator);
 
-        // ── Store pending — flushed on chart-initial-data-loaded ──
         if (pendingEntries.length > 0) {
             this.pendingSetData.set(id, pendingEntries);
         }
 
-        // ── If chart already ready — flush immediately via own double rAF ──
         if (this.chartReady) {
             this.flushPendingSetData();
         }
 
-        // ── Track active sub — indicators only, not strategies ──
         if (!isStrategy) {
             const period = this.periodOverrides.get(data.key) ?? 0;
             this.activeSubs.set(data.key, {
@@ -550,7 +523,6 @@ export class IndicatorManager {
             this.persistActiveSubs();
         }
 
-        // ── Dispatch legend immediately ──
         if (this.legendIds.has(id)) {
             document.dispatchEvent(new CustomEvent('indicator-value-update', {
                 detail: { id, values: legendValues }
@@ -579,8 +551,6 @@ export class IndicatorManager {
         data:      IndicatorUpdatePayload,
         isInitial: boolean
     ): void {
-        // ── Block any single-point update on inactive indicator ──
-        // Prevents stale tick from writing against uncommitted timescale
         if (!indicator.active && !isInitial) return;
 
         const precision = getDecimalPrecision(data.symbol);
@@ -603,12 +573,10 @@ export class IndicatorManager {
                         .filter(p => !isNaN(p.value) && p.value !== 0);
 
                     if (chartData.length > 0) {
-                        // ── Buffer re-init data same as create ──
                         const existing = this.pendingSetData.get(indicator.id) ?? [];
                         existing.push({ series: activeLine.series, chartData });
                         this.pendingSetData.set(indicator.id, existing);
 
-                        // ── Flush immediately if chart already ready ──
                         if (this.chartReady) {
                             this.flushPendingSetData();
                         }
@@ -622,7 +590,6 @@ export class IndicatorManager {
                 }
             } catch (e) {}
 
-            // ── Store last known value ──
             const lastVal = line.values[line.values.length - 1];
             if (lastVal !== undefined && lastVal !== 0) {
                 activeLine.lastValue = lastVal;
@@ -636,14 +603,12 @@ export class IndicatorManager {
             });
         });
 
-        // ── Update values on legend ──
         if (legendValues.length > 0) {
             document.dispatchEvent(new CustomEvent('indicator-value-update', {
                 detail: { id: indicator.id, values: legendValues }
             }));
         }
 
-        // ── Re-add legend if strategy was inactive (TF change removed it) ──
         if (!indicator.active && indicator.isStrategy) {
             document.dispatchEvent(new CustomEvent('indicator-added', {
                 detail: {
@@ -675,7 +640,6 @@ export class IndicatorManager {
     public onTimeframeChange(newTimeframe: string): void {
         this.currentTimeframe = newTimeframe;
 
-        // ── Reset chart ready — candles not yet arrived for new TF ──
         this.chartReady = false;
         this.pendingSetData.clear();
 
@@ -757,7 +721,6 @@ export class IndicatorManager {
     public onSymbolChange(newSymbol: string): void {
         this.currentSymbol = newSymbol;
 
-        // ── Reset chart ready — candles not yet arrived for new symbol ──
         this.chartReady = false;
         this.pendingSetData.clear();
 
@@ -875,7 +838,9 @@ export class IndicatorManager {
 
     // ================================================================
     // REMOVE STRATEGY FROM CHART — frontend only, no backend call
-    // ── Also dispatches legend-item-remove so legend clears too ──
+    // ── No legend-item-remove dispatch here ──
+    // ── chart-core removes legend before dispatching remove-strategy ──
+    // ── module-manager dispatches legend-item-remove after calling this ──
     // ================================================================
     public removeStrategyFromChart(id: string): void {
         const indicator = this.pool.get(id);
@@ -893,11 +858,6 @@ export class IndicatorManager {
         this.pendingSetData.delete(id);
         this.persistPeriodOverrides();
         this.persistActiveSubs();
-
-        // ── Tell legend to remove item ──
-        document.dispatchEvent(new CustomEvent('legend-item-remove', {
-            detail: { id }
-        }));
     }
 
     // ================================================================
@@ -971,7 +931,6 @@ export class IndicatorManager {
             });
         });
 
-        // ── Sync legend dot color ──
         const firstLineName = indicator.lines.keys().next().value;
         const firstLine     = firstLineName ? indicator.lines.get(firstLineName) : null;
         if (firstLine) {
@@ -980,7 +939,6 @@ export class IndicatorManager {
             }));
         }
 
-        // ── Sync legend value color immediately ──
         if (legendValues.length > 0) {
             document.dispatchEvent(new CustomEvent('indicator-value-update', {
                 detail: { id: indicator.id, values: legendValues }
