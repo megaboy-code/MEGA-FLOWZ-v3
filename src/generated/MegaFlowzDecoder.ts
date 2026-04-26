@@ -187,6 +187,17 @@ export interface AvailableSymbolData {
     description: string;
 }
 
+// ================================================================
+// SMC SETTINGS — frontend builds settings panel dynamically
+// Only populated for SMC strategy item
+// ================================================================
+export interface SMCSettingsData {
+    min_gap_pct:      number;
+    max_fvg:          number;
+    mitigation_mode:  string;    // current value
+    mitigation_modes: string[];  // ["touch", "fifty", "full"] — dropdown options
+}
+
 export interface AvailableItemData {
     key:           string;
     label:         string;
@@ -208,6 +219,8 @@ export interface AvailableItemData {
     price_type:    string;
     symbol:        string;
     timeframe:     string;
+    // ── SMC only — null for all other strategies/indicators ──
+    smc_settings:  SMCSettingsData | null;
 }
 
 export interface AvailableConfigPayload {
@@ -290,7 +303,7 @@ export interface StrategyDrawingData {
 export interface StrategyDrawingUpdatePayload {
     strategy_key: string;
     drawings:     StrategyDrawingData[];
-    removed_ids:  string[];   // mitigated — soft delete on frontend
+    removed_ids:  string[]; // mitigated — soft delete on frontend
 }
 
 // ================================================================
@@ -361,6 +374,23 @@ function extractCandle(c: any): CandleData {
 // ================================================================
 
 function extractAvailableItem(item: AvailableItem): AvailableItemData {
+    // ── Extract SMC settings if present ──
+    let smc_settings: SMCSettingsData | null = null;
+    const smc = item.smcSettings();
+    if (smc) {
+        const modes: string[] = [];
+        for (let i = 0; i < smc.mitigationModesLength(); i++) {
+            const m = smc.mitigationModes(i);
+            if (m) modes.push(m);
+        }
+        smc_settings = {
+            min_gap_pct:      smc.minGapPct(),
+            max_fvg:          smc.maxFvg(),
+            mitigation_mode:  smc.mitigationMode() ?? 'touch',
+            mitigation_modes: modes
+        };
+    }
+
     return {
         key:           item.key()         ?? '',
         label:         item.label()       ?? '',
@@ -381,7 +411,8 @@ function extractAvailableItem(item: AvailableItem): AvailableItemData {
         volume:        item.volume(),
         price_type:    item.priceType()   ?? 'close',
         symbol:        item.symbol()      ?? '',
-        timeframe:     item.timeframe()   ?? ''
+        timeframe:     item.timeframe()   ?? '',
+        smc_settings
     };
 }
 
@@ -401,18 +432,13 @@ export class MegaFlowzDecoder {
 
             switch (payloadType) {
 
-                // ── Initial burst ──
                 case MessagePayload.InitialData: {
-                    const p = msg.payload(
-                        new InitialData()
-                    ) as InitialData;
-
+                    const p = msg.payload(new InitialData()) as InitialData;
                     const candles: CandleData[] = [];
                     for (let i = 0; i < p.candlesLength(); i++) {
                         const c = p.candles(i);
                         if (c) candles.push(extractCandle(c));
                     }
-
                     return {
                         type: 'initial',
                         data: {
@@ -423,15 +449,10 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Bar update ──
                 case MessagePayload.BarUpdate: {
-                    const p = msg.payload(
-                        new BarUpdate()
-                    ) as BarUpdate;
-
+                    const p = msg.payload(new BarUpdate()) as BarUpdate;
                     const c = p.candle();
                     if (!c) return { type: 'unknown' };
-
                     return {
                         type: 'bar_update',
                         data: {
@@ -442,12 +463,8 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Price update ──
                 case MessagePayload.PriceUpdate: {
-                    const p = msg.payload(
-                        new PriceUpdate()
-                    ) as PriceUpdate;
-
+                    const p = msg.payload(new PriceUpdate()) as PriceUpdate;
                     return {
                         type: 'price_update',
                         data: {
@@ -460,12 +477,8 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Watchlist update ──
                 case MessagePayload.WatchlistUpdate: {
-                    const p = msg.payload(
-                        new WatchlistUpdate()
-                    ) as WatchlistUpdate;
-
+                    const p = msg.payload(new WatchlistUpdate()) as WatchlistUpdate;
                     return {
                         type: 'watchlist_update',
                         data: {
@@ -479,12 +492,8 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Positions update ──
                 case MessagePayload.PositionsUpdate: {
-                    const p = msg.payload(
-                        new PositionsUpdate()
-                    ) as PositionsUpdate;
-
+                    const p = msg.payload(new PositionsUpdate()) as PositionsUpdate;
                     const positions: PositionData[] = [];
                     for (let i = 0; i < p.positionsLength(); i++) {
                         const pos = p.positions(i);
@@ -504,31 +513,23 @@ export class MegaFlowzDecoder {
                             open_time:     parseInt(pos.openTime().toString(), 10)
                         });
                     }
-
                     const acc = p.account();
-                    const account: AccountData | null = acc
-                        ? {
-                            balance:      acc.balance(),
-                            equity:       acc.equity(),
-                            margin:       acc.margin(),
-                            free_margin:  acc.freeMargin(),
-                            margin_level: acc.marginLevel(),
-                            leverage:     acc.leverage()
-                          }
-                        : null;
-
+                    const account: AccountData | null = acc ? {
+                        balance:      acc.balance(),
+                        equity:       acc.equity(),
+                        margin:       acc.margin(),
+                        free_margin:  acc.freeMargin(),
+                        margin_level: acc.marginLevel(),
+                        leverage:     acc.leverage()
+                    } : null;
                     return {
                         type: 'positions_update',
                         data: { positions, account }
                     };
                 }
 
-                // ── Connection status ──
                 case MessagePayload.ConnectionStatus: {
-                    const p = msg.payload(
-                        new ConnectionStatus()
-                    ) as ConnectionStatus;
-
+                    const p = msg.payload(new ConnectionStatus()) as ConnectionStatus;
                     return {
                         type: 'connection_status',
                         data: {
@@ -538,12 +539,8 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Trade executed ──
                 case MessagePayload.TradeExecuted: {
-                    const p = msg.payload(
-                        new TradeExecuted()
-                    ) as TradeExecuted;
-
+                    const p = msg.payload(new TradeExecuted()) as TradeExecuted;
                     return {
                         type: 'trade_executed',
                         data: {
@@ -559,12 +556,8 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Position modified ──
                 case MessagePayload.PositionModified: {
-                    const p = msg.payload(
-                        new PositionModified()
-                    ) as PositionModified;
-
+                    const p = msg.payload(new PositionModified()) as PositionModified;
                     return {
                         type: 'position_modified',
                         data: {
@@ -575,12 +568,8 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Notification ──
                 case MessagePayload.Notification: {
-                    const p = msg.payload(
-                        new Notification()
-                    ) as Notification;
-
+                    const p = msg.payload(new Notification()) as Notification;
                     return {
                         type: 'notification',
                         data: {
@@ -600,24 +589,16 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Error ──
                 case MessagePayload.ErrorMsg: {
-                    const p = msg.payload(
-                        new ErrorMsg()
-                    ) as ErrorMsg;
-
+                    const p = msg.payload(new ErrorMsg()) as ErrorMsg;
                     return {
                         type: 'error',
                         data: { message: p.message() ?? '' }
                     };
                 }
 
-                // ── Auto trading ──
                 case MessagePayload.AutoTradingStatus: {
-                    const p = msg.payload(
-                        new AutoTradingStatus()
-                    ) as AutoTradingStatus;
-
+                    const p = msg.payload(new AutoTradingStatus()) as AutoTradingStatus;
                     return {
                         type: 'auto_trading',
                         data: {
@@ -627,33 +608,17 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Cache cleared / pong ──
                 case MessagePayload.CacheCleared: {
-                    const p = msg.payload(
-                        new CacheCleared()
-                    ) as CacheCleared;
-
+                    const p = msg.payload(new CacheCleared()) as CacheCleared;
                     const message = p.message() ?? '';
-
                     if (message === 'pong') {
-                        return {
-                            type: 'pong',
-                            data: { message }
-                        };
+                        return { type: 'pong', data: { message } };
                     }
-
-                    return {
-                        type: 'cache_cleared',
-                        data: { message }
-                    };
+                    return { type: 'cache_cleared', data: { message } };
                 }
 
-                // ── Journal data ──
                 case MessagePayload.JournalData: {
-                    const p = msg.payload(
-                        new JournalData()
-                    ) as JournalData;
-
+                    const p = msg.payload(new JournalData()) as JournalData;
                     const trades: JournalTradeData[] = [];
                     for (let i = 0; i < p.tradesLength(); i++) {
                         const t = p.trades(i);
@@ -672,21 +637,14 @@ export class MegaFlowzDecoder {
                             close_time:  parseInt(t.closeTime().toString(), 10)
                         });
                     }
-
                     return {
                         type: 'journal_data',
-                        data: {
-                            trades,
-                            scope: p.scope() ?? 'today'
-                        }
+                        data: { trades, scope: p.scope() ?? 'today' }
                     };
                 }
 
-                // ── Available config ──
                 case MessagePayload.AvailableConfig: {
-                    const p = msg.payload(
-                        new AvailableConfig()
-                    ) as AvailableConfig;
+                    const p = msg.payload(new AvailableConfig()) as AvailableConfig;
 
                     const symbols: AvailableSymbolData[] = [];
                     for (let i = 0; i < p.symbolsLength(); i++) {
@@ -700,16 +658,12 @@ export class MegaFlowzDecoder {
 
                     const timeframes_visible: string[] = [];
                     for (let i = 0; i < p.timeframesVisibleLength(); i++) {
-                        timeframes_visible.push(
-                            p.timeframesVisible(i) ?? ''
-                        );
+                        timeframes_visible.push(p.timeframesVisible(i) ?? '');
                     }
 
                     const timeframes_more: string[] = [];
                     for (let i = 0; i < p.timeframesMoreLength(); i++) {
-                        timeframes_more.push(
-                            p.timeframesMore(i) ?? ''
-                        );
+                        timeframes_more.push(p.timeframesMore(i) ?? '');
                     }
 
                     const indicators: AvailableItemData[] = [];
@@ -746,36 +700,24 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Indicator update ──
                 case MessagePayload.IndicatorUpdate: {
-                    const p = msg.payload(
-                        new IndicatorUpdate()
-                    ) as IndicatorUpdate;
-
+                    const p = msg.payload(new IndicatorUpdate()) as IndicatorUpdate;
                     const lines: IndicatorLineData[] = [];
                     for (let i = 0; i < p.linesLength(); i++) {
                         const line = p.lines(i);
                         if (!line) continue;
-
                         const timestamps: number[] = [];
                         for (let j = 0; j < line.timestampsLength(); j++) {
                             const ts = line.timestamps(j);
                             if (ts !== null) timestamps.push(Number(ts));
                         }
-
                         const values: number[] = [];
                         for (let j = 0; j < line.valuesLength(); j++) {
                             const v = line.values(j);
                             if (v !== null) values.push(v);
                         }
-
-                        lines.push({
-                            name: line.name() ?? '',
-                            timestamps,
-                            values
-                        });
+                        lines.push({ name: line.name() ?? '', timestamps, values });
                     }
-
                     return {
                         type: 'indicator_update',
                         data: {
@@ -788,11 +730,8 @@ export class MegaFlowzDecoder {
                     };
                 }
 
-                // ── Strategy drawing update ──
                 case MessagePayload.StrategyDrawingUpdate: {
-                    const p = msg.payload(
-                        new StrategyDrawingUpdate()
-                    ) as StrategyDrawingUpdate;
+                    const p = msg.payload(new StrategyDrawingUpdate()) as StrategyDrawingUpdate;
 
                     const drawings: StrategyDrawingData[] = [];
                     for (let i = 0; i < p.drawingsLength(); i++) {
@@ -810,44 +749,29 @@ export class MegaFlowzDecoder {
                         }
 
                         drawings.push({
-                            // ── Identity ──
-                            id:             d.id()           ?? '',
-                            tool_type:      d.toolType()     ?? '',
-                            symbol:         d.symbol()       ?? '',
-                            timeframe:      tfToString(d.timeframe()),
-
-                            // ── Geometry ──
+                            id:                d.id()           ?? '',
+                            tool_type:         d.toolType()     ?? '',
+                            symbol:            d.symbol()       ?? '',
+                            timeframe:         tfToString(d.timeframe()),
                             points,
-
-                            // ── Border ──
-                            color:          d.color()        ?? '#2962ff',
-                            border_opacity: d.borderOpacity(),
-                            border_width:   d.borderWidth(),
-                            border_style:   d.borderStyle(),
-                            border_radius:  d.borderRadius(),
-
-                            // ── Fill ──
-                            fill_color:     d.fillColor()    ?? '',
-                            fill_opacity:   d.fillOpacity(),
-
-                            // ── Extension ──
-                            extend_left:    d.extendLeft(),
-                            extend_right:   d.extendRight(),
-
-                            // ── Text/Label ──
-                            text:           d.text()         ?? '',
-                            font_size:      d.fontSize(),
-                            font_color:     d.fontColor()    ?? '',
-                            font_bold:      d.fontBold(),
-                            font_italic:    d.fontItalic(),
-                            text_align_h:   d.textAlignH()   ?? 'left',
-                            text_align_v:   d.textAlignV()   ?? 'middle',
-
-                            // ── Visibility ──
+                            color:             d.color()        ?? '#2962ff',
+                            border_opacity:    d.borderOpacity(),
+                            border_width:      d.borderWidth(),
+                            border_style:      d.borderStyle(),
+                            border_radius:     d.borderRadius(),
+                            fill_color:        d.fillColor()    ?? '',
+                            fill_opacity:      d.fillOpacity(),
+                            extend_left:       d.extendLeft(),
+                            extend_right:      d.extendRight(),
+                            text:              d.text()         ?? '',
+                            font_size:         d.fontSize(),
+                            font_color:        d.fontColor()    ?? '',
+                            font_bold:         d.fontBold(),
+                            font_italic:       d.fontItalic(),
+                            text_align_h:      d.textAlignH()   ?? 'left',
+                            text_align_v:      d.textAlignV()   ?? 'middle',
                             show_price_labels: d.showPriceLabels(),
                             show_time_labels:  d.showTimeLabels(),
-
-                            // ── Parallel channel specific ──
                             show_middle_line:  d.showMiddleLine(),
                             middle_line_color: d.middleLineColor() ?? '',
                             middle_line_style: d.middleLineStyle(),
