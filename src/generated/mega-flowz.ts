@@ -24,6 +24,7 @@ export { PositionModified } from './mega-flowz/position-modified.js';
 export { PositionType } from './mega-flowz/position-type.js';
 export { PositionsUpdate } from './mega-flowz/positions-update.js';
 export { PriceUpdate } from './mega-flowz/price-update.js';
+export { SMCSettings } from './mega-flowz/smcsettings.js';
 export { Severity } from './mega-flowz/severity.js';
 export { StrategyDrawing } from './mega-flowz/strategy-drawing.js';
 export { StrategyDrawingPoint } from './mega-flowz/strategy-drawing-point.js';

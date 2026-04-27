@@ -40,8 +40,20 @@ drawingsLength():number {
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
+removedIds(index: number):string
+removedIds(index: number,optionalEncoding:flatbuffers.Encoding):string|Uint8Array
+removedIds(index: number,optionalEncoding?:any):string|Uint8Array|null {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
+}
+
+removedIdsLength():number {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
+}
+
 static startStrategyDrawingUpdate(builder:flatbuffers.Builder) {
-  builder.startObject(2);
+  builder.startObject(3);
 }
 
 static addStrategyKey(builder:flatbuffers.Builder, strategyKeyOffset:flatbuffers.Offset) {
@@ -64,15 +76,32 @@ static startDrawingsVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
+static addRemovedIds(builder:flatbuffers.Builder, removedIdsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(2, removedIdsOffset, 0);
+}
+
+static createRemovedIdsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+  builder.startVector(4, data.length, 4);
+  for (let i = data.length - 1; i >= 0; i--) {
+    builder.addOffset(data[i]!);
+  }
+  return builder.endVector();
+}
+
+static startRemovedIdsVector(builder:flatbuffers.Builder, numElems:number) {
+  builder.startVector(4, numElems, 4);
+}
+
 static endStrategyDrawingUpdate(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createStrategyDrawingUpdate(builder:flatbuffers.Builder, strategyKeyOffset:flatbuffers.Offset, drawingsOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createStrategyDrawingUpdate(builder:flatbuffers.Builder, strategyKeyOffset:flatbuffers.Offset, drawingsOffset:flatbuffers.Offset, removedIdsOffset:flatbuffers.Offset):flatbuffers.Offset {
   StrategyDrawingUpdate.startStrategyDrawingUpdate(builder);
   StrategyDrawingUpdate.addStrategyKey(builder, strategyKeyOffset);
   StrategyDrawingUpdate.addDrawings(builder, drawingsOffset);
+  StrategyDrawingUpdate.addRemovedIds(builder, removedIdsOffset);
   return StrategyDrawingUpdate.endStrategyDrawingUpdate(builder);
 }
 }

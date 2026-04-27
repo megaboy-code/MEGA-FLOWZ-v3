@@ -2,6 +2,9 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { SMCSettings } from '../mega-flowz/smcsettings.js';
+
+
 export class AvailableItem {
   bb: flatbuffers.ByteBuffer|null = null;
   bb_pos = 0;
@@ -268,8 +271,13 @@ timeframe(optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
+smcSettings(obj?:SMCSettings):SMCSettings|null {
+  const offset = this.bb!.__offset(this.bb_pos, 44);
+  return offset ? (obj || new SMCSettings()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
+}
+
 static startAvailableItem(builder:flatbuffers.Builder) {
-  builder.startObject(20);
+  builder.startObject(21);
 }
 
 static addKey(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset) {
@@ -352,33 +360,13 @@ static addTimeframe(builder:flatbuffers.Builder, timeframeOffset:flatbuffers.Off
   builder.addFieldOffset(19, timeframeOffset, 0);
 }
 
+static addSmcSettings(builder:flatbuffers.Builder, smcSettingsOffset:flatbuffers.Offset) {
+  builder.addFieldOffset(20, smcSettingsOffset, 0);
+}
+
 static endAvailableItem(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createAvailableItem(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset, labelOffset:flatbuffers.Offset, descriptionOffset:flatbuffers.Offset, badgeOffset:flatbuffers.Offset, typeOffset:flatbuffers.Offset, isStrategy:boolean, period:number, fastPeriod:number, slowPeriod:number, signalPeriod:number, kPeriod:number, dPeriod:number, slowing:number, deviation:number, overbought:number, oversold:number, volume:number, priceTypeOffset:flatbuffers.Offset, symbolOffset:flatbuffers.Offset, timeframeOffset:flatbuffers.Offset):flatbuffers.Offset {
-  AvailableItem.startAvailableItem(builder);
-  AvailableItem.addKey(builder, keyOffset);
-  AvailableItem.addLabel(builder, labelOffset);
-  AvailableItem.addDescription(builder, descriptionOffset);
-  AvailableItem.addBadge(builder, badgeOffset);
-  AvailableItem.addType(builder, typeOffset);
-  AvailableItem.addIsStrategy(builder, isStrategy);
-  AvailableItem.addPeriod(builder, period);
-  AvailableItem.addFastPeriod(builder, fastPeriod);
-  AvailableItem.addSlowPeriod(builder, slowPeriod);
-  AvailableItem.addSignalPeriod(builder, signalPeriod);
-  AvailableItem.addKPeriod(builder, kPeriod);
-  AvailableItem.addDPeriod(builder, dPeriod);
-  AvailableItem.addSlowing(builder, slowing);
-  AvailableItem.addDeviation(builder, deviation);
-  AvailableItem.addOverbought(builder, overbought);
-  AvailableItem.addOversold(builder, oversold);
-  AvailableItem.addVolume(builder, volume);
-  AvailableItem.addPriceType(builder, priceTypeOffset);
-  AvailableItem.addSymbol(builder, symbolOffset);
-  AvailableItem.addTimeframe(builder, timeframeOffset);
-  return AvailableItem.endAvailableItem(builder);
-}
 }
